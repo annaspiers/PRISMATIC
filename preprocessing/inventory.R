@@ -3,7 +3,7 @@ library(neonUtilities)
 library(neonOS)
 library(geoNEON)
 library(glue)
-options(stringsAsFactors=F)
+options(stringsAsFactors = FALSE)
 
 # set working directory
 # adapt directory path for your system
@@ -11,24 +11,22 @@ options(stringsAsFactors=F)
 download_veg_structure_data <- function(site) {
     wd <- glue("./data/{site}")
     setwd(wd)
-    if (!dir.exists(wd)){
+    if (!dir.exists(wd)) {
         dir.create(wd)
-    }
-    else{
+    } else {
         print("dir exists")
     }
-    veglist <- loadByProduct(dpID="DP1.10098.001",
-                            site="SOAP",
-                            package="basic",
+    veglist <- loadByProduct(dpID = "DP1.10098.001",
+                            site = site,
+                            package = "basic",
                             check.size = FALSE)
     vegmap <- getLocTOS(veglist$vst_mappingandtagging,
                             "vst_mappingandtagging")
     veg <- joinTableNEON(veglist$vst_apparentindividual,
                         vegmap,
-                        name1="vst_apparentindividual",
-                        name2="vst_mappingandtagging")
+                        name1 = "vst_apparentindividual",
+                        name2 = "vst_mappingandtagging")
     df <- data.frame(veg)
-    write.csv(df, wd, row.names=False)
+    write.csv(df, wd, row.names = FALSE)
     return(glue("raw data for {site} downloaded"))
 }
-

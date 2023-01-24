@@ -1,8 +1,16 @@
-name: prisma_preprocessing
+name: prisma
 channels:
   - conda-forge
   - r
 dependencies:
+  - python=3.9
+  - pdal
+  - python-pdal
+  - gdal
+  - pygbif
+  - folium
+  - mapclassify
+  - matplotlib
   - r-base
   - r-neonUtilities
   - r-neonOS

@@ -16,12 +16,13 @@ COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
         'dendrometerHeight', 'dendrometerGap',
         'dendrometerCondition', 'bandStemDiameter'
         ]
+
 def preprocessing_veg_structure_data(site, year):
     # download raw data
-    # r_source = robjects.r['source']
-    # r_source(str(Path().absolute()/'preprocessing.R'))
-    # download_veg_structure_data = robjects.r('download_veg_structure_data')
-    # download_veg_structure_data(site)
+    r_source = robjects.r['source']
+    r_source(str(Path().absolute()/'preprocessing_inventory.R'))
+    download_veg_structure_data = robjects.r('download_veg_structure_data')
+    download_veg_structure_data(site)
     year = str(year)
     site_path = Path().absolute()/'data'/site
     r_df = pd.read_csv(site_path/'veg_structure.csv')
