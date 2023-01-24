@@ -55,3 +55,4 @@ def clip_laz_by_plots(laz_path, site_plots_path, output_laz_path):
             os.remove(str(output_laz_path/f"{laz_file_path.stem}.laz"))
 
 
+
