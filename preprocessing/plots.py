@@ -22,24 +22,31 @@ def download_neon_polygons(data_path):
         zf.extractall(path=data_path)
 
     output_folder_path = data_path/OUTPUT_FOLDERNAME
-    return output_folder_path
+    return str(output_folder_path)
 
 
-def preprocessing_neon_polygons_site(data_path, site):
+def preprocessing_neon_polygons(data_path):
     data_path = Path(data_path)
     downloaded_data_path = data_path/OUTPUT_FOLDERNAME
     shp_file = [i for i in downloaded_data_path.glob('*.shp')][0]
     polygons = gpd.read_file(shp_file)
-    polygons_site = polygons[polygons.siteID == site]
-    polygons_site_utm = polygons_site.to_crs(EPSG)
-    polygons_site_utm.to_file(data_path/site/PLOTS_FOLDER/'plots.shp')
+    polygons_utm = polygons.to_crs(EPSG)
+    output_folder_path = data_path/PLOTS_FOLDER
+    polygons_utm.to_file(output_folder_path/'plots.shp')
+    return str(output_folder_path)
 
-def preprocessing_neon_polygons_site_inventory(data_path, site, inventory_file_path):
+def preprocessing_neon_polygons_site_inventory(data_path, site, inventory_file_path=None):
     data_path = Path(data_path)
-    polygons_site_utm = gpd.read_file(data_path/site/PLOTS_FOLDER/f'{PLOTS_FOLDER}.shp')
-    inventory = pd.read_csv(inventory_file_path)
-    inventory_avail_plots = inventory.plotID.unique()
-    filtered_polygons_site_utm = polygons_site_utm[polygons_site_utm.plotID.isin(inventory_avail_plots)]
-    filtered_polygons_site_utm.to_file(data_path/site/INVENTORY_PLOTS_FOLDER/'plots.shp')
+    polygons_utm = gpd.read_file(data_path/PLOTS_FOLDER/'plots.shp')
+    polygons = polygons_utm[polygons_utm.siteID == site]
+    
+    if inventory_file_path:
+        inventory = pd.read_csv(inventory_file_path)
+        inventory_avail_plots = inventory.plotID.unique()
+        polygons = polygons[polygons.plotID.isin(inventory_avail_plots)]
+        
+    output_folder_path = data_path/site/INVENTORY_PLOTS_FOLDER
+    polygons.to_file(output_folder_path/'plots.shp')
+    return output_folder_path
 
 download_neon_polygons('/home/toanngo/Documents/GitHub/prisma/preprocessing/data')
