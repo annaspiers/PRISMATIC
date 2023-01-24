@@ -63,10 +63,10 @@ def biomass_coeffs_fabaceae_carya(_):
 def biomass_coeffs_fabaceae_other(_):
     return -2.5095, 2.5437
 
-def biomass_coeffs_fabaceae_deciduous(_):
+def biomass_coeffs_fagaceae_deciduous(_):
     return -2.0705, 2.4410
 
-def biomass_coeffs_fabaceae_evergreen(_):
+def biomass_coeffs_fagaceae_evergreen(_):
     return -2.2198, 2.4410
 
 def biomass_coeffs_hamamelidaceae(_):
@@ -113,8 +113,8 @@ biomass_coeffs = {
     'Fabaceae': biomass_coeffs_fabaceae_carya,
     'Juglandaceae': biomass_coeffs_fabaceae_carya,
     'Carya': biomass_coeffs_fabaceae_carya,
-    'Fabaceae_deciduous': biomass_coeffs_fabaceae_deciduous,
-    'Fabaceae_evergeen': biomass_coeffs_fabaceae_evergreen,
+    'Fagaceae_deciduous': biomass_coeffs_fagaceae_deciduous,
+    'Fagaceae_evergeen': biomass_coeffs_fagaceae_evergreen,
     'Hamamelidaceae': biomass_coeffs_hamamelidaceae,
     'Hippocastanaceae': biomass_coeffs_hippocastanaceae,
     'Tiliaceae': biomass_coeffs_hippocastanaceae,
