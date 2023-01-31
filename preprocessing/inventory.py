@@ -35,7 +35,7 @@ def preprocessing_veg_structure_data(site, year):
     site_year_path.mkdir(parents=True, exist_ok=True)
     file_name = 'pp_veg_structure.csv'
     file_path = site_year_path/file_name
-    pp_veg_df.to_csv(file_path)
+    pp_veg_df.to_csv(file_path, index=False)
     return file_name
 
 # preprocessing_veg_structure_data('SOAP', 2019)

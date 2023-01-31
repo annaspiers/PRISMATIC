@@ -1,1 +1,1 @@
-from .allometry import cal_biomass, biomass_coeffs
+from .allometry import get_biomass

@@ -23,9 +23,9 @@ download_veg_structure_data <- function(site) {
     vegmap <- getLocTOS(veglist$vst_mappingandtagging,
                             "vst_mappingandtagging")
     veg <- joinTableNEON(veglist$vst_apparentindividual,
-                        vegmap,
-                        name1 = "vst_apparentindividual",
-                        name2 = "vst_mappingandtagging")
+                         vegmap,
+                         name1 = "vst_apparentindividual",
+                         name2 = "vst_mappingandtagging")
     df <- data.frame(veg)
     write.csv(df, wd, row.names = FALSE)
     return(glue("raw data for {site} downloaded"))

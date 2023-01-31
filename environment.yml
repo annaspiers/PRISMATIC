@@ -3,17 +3,21 @@ channels:
   - conda-forge
   - r
 dependencies:
-  - python=3.9
+  - python=3.10
   - pdal
   - python-pdal
   - gdal
-  - pygbif
   - folium
   - mapclassify
   - matplotlib
-  - r-base
-  - r-neonUtilities
-  - r-neonOS
-  - r-sp
-  - r-raster
-  - r-devtools
+  - pip
+  - pip:
+    - pygbif
+    - geopandas
+  # - pygbif
+  # - r-base
+  # - r-neonUtilities
+  # - r-neonOS
+  # - r-sp
+  # - r-raster
+  # - r-devtools
