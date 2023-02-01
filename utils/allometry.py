@@ -3,21 +3,27 @@ from pygbif import species
 
 DIAMETER_THRESHOLD = 10
 
-def get_biomass(name, diameter):
+def get_biomass(name, diameter, basal_diameter):
     # genus, species
     genus, s = name.lower().split()[:2]
     family, spg = None, None
+    is_basal_diameter = False
     try:
-        family, spg = get_taxa_family_spg(genus, s)
+        family, spg, is_basal_diameter = get_taxa_family_spg(genus, s)
     except TypeError:
         try:
-            family, spg = get_taxa_family_spg(genus, 'sp.')
+            family, spg, is_basal_diameter = get_taxa_family_spg(genus, 'sp.')
         except TypeError:
             pass
     if not family:
         family = species.name_backbone(name)['family']
         family = family.lower()
     b1, b2 = get_coeffs(family, spg)
+    if is_basal_diameter and not np.isnan(basal_diameter):
+        diameter = basal_diameter
+    elif is_basal_diameter and np.isnan(basal_diameter):
+        print('Warning: suppose to use basalStemDiameter,'
+              'but it is not available, force to use stemDiameter')
     if b1 and b2:
         return cal_biomass(b1, b2, diameter)
     else:
@@ -94,136 +100,136 @@ def get_coeffs(family, spg):
 def get_taxa_family_spg(genus, species):
     if genus == 'abies':
         if species in ('balsamea', 'fraseri', 'lasiocarpa'):
-            return 'abies', 0.34
+            return 'abies', 0.34, False
         elif species in ('amabilis', 'concolor', 'grandis', 'magnifica', 'procera', 'sp.'):
-            return 'abies', 0.36
+            return 'abies', 0.36, False
 
     elif genus == 'thuja':
         if species in ('occidentalis'):
-            return 'cupressaceae', 0.29
+            return 'cupressaceae', 0.29, False
     elif genus in ('calocedrus', 'sequoiadendron'):
         if species in ('decurrens', 'giganteum'):
-            return 'cupressaceae', 0.35
+            return 'cupressaceae', 0.35, False
     elif genus in ('chamaecyparis', 'juniperus'):
         if species in ('nookatensis', 'virginiana'):
-            return 'cupressaceae', 0.41
+            return 'cupressaceae', 0.41, False
 
     elif genus == 'larix':
         if species in ('laricina', 'occidentalis', 'sp.'):
-            return 'larix', None
+            return 'larix', None, False
     
     elif genus == 'picea':
         if species in ('engelmannii', 'sitchensis'):
-            return 'picea', 0.34
+            return 'picea', 0.34, False
         if species in ('abies', 'glauca', 'mariana', 'rubens'):
-            return 'picea', 0.36
+            return 'picea', 0.36, False
 
     elif genus == 'pinus':
         if species in ('albicaulis', 'arizonica', 'banksiana','contorta', 'jeffreyi',
                     'lambertiana', 'leiophylla', 'monticola', 'ponderosa', 'resinosa',
                     'strobus', 'sp.'):
-            return 'pinus', 0.44
+            return 'pinus', 0.44, False
         elif species in ('echinata', 'elliottii', 'palustris', 'rigida', 'taeda'):
-            return 'pinus', 0.45
+            return 'pinus', 0.45, False
     
     elif genus == 'pseudotsuga':
         if species in 'menziesii':
-            return 'pseudotsuga', None
+            return 'pseudotsuga', None, False
     
     elif genus == 'tsuga':
         if species in ('canadensis'):
-            return 'tsuga', 0.39
+            return 'tsuga', 0.39, False
         elif species in ('heterophylla', 'mertensiana'):
-            return 'tsuga', 0.4
+            return 'tsuga', 0.4, False
     
     elif genus == 'acer':
         if species in ('macrophyllum', 'pensylvanicum', 'rubrum', 'saccharinum', 'spicatum'):
-            return 'aceraceae', 0.49
+            return 'aceraceae', 0.49, False
         elif species in ('saccharum'):
-            return 'aceraceae', 0.5
+            return 'aceraceae', 0.5, False
     
     elif genus == 'alnus':
         if species in ('rubra', 'sp.'):
-            return 'betulaceae', 0.39
+            return 'betulaceae', 0.39, False
         elif species in ('papyrifera', 'populifolia'):
-            return 'betulaceae', 0.45
+            return 'betulaceae', 0.45, False
         elif species in ('alleghaniensis'):
-            return 'betulaceae', 0.55
+            return 'betulaceae', 0.55, False
         elif species in ('lenta'):
-            return 'betulaceae', 0.6
+            return 'betulaceae', 0.6, False
     elif genus == 'ostrya':
         if species in ('virginiana'):
-            return 'betulaceae', 0.6
+            return 'betulaceae', 0.6, False
     
     elif genus == 'cornus':
         if species in ('florida'):
-            return 'cornaceae', None
+            return 'cornaceae', None, False
     elif genus == 'nyssa':
         if species in ('aquatica', 'sylvatica'):
-            return 'cornaceae', None
+            return 'cornaceae', None, False
     elif genus == 'arbutus':
         if species in ('menziesii'):
-            return 'ericaceae', None
+            return 'ericaceae', None, False
     elif genus == 'oxydendrum':
         if species in ('arboreum'):
-            return 'ericaceae', None
+            return 'ericaceae', None, False
     elif genus == 'umbellularia':
         if species in ('californica'):
-            return 'ericaceae', None
+            return 'ericaceae', None, False
     elif genus == 'sassafras':
         if species in ('albidum'):
-            return 'lauraceae', None
+            return 'lauraceae', None, False
     elif genus == 'platanus':
         if species in ('occidentalis'):
-            return 'platanaceae', None
+            return 'platanaceae', None, False
     elif genus == 'amelanchier':
         if species in ('sp.'):
-            return 'rosaceae', None
+            return 'rosaceae', None, False
     elif genus == 'prunus':
         if species in ('pensylvanica', 'serotina', 'virginiana'):
-            return 'rosaceae', None
+            return 'rosaceae', None, False
     elif genus == 'sorbus':
         if species in ('americana'):
-            return 'rosaceae', None
+            return 'rosaceae', None, False
     elif genus == 'ulmus':
         if species in ('americana', 'sp.'):
-            return 'ulmaceae', None
+            return 'ulmaceae', None, False
 
     elif genus == 'carya':
         if species in ('illinoinensis', 'ovata', 'sp.'):
-            return 'juglandaceae', None
+            return 'juglandaceae', None, False
     
     elif genus == 'robinia':
         if species == 'pseudoacacia':
-            return 'fabaceae', None
+            return 'fabaceae', None, False
 
     elif genus == 'castanea':
         if species in ('dentata'):
-            return 'fagaceae_deciduous', None
+            return 'fagaceae_deciduous', None, False
     elif genus == 'fagus':
         if species in ('grandifolia'):
-            return 'fagaceae_deciduous', None
+            return 'fagaceae_deciduous', None, False
     elif genus == 'quercus':
         if species in ('alba', 'coccinea', 'ellipsoidalis', 'falcata',
                     'macrocarpa', 'nigra', 'prinus', 'rubra', 'stellata', 'velutina',
                     'sp.'):
-            return 'fagaceae_deciduous', None
+            return 'fagaceae_deciduous', None, False
         elif species in ('douglasii', 'laurifolia', 'minima',
                         'chrysolepis'):
-            return 'fagaceae_evergreen', None
+            return 'fagaceae_evergreen', None, False
     elif genus == 'chrysolepis':
         if species in ('chrysophylla'):
-            return 'fagaceae_evergreen', None
+            return 'fagaceae_evergreen', None, False
     elif genus == 'lithocarpus':
         if species in ('densiflorus'):
-            return 'fagaceae_evergreen', None
+            return 'fagaceae_evergreen', None, False
 
     # lulz
     elif genus == 'ceanothus':
-        if species in ('integerrimus'):
-            return 'ceanothus_integerrimus', None
+        # if species in ('integerrimus', 'sp.'):
+        return 'ceanothus_integerrimus', None, True
     elif genus == 'ribes':
         if species in ('roezlii'):
-            return 'ribes_roezlii', None
+            return 'ribes_roezlii', None, True
     else:
-        return None, None
+        return None, None, False
