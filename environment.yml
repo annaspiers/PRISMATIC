@@ -10,14 +10,14 @@ dependencies:
   - folium
   - mapclassify
   - matplotlib
+  - r-base
+  - r-sp
+  - r-raster
+  - r-devtools
   - pip
   - pip:
     - pygbif
     - geopandas
-  # - pygbif
-  # - r-base
-  # - r-neonUtilities
-  # - r-neonOS
-  # - r-sp
-  # - r-raster
-  # - r-devtools
+    - rpy2
+    - tqdm
+  

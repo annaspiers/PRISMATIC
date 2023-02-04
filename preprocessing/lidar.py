@@ -9,7 +9,7 @@ import json
 
 # add environ
 conda_env_path = Path(sys.executable).parent.parent
-os.environ['PROJ_LIB'] = conda_env_path/'share'/'proj'
+os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
 
 def _get_polygon_str(x_cord, y_cord):
     polygon_str = 'POLYGON(('
@@ -19,9 +19,15 @@ def _get_polygon_str(x_cord, y_cord):
     polygon_str += '))'
     return polygon_str
 
-def clip_laz_by_plots(laz_path, site_plots_path, output_laz_path):
+def clip_laz_by_plots(laz_path, site_plots_path,
+                      site, year,
+                      output_laz_path):
     laz_path = Path(laz_path)
-    output_laz_path = Path(output_laz_path)
+    site_plots_path = Path(site_plots_path)
+    year = str(year)
+    output_laz_path = Path(output_laz_path)/site/year/'clipped_lidar'
+    output_laz_path.mkdir(parents=True, exist_ok=True)
+
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
     polygons_utm = gpd.read_file(shp_file)
@@ -43,7 +49,7 @@ def clip_laz_by_plots(laz_path, site_plots_path, output_laz_path):
                 },
                 {
                     "type": "writers.las",
-                    "filename": str(output_laz_path/f"{laz_file_path.stem}.laz"),
+                    "filename": str(output_laz_path/laz_file_path.name),
                     "extra_dims": "all"
                 }
             ]
@@ -52,7 +58,57 @@ def clip_laz_by_plots(laz_path, site_plots_path, output_laz_path):
         pipeline = pdal.Pipeline(pdal_json_str)
         count = pipeline.execute()
         if count == 0:
-            os.remove(str(output_laz_path/f"{laz_file_path.stem}.laz"))
+            os.remove(str(output_laz_path/laz_file_path.name))
 
+    laz_files = [str(i) for i in output_laz_path.glob('*.laz')]
+    pdal_json = {
+        "pipeline": laz_files + [
+            {
+                "type": "filters.merge"
+            },
+            {
+                "type": "writers.las",
+                "filename": str(output_laz_path/'merge.laz'),
+                "extra_dims": "all"
+            }
+        ]
+    }
+    pdal_json_str = json.dumps(pdal_json)
+    pipeline = pdal.Pipeline(pdal_json_str)
+    pipeline.execute()
+    return str(output_laz_path/'merge.laz')
+
+def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
+                                site, year,
+                                output_laz_path):
+    site_plots_path = Path(site_plots_path)
+    year = str(year)
+    output_laz_path = Path(output_laz_path)/site/year/'clipped_inv_lidar'
+    output_laz_path.mkdir(parents=True, exist_ok=True)
+    shp_file = [i for i in site_plots_path.glob('*.shp')][0]
+    polygons = gpd.read_file(shp_file)
+    for row in tqdm(polygons.itertuples()):
+        pdal_json = {
+            "pipeline": [
+                {
+                    "type": "readers.las",
+                    "filename": merged_laz_file
+                },
+                {
+                    "type": "filters.crop",
+                    "polygon": _get_polygon_str(row.geometry.exterior.coords.xy[0].tolist(),
+                                                row.geometry.exterior.coords.xy[1].tolist()),
+                },
+                {
+                    "type": "writers.las",
+                    "filename": f"{str(output_laz_path)}/{row.plotID}.laz",
+                    "extra_dims": "all"
+                }
+            ]
+        }
+        pdal_json_str = json.dumps(pdal_json)
+        pipeline = pdal.Pipeline(pdal_json_str)
+        count = pipeline.execute()
+    return output_laz_path
 
 

@@ -1,3 +1,6 @@
+install.packages("neonUtilities")
+install.packages("neonOS")
+devtools::install_github("NEONScience/NEON-geolocation/geoNEON")
 library(sp)
 library(neonUtilities)
 library(neonOS)
@@ -9,7 +12,8 @@ options(stringsAsFactors = FALSE)
 # adapt directory path for your system
 
 download_veg_structure_data <- function(site) {
-    wd <- glue("./data/{site}")
+    wd <- getwd()
+    wd <- glue("{wd}/data/{site}")
     setwd(wd)
     if (!dir.exists(wd)) {
         dir.create(wd)
@@ -27,6 +31,6 @@ download_veg_structure_data <- function(site) {
                          name1 = "vst_apparentindividual",
                          name2 = "vst_mappingandtagging")
     df <- data.frame(veg)
-    write.csv(df, wd, row.names = FALSE)
+    write.csv(df, glue("{wd}/veg_structure.csv"), row.names = FALSE)
     return(glue("raw data for {site} downloaded"))
 }

@@ -20,13 +20,13 @@ COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
 def download_veg_structure_data(site):
     # download raw data
     r_source = robjects.r['source']
-    r_source(str(Path().absolute()/'preprocessing_inventory.R'))
+    r_source(str(Path(__file__).resolve().parent/'inventory.R'))
     download_veg_structure_data = robjects.r('download_veg_structure_data')
     download_veg_structure_data(site)
 
-def preprocessing_veg_structure_data(site, year):
+def preprocessing_veg_structure_data(site, year, data_path):
     year = str(year)
-    site_path = Path().absolute()/'data'/site
+    site_path = Path(data_path)/site
     r_df = pd.read_csv(site_path/'veg_structure.csv')
     pp_df_by_year = r_df[r_df['date.x'].str.contains(year, na=False)]
     pp_veg_df = pp_df_by_year[COLS]
@@ -37,5 +37,3 @@ def preprocessing_veg_structure_data(site, year):
     file_path = site_year_path/file_name
     pp_veg_df.to_csv(file_path, index=False)
     return file_name
-
-# preprocessing_veg_structure_data('SOAP', 2019)
