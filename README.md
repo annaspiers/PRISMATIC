@@ -17,4 +17,12 @@ conda create -f environment.yml
  - [x] Encode allometric equations
  - [x] Calculate individual/plot-level biomass given stem diameter/basal stem diameter
  - [ ] Seperate plots into 400m2 subplots
+ - [x] Setup GitHub actions
  - [ ] Add unit tests and integration tests
+ - [ ] Add logging
+ - [ ] Refactor configuration files
+
+# Usage
+```
+python run.py
+```
