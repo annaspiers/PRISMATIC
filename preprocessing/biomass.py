@@ -1,15 +1,13 @@
-import numpy as np
-import os
-from osgeo import gdal, osr
-import matplotlib.pyplot as plt
-import pandas as pd
 import geopandas as gpd
-import sys
+import numpy as np
+import pandas as pd
+
+from pathlib import Path
 from tqdm import tqdm
 from utils import get_biomass
-from pathlib import Path
 
 pd.set_option('mode.chained_assignment', None)
+
 
 def preprocessing_biomass(data_path,
                           site_plots_path,
@@ -30,8 +28,8 @@ def preprocessing_biomass(data_path,
             val = np.nan
             if row.scientificName != 'Unknown plant':
                 val = get_biomass(row.scientificName,
-                                 row.stemDiameter,
-                                 row.basalStemDiameter)
+                                  row.stemDiameter,
+                                  row.basalStemDiameter)
             result.append(val)
     avail_veg_df['biomass'] = result
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
@@ -42,18 +40,28 @@ def preprocessing_biomass(data_path,
     veg_area_df = pd.merge(avail_veg_df, polygons_area, on=['plotID'])
     veg_area_df = veg_area_df[~pd.isna(veg_area_df.biomass)]
     veg_area_df['individualStemNumberDensity'] = 1/veg_area_df.area
-    veg_area_df['individualBasalArea'] = np.pi/4*veg_area_df.stemDiameter**2
-    veg_area_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv', index=False)
+    veg_area_df['individualBasalArea'] = \
+        np.pi/4*veg_area_df.stemDiameter**2
+    veg_area_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv',
+                       index=False)
     plot_level_df = _cal_plot_level_biomass(veg_area_df)
-    plot_level_df.to_csv('plot_level_pp_veg_structure_IND_IBA_IAGB.csv', index=False)
+    plot_level_df.to_csv('plot_level_pp_veg_structure_IND_IBA_IAGB.csv',
+                         index=False)
 
-    veg_area_df_live = veg_area_df[~veg_area_df.plantStatus.isin(['Standing dead', 'Dead, broken bole'])]
-    veg_area_df_live.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB_live.csv', index=False)
+    veg_area_df_live = veg_area_df[
+        ~veg_area_df.plantStatus.isin(['Standing dead',
+                                       'Dead, broken bole'])]
+    veg_area_df_live.to_csv(output_data_path
+                            / 'pp_veg_structure_IND_IBA_IAGB_live.csv',
+                            index=False)
 
     plot_level_df_live = _cal_plot_level_biomass(veg_area_df_live)
-    plot_level_df_live.to_csv('plot_level_pp_veg_structure_IND_IBA_IAGB_live.csv', index=False)
+    plot_level_df_live.to_csv(('plot_level_pp_veg_structure_IND_IBA_IAGB'
+                               '_live.csv'),
+                              index=False)
 
     return str(output_data_path)
+
 
 def _cal_plot_level_biomass(df):
     plots = []
@@ -64,11 +72,13 @@ def _cal_plot_level_biomass(df):
     for plot_id, group in df.groupby('plotID'):
         plots.append(plot_id)
         ND.append(group.individualStemNumberDensity.sum())
-        BA.append((group.individualStemNumberDensity * group.individualBasalArea).sum())
-        ABCD.append((group.individualStemNumberDensity * group.biomass).sum())
+        BA.append((group.individualStemNumberDensity *
+                   group.individualBasalArea).sum())
+        ABCD.append((group.individualStemNumberDensity *
+                     group.biomass).sum())
 
     plot_level_df = pd.DataFrame.from_dict({'plotID': plots,
-                            'stemNumberDensity': ND,
-                            'basalArea': BA,
-                            'biomass': ABCD})
+                                            'stemNumberDensity': ND,
+                                            'basalArea': BA,
+                                            'biomass': ABCD})
     return plot_level_df

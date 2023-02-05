@@ -4,11 +4,13 @@ import requests
 from pathlib import Path
 from zipfile import ZipFile
 
-NEON_POLYGONS_LINK = 'https://www.neonscience.org/sites/default/files/All_NEON_TOS_Plots_V9_0.zip'
+NEON_POLYGONS_LINK = ('https://www.neonscience.org/'
+                      'sites/default/files/All_NEON_TOS_Plots_V9_0.zip')
 OUTPUT_FOLDERNAME = 'All_NEON_TOS_Plots_V9'
 EPSG = 'epsg:32611'
 PLOTS_FOLDER = 'plots'
 INVENTORY_PLOTS_FOLDER = 'inventory_plots'
+
 
 def download_neon_polygons(data_path):
     data_path = Path(data_path)
@@ -36,7 +38,11 @@ def preprocessing_neon_polygons(input_data_path, output_data_path):
     polygons_utm.to_file(output_data_path/'plots.shp')
     return str(output_data_path)
 
-def preprocessing_neon_polygons_site_inventory(input_data_path, site, year, output_data_path, inventory_file_path=None):
+
+def preprocessing_neon_polygons_site_inventory(input_data_path,
+                                               site, year,
+                                               output_data_path,
+                                               inventory_file_path=None):
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     year = str(year)

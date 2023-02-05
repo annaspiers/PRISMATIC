@@ -3,19 +3,21 @@ import pandas as pd
 from pathlib import Path
 
 COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
-        'pointID', 'stemDistance', 'stemAzimuth','scientificName',
-        'taxonRank','adjNorthing', 'adjEasting', 'adjCoordinateUncertainty',
+        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName',
+        'taxonRank', 'adjNorthing', 'adjEasting', 'adjCoordinateUncertainty',
         'adjDecimalLatitude', 'adjDecimalLongitude',
         'adjElevation', 'adjElevationUncertainty',
         'growthForm', 'plantStatus', 'stemDiameter', 'measurementHeight',
         'height', 'baseCrownHeight', 'breakHeight',
-        'breakDiameter', 'maxCrownDiameter', 'ninetyCrownDiameter','canopyPosition',
+        'breakDiameter', 'maxCrownDiameter',
+        'ninetyCrownDiameter', 'canopyPosition',
         'shape', 'basalStemDiameter', 'basalStemDiameterMsrmntHeight',
         'maxBaseCrownDiameter', 'ninetyBaseCrownDiameter',
-	    'initialBandStemDiameter', 'initialDendrometerGap',
+        'initialBandStemDiameter', 'initialDendrometerGap',
         'dendrometerHeight', 'dendrometerGap',
         'dendrometerCondition', 'bandStemDiameter'
         ]
+
 
 def download_veg_structure_data(site):
     # download raw data
@@ -23,6 +25,7 @@ def download_veg_structure_data(site):
     r_source(str(Path(__file__).resolve().parent/'inventory.R'))
     download_veg_structure_data = robjects.r('download_veg_structure_data')
     download_veg_structure_data(site)
+
 
 def preprocessing_veg_structure_data(site, year, data_path):
     year = str(year)

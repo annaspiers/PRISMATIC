@@ -3,6 +3,7 @@ from pygbif import species
 
 DIAMETER_THRESHOLD = 10
 
+
 def get_biomass(name, diameter, basal_diameter):
     # genus, species
     genus, s = name.lower().split()[:2]
@@ -29,9 +30,11 @@ def get_biomass(name, diameter, basal_diameter):
     else:
         return np.nan
 
+
 def cal_biomass(b1, b2, d):
     ln_biomass = b1 + b2*np.log(d)
     return np.exp(ln_biomass)
+
 
 def get_coeffs(family, spg):
     if family == 'abies':
@@ -73,7 +76,7 @@ def get_coeffs(family, spg):
     elif family == 'betulaceae':
         if spg < 0.4:
             return -2.5932, 2.5349
-        elif 0.40 <= spg <=0.49:
+        elif 0.40 <= spg <= 0.49:
             return -2.2271, 2.4513
         elif 0.5 <= spg <= 0.59:
             return -1.8096, 2.3480
@@ -97,11 +100,14 @@ def get_coeffs(family, spg):
     else:
         return None, None
 
+
 def get_taxa_family_spg(genus, species):
     if genus == 'abies':
         if species in ('balsamea', 'fraseri', 'lasiocarpa'):
             return 'abies', 0.34, False
-        elif species in ('amabilis', 'concolor', 'grandis', 'magnifica', 'procera', 'sp.'):
+        elif species in ('amabilis', 'concolor',
+                         'grandis', 'magnifica',
+                         'procera', 'sp.'):
             return 'abies', 0.36, False
 
     elif genus == 'thuja':
@@ -117,7 +123,7 @@ def get_taxa_family_spg(genus, species):
     elif genus == 'larix':
         if species in ('laricina', 'occidentalis', 'sp.'):
             return 'larix', None, False
-    
+
     elif genus == 'picea':
         if species in ('engelmannii', 'sitchensis'):
             return 'picea', 0.34, False
@@ -125,29 +131,32 @@ def get_taxa_family_spg(genus, species):
             return 'picea', 0.36, False
 
     elif genus == 'pinus':
-        if species in ('albicaulis', 'arizonica', 'banksiana','contorta', 'jeffreyi',
-                    'lambertiana', 'leiophylla', 'monticola', 'ponderosa', 'resinosa',
-                    'strobus', 'sp.'):
+        if species in ('albicaulis', 'arizonica', 'banksiana',
+                       'contorta', 'jeffreyi', 'lambertiana',
+                       'leiophylla', 'monticola', 'ponderosa',
+                       'resinosa', 'strobus', 'sp.'):
             return 'pinus', 0.44, False
-        elif species in ('echinata', 'elliottii', 'palustris', 'rigida', 'taeda'):
+        elif species in ('echinata', 'elliottii', 'palustris',
+                         'rigida', 'taeda'):
             return 'pinus', 0.45, False
-    
+
     elif genus == 'pseudotsuga':
         if species in 'menziesii':
             return 'pseudotsuga', None, False
-    
+
     elif genus == 'tsuga':
         if species in ('canadensis'):
             return 'tsuga', 0.39, False
         elif species in ('heterophylla', 'mertensiana'):
             return 'tsuga', 0.4, False
-    
+
     elif genus == 'acer':
-        if species in ('macrophyllum', 'pensylvanicum', 'rubrum', 'saccharinum', 'spicatum'):
+        if species in ('macrophyllum', 'pensylvanicum', 'rubrum',
+                       'saccharinum', 'spicatum'):
             return 'aceraceae', 0.49, False
         elif species in ('saccharum'):
             return 'aceraceae', 0.5, False
-    
+
     elif genus == 'alnus':
         if species in ('rubra', 'sp.'):
             return 'betulaceae', 0.39, False
@@ -160,7 +169,7 @@ def get_taxa_family_spg(genus, species):
     elif genus == 'ostrya':
         if species in ('virginiana'):
             return 'betulaceae', 0.6, False
-    
+
     elif genus == 'cornus':
         if species in ('florida'):
             return 'cornaceae', None, False
@@ -198,7 +207,7 @@ def get_taxa_family_spg(genus, species):
     elif genus == 'carya':
         if species in ('illinoinensis', 'ovata', 'sp.'):
             return 'juglandaceae', None, False
-    
+
     elif genus == 'robinia':
         if species == 'pseudoacacia':
             return 'fabaceae', None, False
@@ -211,11 +220,11 @@ def get_taxa_family_spg(genus, species):
             return 'fagaceae_deciduous', None, False
     elif genus == 'quercus':
         if species in ('alba', 'coccinea', 'ellipsoidalis', 'falcata',
-                    'macrocarpa', 'nigra', 'prinus', 'rubra', 'stellata', 'velutina',
-                    'sp.'):
+                       'macrocarpa', 'nigra', 'prinus', 'rubra',
+                       'stellata', 'velutina', 'sp.'):
             return 'fagaceae_deciduous', None, False
         elif species in ('douglasii', 'laurifolia', 'minima',
-                        'chrysolepis'):
+                         'chrysolepis'):
             return 'fagaceae_evergreen', None, False
     elif genus == 'chrysolepis':
         if species in ('chrysophylla'):

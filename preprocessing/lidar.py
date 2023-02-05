@@ -1,15 +1,16 @@
+import geopandas as gpd
+import json
 import os
 import pdal
 import sys
-from osgeo import gdal, osr
+
 from pathlib import Path
 from tqdm import tqdm
-import geopandas as gpd
-import json
 
 # add environ
 conda_env_path = Path(sys.executable).parent.parent
 os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
+
 
 def _get_polygon_str(x_cord, y_cord):
     polygon_str = 'POLYGON(('
@@ -18,6 +19,7 @@ def _get_polygon_str(x_cord, y_cord):
     polygon_str = polygon_str[:-2]
     polygon_str += '))'
     return polygon_str
+
 
 def clip_laz_by_plots(laz_path, site_plots_path,
                       site, year,
@@ -31,10 +33,13 @@ def clip_laz_by_plots(laz_path, site_plots_path,
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
     polygons_utm = gpd.read_file(shp_file)
-    polygons_str_list = [_get_polygon_str(polygons_utm.geometry.iloc[i].exterior.coords.xy[0].tolist(),
-                                          polygons_utm.geometry.iloc[i].exterior.coords.xy[1].tolist())
-                         for i in range(polygons_utm.shape[0])
-                        ]
+    polygons_str_list = [_get_polygon_str(polygons_utm.geometry.
+                                          iloc[i].exterior.coords.
+                                          xy[0].tolist(),
+                                          polygons_utm.geometry.
+                                          iloc[i].exterior.coords.
+                                          xy[1].tolist())
+                         for i in range(polygons_utm.shape[0])]
 
     for laz_file_path in tqdm(laz_file_paths):
         pdal_json = {
@@ -78,6 +83,7 @@ def clip_laz_by_plots(laz_path, site_plots_path,
     pipeline.execute()
     return str(output_laz_path/'merge.laz')
 
+
 def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
                                 site, year,
                                 output_laz_path):
@@ -96,8 +102,10 @@ def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
                 },
                 {
                     "type": "filters.crop",
-                    "polygon": _get_polygon_str(row.geometry.exterior.coords.xy[0].tolist(),
-                                                row.geometry.exterior.coords.xy[1].tolist()),
+                    "polygon": _get_polygon_str(row.geometry.exterior.
+                                                coords.xy[0].tolist(),
+                                                row.geometry.exterior.
+                                                coords.xy[1].tolist()),
                 },
                 {
                     "type": "writers.las",
@@ -108,7 +116,5 @@ def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
         }
         pdal_json_str = json.dumps(pdal_json)
         pipeline = pdal.Pipeline(pdal_json_str)
-        count = pipeline.execute()
+        pipeline.execute()
     return output_laz_path
-
-
