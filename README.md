@@ -2,11 +2,19 @@
 
 [![Python Package using Conda](https://github.com/RS-PRISMATIC/preprocessing/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/RS-PRISMATIC/preprocessing/actions/workflows/python-package-conda.yml)
 
-# Preprocessing
+# PRISMATIC-Preprocessing
 Data acquisition and preprocessing for RS-PRISMATIC
 
-# Installation
-## Install conda environment
+# Install
 ```
 conda create -f environment.yml
 ```
+
+# Todo
+ - [x] Data acquisition and data processing of inventory data
+ - [x] Data acquisition and data processing of NEON plots
+ - [x] Data acquisition and data processing of LiDAR data
+ - [x] Encode allometric equations
+ - [x] Calculate individual/plot-level biomass given stem diameter/basal stem diameter
+ - [ ] Seperate plots into 400m2 subplots
+ - [ ] Add unit tests and integration tests
