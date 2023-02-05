@@ -1,3 +1,5 @@
+[![Python Package using Conda](https://github.com/RS-PRISMATIC/preprocessing/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/RS-PRISMATIC/preprocessing/actions/workflows/python-package-conda.yml)
+
 # Preprocessing
 Data acquisition and preprocessing for RS-PRISMATIC
 
