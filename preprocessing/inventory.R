@@ -32,5 +32,5 @@ download_veg_structure_data <- function(site) {
                          name2 = "vst_mappingandtagging")
     df <- data.frame(veg)
     write.csv(df, glue("{wd}/veg_structure.csv"), row.names = FALSE)
-    return(glue("raw data for {site} downloaded"))
+    return(glue("{wd}/veg_structure.csv"))
 }

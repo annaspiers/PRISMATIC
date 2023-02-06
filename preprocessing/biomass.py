@@ -1,18 +1,21 @@
+import logging
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
 from pathlib import Path
 from tqdm import tqdm
-from utils import get_biomass
+from utils.allometry import get_biomass
 
 pd.set_option('mode.chained_assignment', None)
+log = logging.getLogger(__name__)
 
 
 def preprocessing_biomass(data_path,
                           site_plots_path,
                           site, year,
                           output_data_path):
+    log.info(f'Processing biomass data for site: {site} / year: {year}')
     veg_df = pd.read_csv(data_path)
     site_plots_path = Path(site_plots_path)
     year = str(year)
@@ -59,7 +62,8 @@ def preprocessing_biomass(data_path,
     plot_level_df_live.to_csv(('plot_level_pp_veg_structure_IND_IBA_IAGB'
                                '_live.csv'),
                               index=False)
-
+    log.info(f'Processed biomass data for site: {site} / year: {year} '
+             f'saved at {output_data_path}')
     return str(output_data_path)
 
 

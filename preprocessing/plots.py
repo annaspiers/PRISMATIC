@@ -1,3 +1,4 @@
+import logging
 import geopandas as gpd
 import pandas as pd
 import requests
@@ -11,8 +12,11 @@ EPSG = 'epsg:32611'
 PLOTS_FOLDER = 'plots'
 INVENTORY_PLOTS_FOLDER = 'inventory_plots'
 
+log = logging.getLogger(__name__)
+
 
 def download_neon_polygons(data_path):
+    log.info('Downloading NEON plots')
     data_path = Path(data_path)
     zip_filename = Path(NEON_POLYGONS_LINK).name
     zip_data_path = data_path/zip_filename
@@ -23,11 +27,13 @@ def download_neon_polygons(data_path):
     with ZipFile(zip_data_path, 'r') as zf:
         zf.extractall(path=data_path)
 
-    output_folder_path = data_path/OUTPUT_FOLDERNAME
-    return str(output_folder_path)
+    output_folder_path = str(data_path/OUTPUT_FOLDERNAME)
+    log.info(f'Downloaded NEON plots saved at: {output_folder_path}')
+    return output_folder_path
 
 
 def preprocessing_neon_polygons(input_data_path, output_data_path):
+    log.info('Processing NEON plots')
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     shp_file = [i for i in input_data_path.glob('*Polygons*.shp')][0]
@@ -36,6 +42,7 @@ def preprocessing_neon_polygons(input_data_path, output_data_path):
     output_data_path = output_data_path/PLOTS_FOLDER
     output_data_path.mkdir(parents=True, exist_ok=True)
     polygons_utm.to_file(output_data_path/'plots.shp')
+    log.info(f'Processed NEON plots saved at: {output_data_path}')
     return str(output_data_path)
 
 
@@ -43,6 +50,8 @@ def preprocessing_neon_polygons_site_inventory(input_data_path,
                                                site, year,
                                                output_data_path,
                                                inventory_file_path=None):
+    log.info(f'Processing NEON plots for site: {site} / '
+             f'inventory: {inventory_file_path}')
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     year = str(year)
@@ -58,4 +67,7 @@ def preprocessing_neon_polygons_site_inventory(input_data_path,
     output_folder_path = output_data_path/site/year/INVENTORY_PLOTS_FOLDER
     output_folder_path.mkdir(parents=True, exist_ok=True)
     polygons.to_file(output_folder_path/'plots.shp')
-    return output_folder_path
+    log.info(f'Processed NEON plots for site: {site} '
+             f'and inventory: {inventory_file_path} '
+             f'saved at: {output_folder_path}')
+    return str(output_folder_path)

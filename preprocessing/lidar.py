@@ -1,3 +1,4 @@
+import logging
 import geopandas as gpd
 import json
 import os
@@ -10,6 +11,8 @@ from tqdm import tqdm
 # add environ
 conda_env_path = Path(sys.executable).parent.parent
 os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
+
+log = logging.getLogger(__name__)
 
 
 def _get_polygon_str(x_cord, y_cord):
@@ -24,6 +27,7 @@ def _get_polygon_str(x_cord, y_cord):
 def clip_laz_by_plots(laz_path, site_plots_path,
                       site, year,
                       output_laz_path):
+    log.info(f'Processing LiDAR data for site: {site} / year: {year}')
     laz_path = Path(laz_path)
     site_plots_path = Path(site_plots_path)
     year = str(year)
@@ -81,12 +85,17 @@ def clip_laz_by_plots(laz_path, site_plots_path,
     pdal_json_str = json.dumps(pdal_json)
     pipeline = pdal.Pipeline(pdal_json_str)
     pipeline.execute()
-    return str(output_laz_path/'merge.laz')
+    merged_lidar_file = str(output_laz_path/'merge.laz')
+    log.info(f'Processed LiDAR data for site: {site} / year: {year} '
+             f'saved at: {merged_lidar_file}')
+    return merged_lidar_file
 
 
 def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
                                 site, year,
                                 output_laz_path):
+    log.info(f'Clipping LiDAR data for site: {site} / year: {year} '
+             f'given inventory: {site_plots_path}')
     site_plots_path = Path(site_plots_path)
     year = str(year)
     output_laz_path = Path(output_laz_path)/site/year/'clipped_inv_lidar'
@@ -117,4 +126,6 @@ def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
         pdal_json_str = json.dumps(pdal_json)
         pipeline = pdal.Pipeline(pdal_json_str)
         pipeline.execute()
-    return output_laz_path
+    log.info(f'Clipped LiDAR data for site: {site} / year: {year} '
+             f'saved at: {output_laz_path}')
+    return str(output_laz_path)

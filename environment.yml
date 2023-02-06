@@ -1,4 +1,4 @@
-name: prisma
+name: prisma-test
 channels:
   - conda-forge
   - r
@@ -20,4 +20,5 @@ dependencies:
     - geopandas
     - rpy2
     - tqdm
-  
+    - hydra-core
+    - hydra_colorlog
