@@ -4,7 +4,7 @@ import pandas as pd
 
 from pathlib import Path
 from tqdm import tqdm
-from utils import get_biomass
+from utils.allometry import get_biomass
 
 pd.set_option('mode.chained_assignment', None)
 
