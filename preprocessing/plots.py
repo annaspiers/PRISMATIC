@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from pathlib import Path
 from zipfile import ZipFile
+from utils.plot_partition import partition
 
 NEON_POLYGONS_LINK = ('https://www.neonscience.org/'
                       'sites/default/files/All_NEON_TOS_Plots_V9_0.zip')
@@ -10,7 +11,8 @@ OUTPUT_FOLDERNAME = 'All_NEON_TOS_Plots_V9'
 EPSG = 'epsg:32611'
 PLOTS_FOLDER = 'plots'
 INVENTORY_PLOTS_FOLDER = 'inventory_plots'
-
+INVENTORY_PARTITIONED_PLOTS_FOLDER = 'inventory_partitioned_plots'
+PLOT_PARTITION_SIZE = 20
 
 def download_neon_polygons(data_path):
     data_path = Path(data_path)
@@ -58,4 +60,42 @@ def preprocessing_neon_polygons_site_inventory(input_data_path,
     output_folder_path = output_data_path/site/year/INVENTORY_PLOTS_FOLDER
     output_folder_path.mkdir(parents=True, exist_ok=True)
     polygons.to_file(output_folder_path/'plots.shp')
-    return output_folder_path
+    return str(output_folder_path)
+
+
+def preprocessing_neon_polygons_site_inventory_partition(input_data_path,
+                                                         sampling_effort_path,
+                                                         inventory_path,
+                                                         site, year,
+                                                         output_data_path):
+    input_data_path = Path(input_data_path)
+    output_data_path = Path(output_data_path)
+    year = str(year)
+    sampling_effort = pd.read_csv(sampling_effort_path)
+    inventory = pd.read_csv(inventory_path)
+    polygons = gpd.read_file(input_data_path/'plots.shp')
+    
+    name = []
+    ps = []
+    for polygon in polygons.itertuples():
+        plot_id = polygon.plotID
+        plot_polygon = polygon.geometry
+        plot_partitions = partition(plot_polygon,
+                                    PLOT_PARTITION_SIZE,
+                                    mode='center')
+        p = plot_partitions[0]
+        name.append(plot_id)
+        ps.append(p)
+        # idxs = ['31', '40', '32', '41']
+        # plot_partitions = partition(plot_polygon,
+        #                             PLOT_PARTITION_SIZE)
+        # for i, p in zip(idxs, plot_partitions):
+        #     name.append(f'{plot_id}_{i}')
+        #     ps.append(p)
+
+    df = gpd.GeoDataFrame(data=zip(name, ps), columns=['plotID', 'geometry'],
+                          crs=polygons.crs)
+    output_folder_path = output_data_path/site/year/INVENTORY_PARTITIONED_PLOTS_FOLDER
+    output_folder_path.mkdir(parents=True, exist_ok=True)
+    df.to_file(output_folder_path/'plots.shp')
+    return str(output_folder_path)

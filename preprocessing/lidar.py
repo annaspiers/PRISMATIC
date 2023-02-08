@@ -86,10 +86,12 @@ def clip_laz_by_plots(laz_path, site_plots_path,
 
 def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
                                 site, year,
-                                output_laz_path):
+                                output_laz_path,
+                                end_result=False):
     site_plots_path = Path(site_plots_path)
     year = str(year)
-    output_laz_path = Path(output_laz_path)/site/year/'clipped_inv_lidar'
+    output_folder = 'clipped_inv_lidar' if not end_result else 'output'
+    output_laz_path = Path(output_laz_path)/site/year/output_folder
     output_laz_path.mkdir(parents=True, exist_ok=True)
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
     polygons = gpd.read_file(shp_file)
