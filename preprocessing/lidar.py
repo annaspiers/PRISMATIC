@@ -3,6 +3,7 @@ import json
 import os
 import pdal
 import sys
+import whitebox
 
 from pathlib import Path
 from tqdm import tqdm
@@ -120,3 +121,24 @@ def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
         pipeline = pdal.Pipeline(pdal_json_str)
         pipeline.execute()
     return output_laz_path
+
+
+def subtract_ground_plots(laz_path,
+                          site,
+                          year,
+                          output_path,
+                          end_result=False):
+    laz_path = Path(laz_path)
+    year = str(year)
+    output_folder = 'subtracted_ground_lidar' if not end_result else 'output'
+    output_path = Path(output_path)/site/year/output_folder
+    output_path.mkdir(parents=True, exist_ok=True)
+    laz_file_paths = [i for i in laz_path.glob('*.laz')]
+
+    wht = whitebox.WhiteboxTools()
+    for laz_path in laz_file_paths:
+        wht.height_about_ground(
+            i=str(laz_path),
+            output=str(output_path/f'{laz_path.stem}.tif')
+        )
+    return output_path

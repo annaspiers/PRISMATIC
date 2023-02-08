@@ -5,7 +5,8 @@ from preprocessing.plots import download_neon_polygons, \
                                 preprocessing_neon_polygons_site_inventory, \
                                 preprocessing_neon_polygons_site_inventory_partition
 from preprocessing.lidar import clip_laz_by_plots, \
-                                clip_laz_by_inventory_plots
+                                clip_laz_by_inventory_plots, \
+                                subtract_ground_plots
 from preprocessing.biomass import preprocessing_biomass
 
 from constants import site, year, data_path, laz_path
@@ -29,7 +30,7 @@ pp_neon_plots_site_inventory_path = \
                                                data_path,
                                                inventory_file_path)
 # pp_neon_plots_site_inventory_path = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/SOAP/2019/inventory_plots'
-# sampling_effort_path = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/SOAP/plot_sampling_effort.csv'
+sampling_effort_path = f'{data_path}/plot_sampling_effort.csv'
 # # partition plots to subplots
 pp_neon_partition_plots_site_inventory_path = \
 preprocessing_neon_polygons_site_inventory_partition(pp_neon_plots_site_inventory_path,
@@ -54,6 +55,11 @@ clipped_laz_inventory_path = \
                                 year,
                                 data_path,
                                 end_result=True)
+subtract_ground_plots(clipped_laz_inventory_path,
+                      site,
+                      year,
+                      data_path,
+                      end_result=False)
 
 # # biomass
 preprocessing_biomass(inventory_file_path,
