@@ -58,7 +58,8 @@ def preprocessing_biomass(data_path,
     veg_area_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv',
                        index=False)
     plot_level_df = _cal_plot_level_biomass(veg_area_df)
-    plot_level_df.to_csv('plot_level_pp_veg_structure_IND_IBA_IAGB.csv',
+    plot_level_df.to_csv(output_data_path/
+                         'plot_level_pp_veg_structure_IND_IBA_IAGB.csv',
                          index=False)
 
     veg_area_df_live = veg_area_df[
@@ -69,8 +70,8 @@ def preprocessing_biomass(data_path,
                             index=False)
 
     plot_level_df_live = _cal_plot_level_biomass(veg_area_df_live)
-    plot_level_df_live.to_csv(('plot_level_pp_veg_structure_IND_IBA_IAGB'
-                               '_live.csv'),
+    plot_level_df_live.to_csv(output_data_path/
+                              'plot_level_pp_veg_structure_IND_IBA_IAGB_live.csv',
                               index=False)
 
     return str(output_data_path)

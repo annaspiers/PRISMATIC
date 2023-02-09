@@ -137,8 +137,8 @@ def subtract_ground_plots(laz_path,
 
     wht = whitebox.WhiteboxTools()
     for laz_path in laz_file_paths:
-        wht.height_about_ground(
+        wht.height_above_ground(
             i=str(laz_path),
-            output=str(output_path/f'{laz_path.stem}.tif')
+            output=str(output_path/f'{laz_path.stem}.laz')
         )
     return output_path

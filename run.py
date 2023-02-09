@@ -15,23 +15,19 @@ from constants import site, year, data_path, laz_path
 # download and preprocessing inventory data
 download_veg_structure_data(site)
 inventory_file_path = preprocessing_veg_structure_data(site, year, data_path)
-# inventory_file_path = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/SOAP/2019/pp_veg_structure.csv'
 # # download NEON plots/watch
 neon_plots_path = download_neon_polygons(data_path)
-# neon_plots_path = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/All_NEON_TOS_Plots_V9'
 # # preprocessing NEON plots
 pp_neon_plots_path = preprocessing_neon_polygons(neon_plots_path, data_path)
-# pp_neon_plots_path = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/plots'
-# # preprocessing NEON plots given site ID and inventory
+# preprocessing NEON plots given site ID and inventory
 pp_neon_plots_site_inventory_path = \
     preprocessing_neon_polygons_site_inventory(pp_neon_plots_path,
                                                site,
                                                year,
                                                data_path,
                                                inventory_file_path)
-# pp_neon_plots_site_inventory_path = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/SOAP/2019/inventory_plots'
-sampling_effort_path = f'{data_path}/plot_sampling_effort.csv'
-# # partition plots to subplots
+sampling_effort_path = f'{data_path}/{site}/plot_sampling_effort.csv'
+# partition plots to subplots
 pp_neon_partition_plots_site_inventory_path = \
 preprocessing_neon_polygons_site_inventory_partition(pp_neon_plots_site_inventory_path,
                                                      sampling_effort_path,
@@ -39,15 +35,18 @@ preprocessing_neon_polygons_site_inventory_partition(pp_neon_plots_site_inventor
                                                      site,
                                                      year,
                                                      data_path)
-# pp_neon_partition_plots_site_inventory_path = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/SOAP/2019/inventory_partitioned_plots'
 
 # # clip lidar data
-merged_laz_file = clip_laz_by_plots(laz_path,
+normalized_laz_path = subtract_ground_plots(laz_path,
+                                            site,
+                                            year,
+                                            data_path,
+                                            end_result=False)
+merged_laz_file = clip_laz_by_plots(normalized_laz_path,
                                     pp_neon_plots_site_inventory_path,
                                     site,
                                     year,
                                     data_path)
-# merged_laz_file = '/home/toanngo/Documents/GitHub/prisma/preprocessing/data/SOAP/2019/clipped_lidar/merge.laz'
 clipped_laz_inventory_path = \
     clip_laz_by_inventory_plots(merged_laz_file,
                                 pp_neon_partition_plots_site_inventory_path,
@@ -55,11 +54,6 @@ clipped_laz_inventory_path = \
                                 year,
                                 data_path,
                                 end_result=True)
-subtract_ground_plots(clipped_laz_inventory_path,
-                      site,
-                      year,
-                      data_path,
-                      end_result=False)
 
 # # biomass
 preprocessing_biomass(inventory_file_path,
