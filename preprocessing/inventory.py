@@ -31,9 +31,7 @@ def download_veg_structure_data(site):
     log.info(f'Downloaded inventory data saved at: {output_data_path}')
 
 
-def preprocessing_veg_structure_data(site, year, data_path):
-    log.info(f'Processing inventory data for site: {site} / year: {year}')
-
+def preprocess_veg_structure_data(site, year, data_path):
     year = str(year)
     site_path = Path(data_path)/site
     r_df = pd.read_csv(site_path/'veg_structure.csv')
