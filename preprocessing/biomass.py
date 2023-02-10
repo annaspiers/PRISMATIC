@@ -8,11 +8,11 @@ from utils.allometry import get_biomass
 
 
 def preprocess_biomass(data_path,
-                          site_plots_path,
-                          sampling_effort_path,
-                          site, year,
-                          output_data_path,
-                          end_result=True):
+                       site_plots_path,
+                       sampling_effort_path,
+                       site, year,
+                       output_data_path,
+                       end_result=True):
     veg_df = pd.read_csv(data_path)
     site_plots_path = Path(site_plots_path)
     sampling_effort_path = Path(sampling_effort_path)
@@ -45,11 +45,15 @@ def preprocess_biomass(data_path,
     sampling_area = []
     for row in avail_veg_df.itertuples():
         if not np.isnan(row.stemDiameter) and row.stemDiameter >= 10:
-            sampling_area.append(sampling_effort_df[sampling_effort_df.plotID == row.plotID].totalSampledAreaTrees)
+            sampling_area.append(
+                sampling_effort_df[sampling_effort_df.plotID == row.plotID]
+                .totalSampledAreaTrees)
         else:
-            sampling_area.append(sampling_effort_df[sampling_effort_df.plotID == row.plotID].totalSampledAreaShrubSapling)
+            sampling_area.append(
+                sampling_effort_df[sampling_effort_df.plotID == row.plotID]
+                .totalSampledAreaShrubSapling)
     avail_veg_df['sampling_area'] = sampling_area
-    
+
     veg_area_df = pd.merge(avail_veg_df, polygons_area, on=['plotID'])
     veg_area_df = veg_area_df[~pd.isna(veg_area_df.biomass)]
     veg_area_df['individualStemNumberDensity'] = 1/veg_area_df.sampling_area
@@ -58,8 +62,8 @@ def preprocess_biomass(data_path,
     veg_area_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv',
                        index=False)
     plot_level_df = _cal_plot_level_biomass(veg_area_df)
-    plot_level_df.to_csv(output_data_path/
-                         'plot_level_pp_veg_structure_IND_IBA_IAGB.csv',
+    plot_level_df.to_csv(output_data_path
+                         / 'plot_level_pp_veg_structure_IND_IBA_IAGB.csv',
                          index=False)
 
     veg_area_df_live = veg_area_df[
@@ -70,8 +74,9 @@ def preprocess_biomass(data_path,
                             index=False)
 
     plot_level_df_live = _cal_plot_level_biomass(veg_area_df_live)
-    plot_level_df_live.to_csv(output_data_path/
-                              'plot_level_pp_veg_structure_IND_IBA_IAGB_live.csv',
+    plot_level_df_live.to_csv(output_data_path
+                              / ('plot_level_pp_veg_structure'
+                                 '_IND_IBA_IAGB_live.csv'),
                               index=False)
 
     return str(output_data_path)
