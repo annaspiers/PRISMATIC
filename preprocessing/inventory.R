@@ -31,6 +31,9 @@ download_veg_structure_data <- function(site) {
                          name1 = "vst_apparentindividual",
                          name2 = "vst_mappingandtagging")
     df <- data.frame(veg)
+    df_perplotperyear <- data.frame(veglist$vst_perplotperyear)
     write.csv(df, glue("{wd}/veg_structure.csv"), row.names = FALSE)
+    write.csv(df_perplotperyear, glue("{wd}/plot_sampling_effort.csv"),
+              row.names = FALSE)
     return(glue("raw data for {site} downloaded"))
 }
