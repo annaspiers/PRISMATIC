@@ -7,7 +7,7 @@ from tqdm import tqdm
 from utils.allometry import get_biomass
 
 
-def preprocessing_biomass(data_path,
+def preprocess_biomass(data_path,
                           site_plots_path,
                           sampling_effort_path,
                           site, year,

@@ -27,7 +27,7 @@ def download_veg_structure_data(site):
     download_veg_structure_data(site)
 
 
-def preprocessing_veg_structure_data(site, year, data_path):
+def preprocess_veg_structure_data(site, year, data_path):
     year = str(year)
     site_path = Path(data_path)/site
     r_df = pd.read_csv(site_path/'veg_structure.csv')

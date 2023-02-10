@@ -29,7 +29,7 @@ def download_neon_polygons(data_path):
     return str(output_folder_path)
 
 
-def preprocessing_neon_polygons(input_data_path, output_data_path):
+def preprocess_neon_polygons(input_data_path, output_data_path):
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     shp_file = [i for i in input_data_path.glob('*Polygons*.shp')][0]
@@ -41,7 +41,7 @@ def preprocessing_neon_polygons(input_data_path, output_data_path):
     return str(output_data_path)
 
 
-def preprocessing_neon_polygons_site_inventory(input_data_path,
+def preprocess_neon_polygons_site_inventory(input_data_path,
                                                site, year,
                                                output_data_path,
                                                inventory_file_path=None):
@@ -63,7 +63,7 @@ def preprocessing_neon_polygons_site_inventory(input_data_path,
     return str(output_folder_path)
 
 
-def preprocessing_neon_polygons_site_inventory_partition(input_data_path,
+def preprocess_neon_polygons_site_inventory_partition(input_data_path,
                                                          sampling_effort_path,
                                                          inventory_path,
                                                          site, year,
