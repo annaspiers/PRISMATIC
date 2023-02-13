@@ -1,9 +1,7 @@
 from preprocessing.inventory import download_veg_structure_data, \
                                     preprocess_veg_structure_data
 from preprocessing.plots import download_polygons, \
-                                preprocess_polygons, \
-                                preprocess_polygons_site_inventory, \
-                                preprocess_polygons_site_inventory_partition
+                                preprocess_polygons
 from preprocessing.lidar import clip_laz_by_plots, \
                                 clip_laz_by_inventory_plots, \
                                 subtract_ground_plots
@@ -18,23 +16,15 @@ inventory_file_path = preprocess_veg_structure_data(site, year, data_path)
 # # download NEON plots/watch
 neon_plots_path = download_polygons(data_path)
 # # preprocessing NEON plots
-pp_plots_path = preprocess_polygons(neon_plots_path, data_path)
-# preprocessing NEON plots given site ID and inventory
-pp_plots_site_inventory_path = \
-    preprocess_polygons_site_inventory(pp_plots_path,
-                                       site,
-                                       year,
-                                       data_path,
-                                       inventory_file_path)
 sampling_effort_path = f'{data_path}/{site}/plot_sampling_effort.csv'
 # partition plots to subplots
 pp_partition_plots_site_inventory_path = \
-    preprocess_polygons_site_inventory_partition(pp_plots_site_inventory_path,
-                                                 sampling_effort_path,
-                                                 inventory_file_path,
-                                                 site,
-                                                 year,
-                                                 data_path)
+    preprocess_polygons(neon_plots_path,
+                        sampling_effort_path,
+                        inventory_file_path,
+                        site,
+                        year,
+                        data_path)
 
 # # clip lidar data
 normalized_laz_path = subtract_ground_plots(laz_path,
@@ -43,7 +33,7 @@ normalized_laz_path = subtract_ground_plots(laz_path,
                                             data_path,
                                             end_result=False)
 merged_laz_file = clip_laz_by_plots(normalized_laz_path,
-                                    pp_plots_site_inventory_path,
+                                    pp_partition_plots_site_inventory_path,
                                     site,
                                     year,
                                     data_path)
