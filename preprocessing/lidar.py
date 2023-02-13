@@ -1,6 +1,6 @@
+import json
 import logging
 import geopandas as gpd
-import json
 import os
 import pdal
 import sys
