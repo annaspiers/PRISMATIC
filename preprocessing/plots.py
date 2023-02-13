@@ -14,7 +14,6 @@ OUTPUT_FOLDERNAME = 'All_NEON_TOS_Plots_V9'
 EPSG = 'epsg:32611'
 PLOTS_FOLDER = 'plots'
 INVENTORY_PLOTS_FOLDER = 'inventory_plots'
-INVENTORY_PARTITIONED_PLOTS_FOLDER = 'inventory_partitioned_plots'
 PLOT_PARTITION_SIZE = 20
 
 
@@ -104,14 +103,14 @@ def preprocess_polygons(input_data_path,
                 plt.title(label=f"Site: {plot_id}")
                 output_folder_path = \
                     output_data_path/site \
-                    / year/INVENTORY_PARTITIONED_PLOTS_FOLDER
+                    / year/INVENTORY_PLOTS_FOLDER
                 fig.savefig(output_folder_path/f'{plot_id}.png')
                 plt.close()
 
     df = gpd.GeoDataFrame(data=zip(names, ps), columns=['plotID', 'geometry'],
                           crs=polygons.crs)
     output_folder_path = \
-        output_data_path/site/year/INVENTORY_PARTITIONED_PLOTS_FOLDER
+        output_data_path/site/year/INVENTORY_PLOTS_FOLDER
     output_folder_path.mkdir(parents=True, exist_ok=True)
     df.to_file(output_folder_path/'plots.shp')
     return str(output_folder_path)
