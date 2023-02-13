@@ -126,7 +126,7 @@ def normalize_laz(laz_path,
                   end_result=False):
     laz_path = Path(laz_path)
     year = str(year)
-    output_folder = 'subtracted_ground_lidar' if not end_result else 'output'
+    output_folder = 'normalized_lidar' if not end_result else 'output'
     output_path = Path(output_path)/site/year/output_folder
     output_path.mkdir(parents=True, exist_ok=True)
     laz_file_paths = [i for i in laz_path.glob('*.laz')]
