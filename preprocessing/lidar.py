@@ -25,14 +25,18 @@ def _get_polygon_str(x_cord, y_cord):
     return polygon_str
 
 
-def clip_laz_by_plots(laz_path, site_plots_path,
+def clip_laz_by_plots(laz_path,
+                      site_plots_path,
                       site, year,
-                      output_laz_path):
-    log.info(f'Processing LiDAR data for site: {site} / year: {year}')
+                      output_laz_path,
+                      end_result=False):
     laz_path = Path(laz_path)
     site_plots_path = Path(site_plots_path)
     year = str(year)
-    output_laz_path = Path(output_laz_path)/site/year/'clipped_lidar'
+    output_folder = 'clipped_lidar' if not end_result else 'output'
+    pp_laz_path = Path(output_laz_path)/site/year/'clipped_lidar'
+    pp_laz_path.mkdir(parents=True, exist_ok=True)
+    output_laz_path = Path(output_laz_path)/site/year/output_folder
     output_laz_path.mkdir(parents=True, exist_ok=True)
 
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
@@ -46,6 +50,7 @@ def clip_laz_by_plots(laz_path, site_plots_path,
                                           xy[1].tolist())
                          for i in range(polygons_utm.shape[0])]
 
+    # crop each lidar file with all plots
     for laz_file_path in tqdm(laz_file_paths):
         pdal_json = {
             "pipeline": [
@@ -59,7 +64,7 @@ def clip_laz_by_plots(laz_path, site_plots_path,
                 },
                 {
                     "type": "writers.las",
-                    "filename": str(output_laz_path/laz_file_path.name),
+                    "filename": str(pp_laz_path/laz_file_path.name),
                     "extra_dims": "all"
                 }
             ]
@@ -68,9 +73,11 @@ def clip_laz_by_plots(laz_path, site_plots_path,
         pipeline = pdal.Pipeline(pdal_json_str)
         count = pipeline.execute()
         if count == 0:
-            os.remove(str(output_laz_path/laz_file_path.name))
+            os.remove(str(pp_laz_path/laz_file_path.name))
 
-    laz_files = [str(i) for i in output_laz_path.glob('*.laz')]
+    # merge clipped lidar files into merge.laz
+    merged_laz_file = str(pp_laz_path/'merge.laz')
+    laz_files = [str(i) for i in pp_laz_path.glob('*.laz')]
     pdal_json = {
         "pipeline": laz_files + [
             {
@@ -78,7 +85,7 @@ def clip_laz_by_plots(laz_path, site_plots_path,
             },
             {
                 "type": "writers.las",
-                "filename": str(output_laz_path/'merge.laz'),
+                "filename": merged_laz_file,
                 "extra_dims": "all"
             }
         ]
@@ -86,24 +93,9 @@ def clip_laz_by_plots(laz_path, site_plots_path,
     pdal_json_str = json.dumps(pdal_json)
     pipeline = pdal.Pipeline(pdal_json_str)
     pipeline.execute()
-    merged_lidar_file = str(output_laz_path/'merge.laz')
-    log.info(f'Processed LiDAR data for site: {site} / year: {year} '
-             f'saved at: {merged_lidar_file}')
-    return merged_lidar_file
 
-
-def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
-                                site, year,
-                                output_laz_path,
-                                end_result=False):
-    site_plots_path = Path(site_plots_path)
-    year = str(year)
-    output_folder = 'clipped_inv_lidar' if not end_result else 'output'
-    output_laz_path = Path(output_laz_path)/site/year/output_folder
-    output_laz_path.mkdir(parents=True, exist_ok=True)
-    shp_file = [i for i in site_plots_path.glob('*.shp')][0]
-    polygons = gpd.read_file(shp_file)
-    for row in tqdm(polygons.itertuples()):
+    # clip merged lidar file again into plot level lidar files
+    for row in tqdm(polygons_utm.itertuples()):
         pdal_json = {
             "pipeline": [
                 {
@@ -127,17 +119,17 @@ def clip_laz_by_inventory_plots(merged_laz_file, site_plots_path,
         pdal_json_str = json.dumps(pdal_json)
         pipeline = pdal.Pipeline(pdal_json_str)
         pipeline.execute()
-    return output_laz_path
+    return str(output_laz_path)
 
 
-def subtract_ground_plots(laz_path,
-                          site,
-                          year,
-                          output_path,
-                          end_result=False):
+def normalize_laz(laz_path,
+                  site,
+                  year,
+                  output_path,
+                  end_result=False):
     laz_path = Path(laz_path)
     year = str(year)
-    output_folder = 'subtracted_ground_lidar' if not end_result else 'output'
+    output_folder = 'normalized_lidar' if not end_result else 'output'
     output_path = Path(output_path)/site/year/output_folder
     output_path.mkdir(parents=True, exist_ok=True)
     laz_file_paths = [i for i in laz_path.glob('*.laz')]
