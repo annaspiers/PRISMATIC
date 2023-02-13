@@ -41,7 +41,7 @@ def preprocess_polygons(input_data_path,
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     year = str(year)
-    
+
     shp_file = [i for i in input_data_path.glob('*Polygons*.shp')][0]
     polygons = gpd.read_file(shp_file)
     sampling_effort = pd.read_csv(sampling_effort_path)
@@ -52,53 +52,61 @@ def preprocess_polygons(input_data_path,
                                         avail_veg_df['adjDecimalLatitude'])]
     polygons_site = polygons[polygons.siteID == site]
     avail_veg_gdf = gpd.GeoDataFrame(avail_veg_df,
-                                    crs=polygons_site.crs,
-                                    geometry=geometry)
+                                     crs=polygons_site.crs,
+                                     geometry=geometry)
     avail_veg_gdf = avail_veg_gdf.to_crs(EPSG)
     polygons_site_utm = polygons_site.to_crs(EPSG)
-    polygons_site_utm = polygons_site_utm[polygons_site_utm.pointID.isin(['31', '32', '40', '41'])]
-    polygons_site_utm = polygons_site_utm[polygons_site_utm.plotID.isin(avail_veg_df.plotID.unique())]
+    polygons_site_utm = polygons_site_utm[polygons_site_utm
+                                          .pointID
+                                          .isin(['31', '32', '40', '41'])]
+    polygons_site_utm = polygons_site_utm[polygons_site_utm
+                                          .plotID
+                                          .isin(avail_veg_df.plotID.unique())]
     names = []
     ps = []
     processed_plots = {}
     for plot_id, group in polygons_site_utm.groupby('plotID'):
         veg_gdf = avail_veg_gdf[avail_veg_gdf.plotID == plot_id]
-        sampling_area = sampling_effort.query(f'plotID == "{plot_id}" and plotType == "distributed"').totalSampledAreaTrees.values[0]
+        query = f'plotID == "{plot_id}" and plotType == "distributed"'
+        sampling_area = sampling_effort.query(query)\
+            .totalSampledAreaTrees.values[0]
         sampling_side = int(np.sqrt(sampling_area))
-
 
         for row in group.itertuples():
             p = plot_polygon = row.geometry
-            if plot_id not in processed_plots or sum(plot_polygon.contains(veg_gdf.geometry)) > processed_plots[plot_id]:
-                processed_plots[plot_id] = sum(plot_polygon.contains(veg_gdf.geometry))
+            tree_inside_plot = sum(plot_polygon.contains(veg_gdf.geometry))
+            if plot_id not in processed_plots or \
+               tree_inside_plot > processed_plots[plot_id]:
+
+                processed_plots[plot_id] = tree_inside_plot
                 if row.geometry.area > sampling_area:
                     # perform clipping
                     pplot = partition(plot_polygon,
                                       sampling_side,
                                       mode='center')
                     p = pplot[0]
-                    num_tree_inside = sum(p.contains(veg_gdf.geometry))
+                    tree_inside_subplot = sum(p.contains(veg_gdf.geometry))
 
                     idxs = ['31', '40', '32', '41']
                     pplots = partition(plot_polygon,
                                        sampling_side)
                     for _, plot in zip(idxs, pplots):
                         n = sum(plot.contains(veg_gdf.geometry))
-                        if num_tree_inside < n:
-                            num_tree_inside = n
+                        if tree_inside_subplot < n:
+                            tree_inside_subplot = n
                             p = plot
                 names.append(plot_id)
                 ps.append(p)
                 fig, ax = plt.subplots(figsize=(5, 5))
                 gpd.GeoSeries(p).boundary.plot(ax=ax)
-                gpd.GeoSeries([plot_polygon]).boundary.plot(ax=ax,color="red")
+                gpd.GeoSeries([plot_polygon]).boundary.plot(ax=ax, color="red")
                 veg_gdf.plot(ax=ax, color="red")
                 plt.title(label=f"Site: {plot_id}")
                 output_folder_path = \
-                    output_data_path/site/year/INVENTORY_PARTITIONED_PLOTS_FOLDER
+                    output_data_path/site \
+                    / year/INVENTORY_PARTITIONED_PLOTS_FOLDER
                 fig.savefig(output_folder_path/f'{plot_id}.png')
                 plt.close()
-
 
     df = gpd.GeoDataFrame(data=zip(names, ps), columns=['plotID', 'geometry'],
                           crs=polygons.crs)
