@@ -23,8 +23,7 @@ def preprocess_biomass(data_path,
 
     avail_veg_df = veg_df[(~pd.isna(veg_df.basalStemDiameter) |
                            ~pd.isna(veg_df.stemDiameter)) &
-                          (~pd.isna(veg_df.plotID) &
-                           ~pd.isna(veg_df.subplotID))].copy()
+                          ~pd.isna(veg_df.plotID)].copy()
     sampling_effort_df = pd.read_csv(sampling_effort_path)
     result = []
     with tqdm(total=avail_veg_df.shape[0]) as pbar:
