@@ -143,7 +143,7 @@ def preprocess_polygons(input_data_path,
                     json.dump(veg_plot_metadata, f, indent=4)
 
     df = gpd.GeoDataFrame(data=zip(names, ps), columns=['plotID', 'geometry'],
-                          crs=polygons.crs)
+                          crs=polygons_site_utm.crs)
     output_folder_path = \
         output_data_path/site/year/INVENTORY_PLOTS_FOLDER
     output_folder_path.mkdir(parents=True, exist_ok=True)
