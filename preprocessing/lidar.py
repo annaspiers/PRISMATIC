@@ -36,8 +36,6 @@ def clip_laz_by_plots(laz_path,
     output_laz_path = Path(output_laz_path)/site/year/output_folder
     output_laz_path.mkdir(parents=True, exist_ok=True)
 
-
-
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
     polygons_utm = gpd.read_file(shp_file)
@@ -121,11 +119,11 @@ def clip_laz_by_plots(laz_path,
     return str(output_laz_path)
 
 
-def subtract_ground_plots(laz_path,
-                          site,
-                          year,
-                          output_path,
-                          end_result=False):
+def normalize_laz(laz_path,
+                  site,
+                  year,
+                  output_path,
+                  end_result=False):
     laz_path = Path(laz_path)
     year = str(year)
     output_folder = 'subtracted_ground_lidar' if not end_result else 'output'
