@@ -57,6 +57,8 @@ def main(cfg):
                        data_path,
                        end_result=True)
 
+    log.info(f'DONE')
+
 
 if __name__ == '__main__':
     main()

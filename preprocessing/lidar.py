@@ -138,7 +138,8 @@ def normalize_laz(laz_path,
     laz_file_paths = [i for i in laz_path.glob('*.laz')]
 
     wht = whitebox.WhiteboxTools()
-    for laz_path in laz_file_paths:
+    wht.set_verbose_mode(False)
+    for laz_path in tqdm(laz_file_paths):
         wht.height_above_ground(
             i=str(laz_path),
             output=str(output_path/f'{laz_path.stem}.laz')
