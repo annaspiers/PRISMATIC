@@ -30,6 +30,7 @@ def clip_laz_by_plots(laz_path,
                       site, year,
                       output_laz_path,
                       end_result=False):
+    log.info(f'Processing LiDAR data for site: {site} / year: {year}')
     laz_path = Path(laz_path)
     site_plots_path = Path(site_plots_path)
     year = str(year)
@@ -50,7 +51,7 @@ def clip_laz_by_plots(laz_path,
                                           xy[1].tolist())
                          for i in range(polygons_utm.shape[0])]
 
-    # crop each lidar file with all plots
+    log.info('Cropping lidar files given all plots...')
     for laz_file_path in tqdm(laz_file_paths):
         pdal_json = {
             "pipeline": [
@@ -75,7 +76,7 @@ def clip_laz_by_plots(laz_path,
         if count == 0:
             os.remove(str(pp_laz_path/laz_file_path.name))
 
-    # merge clipped lidar files into merge.laz
+    log.info('Merging clipped lidar files...')
     merged_laz_file = str(pp_laz_path/'merge.laz')
     laz_files = [str(i) for i in pp_laz_path.glob('*.laz')]
     pdal_json = {
@@ -94,7 +95,7 @@ def clip_laz_by_plots(laz_path,
     pipeline = pdal.Pipeline(pdal_json_str)
     pipeline.execute()
 
-    # clip merged lidar file again into plot level lidar files
+    log.info('Clipping lidar into plot level lidar files...')
     for row in tqdm(polygons_utm.itertuples()):
         pdal_json = {
             "pipeline": [
@@ -119,6 +120,7 @@ def clip_laz_by_plots(laz_path,
         pdal_json_str = json.dumps(pdal_json)
         pipeline = pdal.Pipeline(pdal_json_str)
         pipeline.execute()
+    log.info(f'Processed LiDAR data for site: {site} / year: {year}')
     return str(output_laz_path)
 
 
@@ -127,6 +129,7 @@ def normalize_laz(laz_path,
                   year,
                   output_path,
                   end_result=False):
+    log.info(f'Normalizing LiDAR data for site: {site} / year: {year}')
     laz_path = Path(laz_path)
     year = str(year)
     output_folder = 'normalized_lidar' if not end_result else 'output'
@@ -140,4 +143,5 @@ def normalize_laz(laz_path,
             i=str(laz_path),
             output=str(output_path/f'{laz_path.stem}.laz')
         )
+    log.info(f'Normalized LiDAR data for site: {site} / year: {year}')
     return output_path

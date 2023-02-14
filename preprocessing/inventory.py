@@ -1,6 +1,7 @@
 import logging
-import rpy2.robjects as robjects
 import pandas as pd
+import rpy2.robjects as robjects
+
 from pathlib import Path
 
 COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',

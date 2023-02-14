@@ -42,20 +42,20 @@ def main(cfg):
                                         data_path,
                                         end_result=False)
     clip_laz_by_plots(normalized_laz_path,
-                     partitioned_plots_path,
-                     site,
-                     year,
-                     data_path,
-                     end_result=True)
-
-    # biomass
-    preprocess_biomass(inventory_file_path,
                       partitioned_plots_path,
-                      sampling_effort_path,
                       site,
                       year,
                       data_path,
                       end_result=True)
+
+    # biomass
+    preprocess_biomass(inventory_file_path,
+                       partitioned_plots_path,
+                       sampling_effort_path,
+                       site,
+                       year,
+                       data_path,
+                       end_result=True)
 
 
 if __name__ == '__main__':

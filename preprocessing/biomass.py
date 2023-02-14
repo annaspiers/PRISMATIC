@@ -7,6 +7,8 @@ from pathlib import Path
 from tqdm import tqdm
 from utils.allometry import get_biomass
 
+log = logging.getLogger(__name__)
+
 
 def preprocess_biomass(data_path,
                        site_plots_path,
@@ -14,6 +16,7 @@ def preprocess_biomass(data_path,
                        site, year,
                        output_data_path,
                        end_result=True):
+    log.info(f'Processing biomass data for site: {site} / year: {year}')
     veg_df = pd.read_csv(data_path)
     site_plots_path = Path(site_plots_path)
     sampling_effort_path = Path(sampling_effort_path)

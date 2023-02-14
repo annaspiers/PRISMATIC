@@ -40,6 +40,8 @@ def preprocess_polygons(input_data_path,
                         inventory_path,
                         site, year,
                         output_data_path):
+    log.info(f'Processing polygons for site: {site} / '
+             f'year: {year} given inventory')
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     year = str(year)
@@ -152,4 +154,7 @@ def preprocess_polygons(input_data_path,
         output_data_path/site/year/INVENTORY_PLOTS_FOLDER
     output_folder_path.mkdir(parents=True, exist_ok=True)
     df.to_file(output_folder_path/'plots.shp')
+    log.info(f'Processed polygons saved at: {output_folder_path}\n'
+             'Diagnostics and metadata saved at: '
+             f'{output_folder_metadata_path}')
     return str(output_folder_path)
