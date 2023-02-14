@@ -19,8 +19,9 @@ conda create -f environment.yml
  - [ ] Seperate plots into 400m2 subplots
  - [x] Setup GitHub actions
  - [ ] Add unit tests and integration tests
- - [-] Add logging
- - [-] Refactor configuration files
+ - [x] Add diagnostics
+ - [x] Add logging
+ - [x] Refactor configuration files
 
 # Usage
 ```
