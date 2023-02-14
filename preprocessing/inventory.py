@@ -1,5 +1,7 @@
-import rpy2.robjects as robjects
+import logging
 import pandas as pd
+import rpy2.robjects as robjects
+
 from pathlib import Path
 
 COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
@@ -18,13 +20,16 @@ COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
         'dendrometerCondition', 'bandStemDiameter'
         ]
 
+log = logging.getLogger(__name__)
+
 
 def download_veg_structure_data(site):
-    # download raw data
+    log.info(f'Downloading inventory data for site: {site}')
     r_source = robjects.r['source']
     r_source(str(Path(__file__).resolve().parent/'inventory.R'))
     download_veg_structure_data = robjects.r('download_veg_structure_data')
-    download_veg_structure_data(site)
+    output_data_path = download_veg_structure_data(site)
+    log.info(f'Downloaded inventory data saved at: {output_data_path}')
 
 
 def preprocess_veg_structure_data(site, year, data_path):
@@ -39,4 +44,7 @@ def preprocess_veg_structure_data(site, year, data_path):
     file_name = 'pp_veg_structure.csv'
     file_path = site_year_path/file_name
     pp_veg_df.to_csv(file_path, index=False)
+
+    log.info(f'Processed inventory data for site: {site} / year: {year} '
+             f'saved at: {file_name}')
     return file_name

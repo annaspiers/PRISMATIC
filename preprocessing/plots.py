@@ -1,3 +1,4 @@
+import logging
 import json
 import numpy as np
 import geopandas as gpd
@@ -15,6 +16,8 @@ OUTPUT_FOLDERNAME = 'All_NEON_TOS_Plots_V9'
 EPSG = 'epsg:32611'
 INVENTORY_PLOTS_FOLDER = 'inventory_plots'
 
+log = logging.getLogger(__name__)
+
 
 def download_polygons(data_path):
     data_path = Path(data_path)
@@ -27,8 +30,9 @@ def download_polygons(data_path):
     with ZipFile(zip_data_path, 'r') as zf:
         zf.extractall(path=data_path)
 
-    output_folder_path = data_path/OUTPUT_FOLDERNAME
-    return str(output_folder_path)
+    output_folder_path = str(data_path/OUTPUT_FOLDERNAME)
+    log.info(f'Downloaded NEON plots saved at: {output_folder_path}')
+    return output_folder_path
 
 
 def preprocess_polygons(input_data_path,
@@ -36,6 +40,8 @@ def preprocess_polygons(input_data_path,
                         inventory_path,
                         site, year,
                         output_data_path):
+    log.info(f'Processing polygons for site: {site} / '
+             f'year: {year} given inventory')
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     year = str(year)
@@ -122,6 +128,12 @@ def preprocess_polygons(input_data_path,
                 names.append(plot_id)
                 ps.append(p)
                 veg_plot_metadata['clipped_subplot_position'] = subplot_region
+                if tree_in_plot == 0:
+                    log.warning(f'{plot_id} does not have any tree location. '
+                                'Selecting the first plot encountered as '
+                                'default. Clipping to the central area given '
+                                'the totalSampledAreaTrees in sampling_effort.'
+                                )
                 # save result for diagnostics
                 fig, ax = plt.subplots(figsize=(5, 5))
                 gpd.GeoSeries(p).boundary.plot(ax=ax)
@@ -148,4 +160,7 @@ def preprocess_polygons(input_data_path,
         output_data_path/site/year/INVENTORY_PLOTS_FOLDER
     output_folder_path.mkdir(parents=True, exist_ok=True)
     df.to_file(output_folder_path/'plots.shp')
+    log.info(f'Processed polygons saved at: {output_folder_path}\n'
+             'Diagnostics and metadata saved at: '
+             f'{output_folder_metadata_path}')
     return str(output_folder_path)
