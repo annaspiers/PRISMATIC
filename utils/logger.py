@@ -3,7 +3,8 @@ import logging
 import os
 
 from configparser import ConfigParser
-from stat import FILE_ATTRIBUTE_HIDDEN
+# from stat import FILE_ATTRIBUTE_HIDDEN
+
 
 class Logger(logging.Logger):
     def __init__(self, cfg_path):
@@ -18,15 +19,16 @@ class Logger(logging.Logger):
                 log_level = eval(log_level)
             except Exception:
                 err_msg = ('Unable to evaluate config file log level: '
-                            f'{log_level}. Using default log '
-                            'level INFO.')
+                           f'{log_level}. Using default log '
+                           'level INFO.')
                 print(err_msg)
                 log_level = logging.INFO
 
             self.log_file_timestamp = dt.datetime.now()
             log_ts_fmt = '%Y%m%d%H%M%S'
             timestamp_str = self.log_file_timestamp.strftime(log_ts_fmt)
-            self.log_file_name = f'prismatic_preprocessing_report_{timestamp_str}.log'
+            self.log_file_name = \
+                f'prismatic_preprocessing_report_{timestamp_str}.log'
             if not os.path.exists(self.log_dir):
                 os.makedirs(self.log_dir)
             self.log_path = os.path.join(self.log_dir, self.log_file_name)

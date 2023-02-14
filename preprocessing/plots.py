@@ -128,6 +128,12 @@ def preprocess_polygons(input_data_path,
                 names.append(plot_id)
                 ps.append(p)
                 veg_plot_metadata['clipped_subplot_position'] = subplot_region
+                if tree_in_plot == 0:
+                    log.warning(f'{plot_id} does not have any tree location. '
+                                'Selecting the first plot encountered as '
+                                'default. Clipping to the central area given '
+                                'the totalSampledAreaTrees in sampling_effort.'
+                                )
                 # save result for diagnostics
                 fig, ax = plt.subplots(figsize=(5, 5))
                 gpd.GeoSeries(p).boundary.plot(ax=ax)
