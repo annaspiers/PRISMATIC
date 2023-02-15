@@ -57,7 +57,7 @@ def main(cfg):
                        data_path,
                        end_result=True)
 
-    log.info(f'DONE')
+    log.info('DONE')
 
 
 if __name__ == '__main__':
