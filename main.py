@@ -24,9 +24,9 @@ def main(cfg):
     # process inventory
     download_veg_structure_data(site)
     inventory_file_path, \
-    sampling_effort_path = preprocess_veg_structure_data(site,
-                                                         year,
-                                                         data_path)
+        sampling_effort_path = preprocess_veg_structure_data(site,
+                                                             year,
+                                                             data_path)
 
     # process plots
     neon_plots_path = download_polygons(data_path)

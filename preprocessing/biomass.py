@@ -13,7 +13,8 @@ log = logging.getLogger(__name__)
 def preprocess_biomass(data_path,
                        site_plots_path,
                        sampling_effort_path,
-                       site, year,
+                       site,
+                       year,
                        output_data_path,
                        end_result=True):
     log.info(f'Processing biomass data for site: {site} / year: {year}')

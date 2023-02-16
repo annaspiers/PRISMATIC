@@ -27,7 +27,8 @@ def _get_polygon_str(x_cord, y_cord):
 
 def clip_laz_by_plots(laz_path,
                       site_plots_path,
-                      site, year,
+                      site,
+                      year,
                       output_laz_path,
                       end_result=False):
     log.info(f'Processing LiDAR data for site: {site} / year: {year}')
@@ -105,10 +106,12 @@ def clip_laz_by_plots(laz_path,
                 },
                 {
                     "type": "filters.crop",
-                    "polygon": _get_polygon_str(row.geometry.exterior.
-                                                coords.xy[0].tolist(),
-                                                row.geometry.exterior.
-                                                coords.xy[1].tolist()),
+                    "polygon": _get_polygon_str(row.geometry.
+                                                exterior.coords
+                                                .xy[0].tolist(),
+                                                row.geometry.
+                                                exterior.coords
+                                                .xy[1].tolist()),
                 },
                 {
                     "type": "writers.las",

@@ -15,6 +15,7 @@ NEON_POLYGONS_LINK = ('https://www.neonscience.org/'
 OUTPUT_FOLDERNAME = 'All_NEON_TOS_Plots_V9'
 EPSG = 'epsg:32611'
 INVENTORY_PLOTS_FOLDER = 'inventory_plots'
+METADATA = 'metadata'
 
 log = logging.getLogger(__name__)
 
@@ -83,17 +84,21 @@ def preprocess_polygons(input_data_path,
         veg_gdf = avail_veg_gdf[avail_veg_gdf.plotID == plot_id]
         veg_plot_metadata['total_ind'] = veg_gdf.shape[0]
         veg_plot_metadata['percent_ind_have_location'] = \
-            round(sum(~veg_gdf.geometry.is_empty)/veg_gdf.shape[0]*100, 2)
+            round(sum(~veg_gdf.geometry.is_empty)
+                  / veg_gdf.shape[0]*100,
+                  2)
         veg_plot_metadata['total_ind_stem_gt_10'] = \
             sum(veg_gdf.stemDiameter >= 10)
         veg_plot_metadata['total_ind_stem_lt_10'] = \
             sum(veg_gdf.stemDiameter < 10)
         query = f'plotID == "{plot_id}"'
         sampling_area = sampling_effort.query(query)
-        sampling_area_trees = sampling_area \
-            .totalSampledAreaTrees.values[0]
-        sampling_area_sapling = sampling_area \
-            .totalSampledAreaShrubSapling.values[0]
+        sampling_area_trees = (sampling_area
+                               .totalSampledAreaTrees
+                               .values[0])
+        sampling_area_sapling = (sampling_area
+                                 .totalSampledAreaShrubSapling
+                                 .values[0])
         veg_plot_metadata['sampling_effort_trees'] = sampling_area_trees
         veg_plot_metadata['sampling_effort_sapling'] = sampling_area_sapling
         sampling_side = int(np.sqrt(sampling_area_trees))
@@ -101,7 +106,8 @@ def preprocess_polygons(input_data_path,
         for row in group.itertuples():
             p = plot_polygon = row.geometry
             veg_gdf_position_list = veg_gdf.geometry[~veg_gdf
-                                                     .geometry.is_empty]
+                                                     .geometry
+                                                     .is_empty]
             tree_in_plot = sum(plot_polygon.contains(veg_gdf_position_list))
             subplot_region = 'unclipped'
             if plot_id not in processed_plots or \
@@ -141,14 +147,14 @@ def preprocess_polygons(input_data_path,
                 veg_gdf.plot(ax=ax, color="red")
                 plt.title(label=f"Site: {plot_id}")
                 output_folder_path = \
-                    output_data_path/'diagnostics'/site \
-                    / year/INVENTORY_PLOTS_FOLDER
+                    (output_data_path/'diagnostics'/site
+                     / year/INVENTORY_PLOTS_FOLDER)
                 output_folder_path.mkdir(parents=True, exist_ok=True)
                 fig.savefig(output_folder_path/f'{plot_id}.png')
                 plt.close()
                 output_folder_metadata_path = \
-                    output_data_path/'diagnostics'/site \
-                    / year/'metadata'
+                    (output_data_path/'diagnostics'/site
+                     / year/METADATA)
                 output_folder_metadata_path.mkdir(parents=True, exist_ok=True)
                 f_name = output_folder_metadata_path/f'{plot_id}.json'
                 with open(f_name, 'w') as f:
