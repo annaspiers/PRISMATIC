@@ -21,5 +21,8 @@ dependencies:
     - geopandas
     - rpy2
     - tqdm
+    - laspy[lazrs, laszip]
+    - open3d
+    - sklearn
     - hydra-core
     - hydra_colorlog
