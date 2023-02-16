@@ -35,8 +35,8 @@ def download_veg_structure_data(site):
 def preprocess_veg_structure_data(site, year, data_path):
     year = str(year)
     site_path = Path(data_path)/site
-    r_df = pd.read_csv(site_path/'veg_structure.csv')
-    pp_df_by_year = r_df[r_df['date.x'].str.contains(year, na=False)]
+    df = pd.read_csv(site_path/'veg_structure.csv')
+    pp_df_by_year = df[df['date.x'].str.contains(year, na=False)]
     pp_veg_df = pp_df_by_year[COLS]
 
     site_year_path = site_path/year
@@ -45,6 +45,12 @@ def preprocess_veg_structure_data(site, year, data_path):
     file_path = site_year_path/file_name
     pp_veg_df.to_csv(file_path, index=False)
 
+    e_df = pd.read_csv(site_path/'plot_sampling_effort.csv')
+    e_pp_df_by_year = e_df[e_df['date'].str.contains(year, na=False)]
+    e_file_name = 'pp_plot_sampling_effort.csv'
+    e_file_path = site_year_path/e_file_name
+    e_pp_df_by_year.to_csv(e_file_path, index=False)
+
     log.info(f'Processed inventory data for site: {site} / year: {year} '
              f'saved at: {file_name}')
-    return file_name
+    return str(file_path), str(e_file_path)

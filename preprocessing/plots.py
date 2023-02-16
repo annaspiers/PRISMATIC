@@ -88,7 +88,7 @@ def preprocess_polygons(input_data_path,
             sum(veg_gdf.stemDiameter >= 10)
         veg_plot_metadata['total_ind_stem_lt_10'] = \
             sum(veg_gdf.stemDiameter < 10)
-        query = f'plotID == "{plot_id}" and plotType == "distributed"'
+        query = f'plotID == "{plot_id}"'
         sampling_area = sampling_effort.query(query)
         sampling_area_trees = sampling_area \
             .totalSampledAreaTrees.values[0]

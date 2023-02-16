@@ -21,13 +21,15 @@ def main(cfg):
     lidar_path = cfg.paths.lidar_path
     data_path = cfg.paths.data_path
 
+    # process inventory
     download_veg_structure_data(site)
-    inventory_file_path = preprocess_veg_structure_data(site,
-                                                        year,
-                                                        data_path)
+    inventory_file_path, \
+    sampling_effort_path = preprocess_veg_structure_data(site,
+                                                         year,
+                                                         data_path)
 
+    # process plots
     neon_plots_path = download_polygons(data_path)
-    sampling_effort_path = f'{data_path}/{site}/plot_sampling_effort.csv'
     partitioned_plots_path = \
         preprocess_polygons(neon_plots_path,
                             sampling_effort_path,
@@ -35,6 +37,7 @@ def main(cfg):
                             site,
                             year,
                             data_path)
+
     # clip lidar data
     normalized_laz_path = normalize_laz(lidar_path,
                                         site,
