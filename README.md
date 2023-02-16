@@ -1,6 +1,7 @@
 <img src="docs/img/logo.png" align="right" width="25%"/>
 
 [![Python Package using Conda](https://github.com/RS-PRISMATIC/preprocessing/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/RS-PRISMATIC/preprocessing/actions/workflows/python-package-conda.yml)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/RS-PRISMATIC/preprocessing/HEAD)
 
 # PRISMATIC-Preprocessing
 Data acquisition and preprocessing for RS-PRISMATIC
