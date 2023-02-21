@@ -11,6 +11,17 @@ import requests
 import urllib
 import os
 
+SITES = [
+    "DELA", "LENO", "TALL", "BONA", "DEJU", "HEAL",
+    "SRER", "SJER", "SOAP", "TEAK", "CPER", "NIWO",
+    "RMNP", "DSNY", "OSBS", "JERC", "PUUM", "KONZ",
+    "UKFS", "SERC", "HARV", "UNDE", "BART", "JORN",
+    "DCFS", "NOGP", "WOOD", "GUAN", "LAJA", "GRSM",
+    "ORNL", "CLBJ", "MOAB", "ONAQ", "BLAN", "MLBS",
+    "SCBI", "ABBY", "WREF", "STEI", "TREE", "YELL"
+]
+VEGETATION_STRUCTURE = 'DP1.10098.001'
+LIDAR = 'DP1.30003.001'
 
 def list_available_urls(product, site):
     """
@@ -160,6 +171,7 @@ def download_aop_files(product,
 
     # get a list of the urls for a given
     # data product, site, and year (if included)
+    year = str(year)
     if year is not None:
         urls = list_available_urls_by_year(product, site, year)
     else:
@@ -199,3 +211,55 @@ def download_aop_files(product,
                                                files[i]['name']))
                 except requests.exceptions.RequestException as e:
                     print(e)
+
+
+def get_overlapped_list():
+    dv = {}
+    dl = {}
+    for site in SITES:
+        vegetation_structure = list_available_urls(VEGETATION_STRUCTURE, site)
+        lidar = list_available_urls(LIDAR, site)
+
+        vegetation_structure = [i.split('/')[-1] for i in vegetation_structure]
+        lidar = [i.split('/')[-1] for i in lidar]
+        dv[site] = {}
+        dl[site] = {}
+
+        for v in vegetation_structure:
+            y, m = v.split('-')
+            y = int(y)
+            m = int(m)
+            if y not in dv[site]:
+                dv[site][y] = [m]
+            else:
+                dv[site][y].append(m)
+        for v in lidar:
+            y, m = v.split('-')
+            y = int(y)
+            m = int(m)
+            if y not in dl[site]:
+                dl[site][y] = [m]
+            else:
+                dl[site][y].append(m)
+
+    ranks = {}
+    for site in SITES:
+        dl_site = dl[site]
+        dv_site = dv[site]
+        ranks[site] = {}
+        for year, dv_months in dv_site.items():
+            rank = 99
+            if year in dl_site:
+                dl_months = dl_site[year]
+                min_dv_month = min(dv_months)
+                max_dv_month = max(dv_months)
+                for dl_m in dl_months:
+                    if min_dv_month <= dl_m <= max_dv_month:
+                        r = 0
+                    else:
+                        r = min(abs(dl_m-min_dv_month),
+                                abs(dl_m-max_dv_month))
+                    if r < rank:
+                        rank = r
+            ranks[site][year] = rank
+    return dv, dl
