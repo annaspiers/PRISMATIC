@@ -48,16 +48,23 @@ def preprocess_biomass(data_path,
 
     sampling_area = []
     for row in avail_veg_df.itertuples():
+        query = f'plotID == "{row.plotID}"'
+        v = polygons.query(query).area.values[0]
         if not np.isnan(row.stemDiameter) and row.stemDiameter >= 10:
-            sampling_area.append(
-                sampling_effort_df[sampling_effort_df.plotID == row.plotID]
-                .totalSampledAreaTrees
-                .values[0])
+            try:
+                v = (sampling_effort_df[sampling_effort_df.plotID == row.plotID]
+                     .totalSampledAreaTrees
+                     .values[0])
+            except:
+                pass
         else:
-            sampling_area.append(
-                sampling_effort_df[sampling_effort_df.plotID == row.plotID]
-                .totalSampledAreaShrubSapling
-                .values[0])
+            try:
+                v = (sampling_effort_df[sampling_effort_df.plotID == row.plotID]
+                     .totalSampledAreaShrubSapling
+                     .values[0])
+            except:
+                pass
+        sampling_area.append(v)
     avail_veg_df['sampling_area'] = sampling_area
 
     veg_area_df = pd.merge(avail_veg_df, polygons_area, on=['plotID'])
