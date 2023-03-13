@@ -35,7 +35,7 @@ def preprocess_biomass(data_path,
         for row in avail_veg_df.itertuples():
             pbar.update(1)
             val = np.nan
-            if row.scientificName != 'Unknown plant':
+            if 'unknown' not in row.scientificName.lower():
                 val = get_biomass(row.scientificName,
                                   row.stemDiameter,
                                   row.basalStemDiameter)
