@@ -14,7 +14,8 @@ conda_env_path = Path(sys.executable).parent.parent
 os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
 
 log = logging.getLogger(__name__)
-
+wht = whitebox.WhiteboxTools()
+wht.set_verbose_mode(False)
 
 def _get_polygon_str(x_cord, y_cord):
     polygon_str = 'POLYGON(('
@@ -44,39 +45,14 @@ def clip_laz_by_plots(laz_path,
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
     polygons_utm = gpd.read_file(shp_file)
-    polygons_str_list = [_get_polygon_str(polygons_utm.geometry.
-                                          iloc[i].exterior.coords.
-                                          xy[0].tolist(),
-                                          polygons_utm.geometry.
-                                          iloc[i].exterior.coords.
-                                          xy[1].tolist())
-                         for i in range(polygons_utm.shape[0])]
 
     log.info('Cropping lidar files given all plots...')
     for laz_file_path in tqdm(laz_file_paths):
-        pdal_json = {
-            "pipeline": [
-                {
-                    "type": "readers.las",
-                    "filename": str(laz_file_path)
-                },
-                {
-                    "type": "filters.crop",
-                    "a_srs": polygons_utm.crs.srs,
-                    "polygon": polygons_str_list,
-                },
-                {
-                    "type": "writers.las",
-                    "filename": str(pp_laz_path/laz_file_path.name),
-                    "extra_dims": "all"
-                }
-            ]
-        }
-        pdal_json_str = json.dumps(pdal_json)
-        pipeline = pdal.Pipeline(pdal_json_str)
-        count = pipeline.execute()
-        if count == 0:
-            os.remove(str(pp_laz_path/laz_file_path.name))
+        wht.clip_lidar_to_polygon(
+            str(laz_file_path),
+            str(shp_file),
+            str(pp_laz_path/laz_file_path.name)
+        )
 
     log.info('Merging clipped lidar files...')
     merged_laz_file = str(pp_laz_path/'merge.laz')
@@ -141,8 +117,6 @@ def normalize_laz(laz_path,
     output_path.mkdir(parents=True, exist_ok=True)
     laz_file_paths = [i for i in laz_path.glob('*.laz')]
 
-    wht = whitebox.WhiteboxTools()
-    wht.set_verbose_mode(False)
     for laz_path in tqdm(laz_file_paths):
         wht.height_above_ground(
             i=str(laz_path),
