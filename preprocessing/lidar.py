@@ -62,6 +62,7 @@ def clip_laz_by_plots(laz_path,
                 },
                 {
                     "type": "filters.crop",
+                    "a_srs": polygons_utm.crs.srs,
                     "polygon": polygons_str_list,
                 },
                 {
