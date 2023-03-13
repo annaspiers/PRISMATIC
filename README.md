@@ -4,7 +4,7 @@
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/RS-PRISMATIC/preprocessing/HEAD)
 
 # PRISMATIC-Preprocessing
-Data acquisition and preprocessing for RS-PRISMATIC
+Data acquisition and preprocessing for PRISMATIC
 
 # Install
 ```

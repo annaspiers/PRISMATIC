@@ -1,4 +1,4 @@
-name: prisma-test
+name: prismatic
 channels:
   - conda-forge
   - r

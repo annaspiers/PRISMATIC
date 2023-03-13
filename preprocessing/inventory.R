@@ -14,12 +14,12 @@ options(stringsAsFactors = FALSE)
 download_veg_structure_data <- function(site) {
     wd <- getwd()
     wd <- glue("{wd}/data/{site}")
-    setwd(wd)
     if (!dir.exists(wd)) {
         dir.create(wd)
     } else {
         print("dir exists")
     }
+    setwd(wd)
     veglist <- loadByProduct(dpID = "DP1.10098.001",
                             site = site,
                             package = "basic",
