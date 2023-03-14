@@ -23,12 +23,12 @@ COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
 log = logging.getLogger(__name__)
 
 
-def download_veg_structure_data(site):
+def download_veg_structure_data(site, data_path):
     log.info(f'Downloading inventory data for site: {site}')
     r_source = robjects.r['source']
     r_source(str(Path(__file__).resolve().parent/'inventory.R'))
     download_veg_structure_data = robjects.r('download_veg_structure_data')
-    output_data_path = download_veg_structure_data(site)
+    output_data_path = download_veg_structure_data(site, data_path)
     log.info(f'Downloaded inventory data saved at: {output_data_path}')
 
 

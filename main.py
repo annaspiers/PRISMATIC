@@ -22,7 +22,7 @@ def main(cfg):
     data_path = cfg.paths.data_path
 
     # process inventory
-    download_veg_structure_data(site)
+    download_veg_structure_data(site, data_path)
     inventory_file_path, \
         sampling_effort_path = preprocess_veg_structure_data(site,
                                                              year,

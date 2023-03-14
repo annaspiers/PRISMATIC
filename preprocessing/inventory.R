@@ -11,9 +11,8 @@ options(stringsAsFactors = FALSE)
 # set working directory
 # adapt directory path for your system
 
-download_veg_structure_data <- function(site) {
-    wd <- getwd()
-    wd <- glue("{wd}/data/{site}")
+download_veg_structure_data <- function(site, data_path) {
+    wd <- glue("{data_path}/{site}")
     if (!dir.exists(wd)) {
         dir.create(wd)
     } else {
