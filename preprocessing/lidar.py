@@ -92,7 +92,7 @@ def clip_laz_by_plots(laz_path,
                 },
                 {
                     "type": "writers.las",
-                    "filename": f"{str(output_laz_path)}/{row.plotID}.laz",
+                    "filename": f"{str(output_laz_path)}/{row.plotID}_{row.subplotID}.laz",
                     "extra_dims": "all"
                 }
             ]

@@ -6,13 +6,18 @@ import numpy as np
 
 # from https://www.matecdev.com/posts/shapely-polygon-gridding.html
 
+SUBPLOTS = ['21', '39', '23', '41']
 
-def partition(geom, delta, mode='grid'):
+def partition(geom, delta, subplots=None):
     prepared_geom = prep(geom)
-    if mode == 'grid':
-        grid = list(filter(prepared_geom.intersects,
+    grid = []
+    if len(subplots) != 4:
+        grids = list(filter(prepared_geom.intersects,
                            _grid_bounds(geom, delta)))
-    elif mode == 'center':
+        for s in subplots:
+            idx = SUBPLOTS.index(s)
+            grid.append(grids[idx])
+    else:
         grid = list(filter(prepared_geom.intersects,
                            _center_bounds(geom, delta)))
     return grid

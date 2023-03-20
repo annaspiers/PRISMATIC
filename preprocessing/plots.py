@@ -16,6 +16,7 @@ OUTPUT_FOLDERNAME = 'All_NEON_TOS_Plots_V9'
 EPSG = 'epsg:32611'
 INVENTORY_PLOTS_FOLDER = 'inventory_plots'
 METADATA = 'metadata'
+SUBPLOT_AREA_UNIT = 400
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ def preprocess_polygons(input_data_path,
                                           .plotID
                                           .isin(avail_veg_df.plotID.unique())]
     names = []
+    subplot_ids = []
     ps = []
     processed_plots = {}
     for plot_id, group in polygons_site_utm.groupby('plotID'):
@@ -116,10 +118,17 @@ def preprocess_polygons(input_data_path,
         except IndexError:
             log.warning(f'Site: {site}, plot: {plot_id} '
                          'does not have in: pp_sampling_effort.csv')
+        sampled_subplots = sampling_area.subplotsSampled.values[0]
+        subplots = [v.strip() for v in sampled_subplots.split('|')]
+        sampling_area_trees = SUBPLOT_AREA_UNIT
+        sampling_area_sapling = SUBPLOT_AREA_UNIT
+        if np.isnan(sampling_area_trees) and len(subplots) < 4:
+            sampling_area_trees = SUBPLOT_AREA_UNIT * len(subplots)
+        if np.isnan(sampling_area_sapling) and len(subplots) < 4:
+            sampling_area_sapling = SUBPLOT_AREA_UNIT * len(subplots)
 
         veg_plot_metadata['sampling_effort_trees'] = sampling_area_trees
         veg_plot_metadata['sampling_effort_sapling'] = sampling_area_sapling
-        sampling_side = int(np.sqrt(sampling_area_trees))
 
         for row in group.itertuples():
             p = plot_polygon = row.geometry
@@ -127,43 +136,39 @@ def preprocess_polygons(input_data_path,
                                                      .geometry
                                                      .is_empty]
             tree_in_plot = sum(plot_polygon.contains(veg_gdf_position_list))
-            subplot_region = 'unclipped'
+            
             if plot_id not in processed_plots or \
                tree_in_plot > processed_plots[plot_id]:
                 processed_plots[plot_id] = tree_in_plot
                 if row.geometry.area > sampling_area_trees:
-                    # perform clipping
-                    pplot = partition(plot_polygon,
-                                      sampling_side,
-                                      mode='center')
-                    p = pplot[0]
-                    subplot_region = 'center'
-                    tree_in_subplot = sum(p.contains(veg_gdf_position_list))
-
-                    idxs = ['31', '40', '32', '41']
                     pplots = partition(plot_polygon,
-                                       sampling_side)
-                    for i, plot in zip(idxs, pplots):
-                        n = sum(plot.contains(veg_gdf_position_list))
-                        if tree_in_subplot < n:
-                            tree_in_subplot = n
-                            p = plot
-                            subplot_region = i
-                names.append(plot_id)
-                ps.append(p)
-                veg_plot_metadata['clipped_subplot_position'] = subplot_region
+                                      np.sqrt(SUBPLOT_AREA_UNIT),
+                                      subplots)
+                if len(pplots) == 1:
+                    p = pplots[0]
+                    names.append(plot_id)
+                    ps.append(p)
+                    subplot_ids.append('central')
+                else:
+                    for subplot, p in zip(subplots, pplots):
+                        names.append(plot_id)
+                        ps.append(p)
+                        subplot_ids.append(subplot)
+                veg_plot_metadata['clipped_subplot_position'] = subplots
                 if tree_in_plot == 0:
                     log.warning(f'{plot_id} does not have any tree location. '
                                 'Selecting the first plot encountered as '
                                 'default. Clipping to the central area given '
                                 'the totalSampledAreaTrees in sampling_effort.'
                                 )
+
                 # save result for diagnostics
                 fig, ax = plt.subplots(figsize=(5, 5))
-                gpd.GeoSeries(p).boundary.plot(ax=ax)
                 gpd.GeoSeries([plot_polygon]).boundary.plot(ax=ax, color="red")
+                for p in pplots:
+                    gpd.GeoSeries(p).boundary.plot(ax=ax)
                 veg_gdf.plot(ax=ax, color="red")
-                plt.title(label=f"Site: {plot_id}")
+                plt.title(label=f"Site: {plot_id} {sampled_subplots}")
                 output_folder_path = \
                     (output_data_path/'diagnostics'/site
                      / year/INVENTORY_PLOTS_FOLDER)
@@ -178,7 +183,7 @@ def preprocess_polygons(input_data_path,
                 with open(f_name, 'w') as f:
                     json.dump(veg_plot_metadata, f, indent=4)
 
-    df = gpd.GeoDataFrame(data=zip(names, ps), columns=['plotID', 'geometry'],
+    df = gpd.GeoDataFrame(data=zip(names, subplot_ids, ps), columns=['plotID', 'subplotID', 'geometry'],
                           crs=polygons_site_utm.crs)
     output_folder_path = \
         output_data_path/site/year/INVENTORY_PLOTS_FOLDER
