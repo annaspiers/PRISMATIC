@@ -26,9 +26,9 @@ def get_biomass(name, diameter, basal_diameter):
         print('Warning: suppose to use basalStemDiameter,'
               'but it is not available, force to use stemDiameter')
     if b1 and b2:
-        return cal_biomass(b1, b2, diameter)
+        return cal_biomass(b1, b2, diameter), family
     else:
-        return np.nan
+        return np.nan, family
 
 
 def cal_biomass(b1, b2, d):

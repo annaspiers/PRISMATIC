@@ -1,11 +1,14 @@
 import logging
 import geopandas as gpd
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from pathlib import Path
 from tqdm import tqdm
 from utils.allometry import get_biomass
+
+BIOMASS_PLOTS_FOLDER = 'biomass_plots'
 
 log = logging.getLogger(__name__)
 
@@ -28,19 +31,69 @@ def preprocess_biomass(data_path,
 
     avail_veg_df = veg_df[(~pd.isna(veg_df.basalStemDiameter) |
                            ~pd.isna(veg_df.stemDiameter)) &
-                          ~pd.isna(veg_df.plotID)].copy()
+                           ~pd.isna(veg_df.plotID)].copy()
     sampling_effort_df = pd.read_csv(sampling_effort_path)
-    result = []
+    biomass = []
+    family = []
     with tqdm(total=avail_veg_df.shape[0]) as pbar:
         for row in avail_veg_df.itertuples():
             pbar.update(1)
-            val = np.nan
+            v = np.nan
             if 'unknown' not in row.scientificName.lower():
-                val = get_biomass(row.scientificName,
-                                  row.stemDiameter,
-                                  row.basalStemDiameter)
-            result.append(val)
-    avail_veg_df['biomass'] = result
+                v, f = get_biomass(row.scientificName,
+                                   row.stemDiameter,
+                                   row.basalStemDiameter)
+            biomass.append(v)
+            family.append(f)
+    avail_veg_df['biomass'] = biomass
+    avail_veg_df['family'] = family
+
+    # save result for diagnostics
+    plot_values = {}
+    for name, group in avail_veg_df.groupby('scientificName'):
+        name = ' '.join(name.split()[:2])
+        family = group.family.iloc[0] if group.shape[0] > 0 else None
+        plot_values[name] = {
+            'num_biomass': np.sum(~pd.isna(group.biomass)),
+            'num_no_biomass': np.sum(pd.isna(group.biomass)),
+            'family': family
+        }
+    plot_values = sorted(plot_values.items(),
+                         key=lambda x: -(x[1]['num_biomass'] +
+                                         x[1]['num_no_biomass']))
+    X = [v[0] for v in plot_values]
+    x_avail = np.array([i[1]['num_biomass'] for i in plot_values])
+    x_nan = np.array([i[1]['num_no_biomass'] for i in plot_values])
+    red_color = [i[0] for i in plot_values if i[1]['num_biomass'] == 0]
+    fig, axs = plt.subplots(figsize=(10, 15))
+    x_axis = np.arange(len(X))
+    plt.bar(x_axis,
+            x_avail+x_nan,
+            label='stem/basal_stem diameter not available',
+            color='red')
+    plt.bar(x_axis,
+            x_avail,
+            label='stem/basal_stem diameter available',
+            color='green')
+    plt.xticks(x_axis, X)
+    [label.set_color('red')
+     for label in axs.xaxis.get_ticklabels()
+     if label.get_text() in red_color]
+    plt.xticks(x_axis, [f"{i[0]} [{i[1]['family'] if i[1] else ''}]"
+                        for i in plot_values])
+    plt.xticks(rotation = 90)
+    plt.xlabel("Scientific name")
+    plt.ylabel("Number of individuals")
+    plt.title(f"Site: {site}, year: {year}, number of stem/basal stem diameter")
+    plt.legend()
+    output_folder_path = \
+        (output_data_path/'..'/'..'/'..'/'diagnostics'/site
+            / year/BIOMASS_PLOTS_FOLDER)
+    output_folder_path.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(output_folder_path/f'{site}.png')
+    plt.close()
+
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
     polygons = gpd.read_file(shp_file)
     polygons['area'] = polygons.area
@@ -52,14 +105,14 @@ def preprocess_biomass(data_path,
         v = polygons.query(query).area.values[0]
         if not np.isnan(row.stemDiameter) and row.stemDiameter >= 10:
             try:
-                v = (sampling_effort_df[sampling_effort_df.plotID == row.plotID]
+                v = (sampling_effort_df.query(query)
                      .totalSampledAreaTrees
                      .values[0])
             except:
                 pass
         else:
             try:
-                v = (sampling_effort_df[sampling_effort_df.plotID == row.plotID]
+                v = (sampling_effort_df.query(query)
                      .totalSampledAreaShrubSapling
                      .values[0])
             except:
