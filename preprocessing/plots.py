@@ -94,31 +94,14 @@ def preprocess_polygons(input_data_path,
         veg_plot_metadata['total_ind_stem_lt_10'] = \
             sum(veg_gdf.stemDiameter < 10)
 
-        sampling_area_trees = group.area.values[0]
-        sampling_area_sapling = group.area.values[0]
+        sampled_subplots = '31 | 32 |  40 | 41'
         try:
             query = f'plotID == "{plot_id}"'
             sampling_area = sampling_effort.query(query)
-            v = (sampling_area
-                 .totalSampledAreaTrees
-                 .values[0])
-            if np.isnan(v):
-                log.warning(f'Site: {site}, plot: {plot_id} '
-                            'has empty sampling_area_trees')
-            else:
-                sampling_area_trees = v
-            v = (sampling_area
-                 .totalSampledAreaShrubSapling
-                 .values[0])
-            if np.isnan(v):
-                log.warning(f'Site: {site}, plot: {plot_id} '
-                            'has empty sampling_area_sapling')
-            else:
-                sampling_area_sapling = v
-        except IndexError:
-            log.warning(f'Site: {site}, plot: {plot_id} '
-                         'does not have in: pp_sampling_effort.csv')
-        sampled_subplots = sampling_area.subplotsSampled.values[0]
+            if isinstance(sampling_area.subplotsSampled.values[0], str):
+                sampled_subplots = sampling_area.subplotsSampled.values[0]
+        except:
+            pass
         subplots = [v.strip() for v in sampled_subplots.split('|')]
         sampling_area_trees = SUBPLOT_AREA_UNIT
         sampling_area_sapling = SUBPLOT_AREA_UNIT
@@ -142,8 +125,8 @@ def preprocess_polygons(input_data_path,
                 processed_plots[plot_id] = tree_in_plot
                 if row.geometry.area > sampling_area_trees:
                     pplots = partition(plot_polygon,
-                                      np.sqrt(SUBPLOT_AREA_UNIT),
-                                      subplots)
+                                       np.sqrt(SUBPLOT_AREA_UNIT),
+                                       subplots)
                 if len(pplots) == 1:
                     p = pplots[0]
                     names.append(plot_id)

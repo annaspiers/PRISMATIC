@@ -97,49 +97,42 @@ def preprocess_biomass(data_path,
     shp_file = [i for i in site_plots_path.glob('*.shp')][0]
     polygons = gpd.read_file(shp_file)
     polygons['area'] = polygons.area
-    polygons_area = polygons[['plotID', 'geometry', 'area']]
 
     sampling_area = []
     for row in avail_veg_df.itertuples():
-        query = f'plotID == "{row.plotID}"'
-        v = polygons.query(query).area.values[0]
-        if not np.isnan(row.stemDiameter) and row.stemDiameter >= 10:
-            try:
-                v = (sampling_effort_df.query(query)
-                     .totalSampledAreaTrees
-                     .values[0])
-            except:
-                pass
-        else:
-            try:
-                v = (sampling_effort_df.query(query)
-                     .totalSampledAreaShrubSapling
-                     .values[0])
-            except:
-                pass
+        try:
+            query = (f'plotID == "{row.plotID}" '
+                    'and '
+                    f'subplotID == "{int(row.subplotID)}"')
+            v = polygons.query(query).area.values[0]
+        except (IndexError, ValueError):
+            query = (f'plotID == "{row.plotID}" '
+                    'and '
+                    f'subplotID == "central"')
+            v = polygons.query(query).area.values[0]
         sampling_area.append(v)
-    avail_veg_df['sampling_area'] = sampling_area
 
-    veg_area_df = pd.merge(avail_veg_df, polygons_area, on=['plotID'])
-    veg_area_df = veg_area_df[~pd.isna(veg_area_df.biomass)]
-    veg_area_df['individualStemNumberDensity'] = 1/veg_area_df.sampling_area
-    veg_area_df['individualBasalArea'] = \
-        np.pi/4*veg_area_df.stemDiameter**2
-    veg_area_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv',
+    avail_veg_df['sampling_area'] = sampling_area
+    avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.biomass)].copy()
+    avail_veg_df['individualStemNumberDensity'] = 1/avail_veg_df.sampling_area
+    avail_veg_df['individualBasalArea'] = \
+        np.pi/4*avail_veg_df.stemDiameter**2
+    avail_veg_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv',
                        index=False)
-    plot_level_df = _cal_plot_level_biomass(veg_area_df)
+    plot_level_df = _cal_plot_level_biomass(avail_veg_df, polygons)
     plot_level_df.to_csv(output_data_path
                          / 'plot_level_pp_veg_structure_IND_IBA_IAGB.csv',
                          index=False)
 
-    veg_area_df_live = veg_area_df[
-        ~veg_area_df.plantStatus.isin(['Standing dead',
-                                       'Dead, broken bole'])]
-    veg_area_df_live.to_csv(output_data_path
+    avail_veg_df_live = avail_veg_df[
+        ~avail_veg_df.plantStatus
+        .str.lower()
+        .str.contains('dead')]
+    avail_veg_df_live.to_csv(output_data_path
                             / 'pp_veg_structure_IND_IBA_IAGB_live.csv',
                             index=False)
 
-    plot_level_df_live = _cal_plot_level_biomass(veg_area_df_live)
+    plot_level_df_live = _cal_plot_level_biomass(avail_veg_df_live, polygons)
     plot_level_df_live.to_csv(output_data_path
                               / ('plot_level_pp_veg_structure'
                                  '_IND_IBA_IAGB_live.csv'),
@@ -149,21 +142,31 @@ def preprocess_biomass(data_path,
     return str(output_data_path)
 
 
-def _cal_plot_level_biomass(df):
+def _cal_plot_level_biomass(df, polygons):
     plots = []
+    subplots = []
     ND = []
     BA = []
     ABCD = []
-
-    for plot_id, group in df.groupby('plotID'):
+    for row in polygons.itertuples():
+        plot_id = row.plotID
+        subplot_id = row.subplotID
+        if subplot_id == 'central':
+            group = df.query(f'plotID == "{plot_id}"')
+        else:
+            group = df.query(f'plotID == "{plot_id}" '
+                             'and '
+                             f'subplotID == {subplot_id}')
         plots.append(plot_id)
+        subplots.append(subplot_id)
         ND.append(group.individualStemNumberDensity.sum())
         BA.append((group.individualStemNumberDensity *
-                   group.individualBasalArea).sum())
+                    group.individualBasalArea).sum())
         ABCD.append((group.individualStemNumberDensity *
-                     group.biomass).sum())
+                        group.biomass).sum())
 
     plot_level_df = pd.DataFrame.from_dict({'plotID': plots,
+                                            'subplotID': subplots,
                                             'stemNumberDensity': ND,
                                             'basalArea': BA,
                                             'biomass': ABCD})

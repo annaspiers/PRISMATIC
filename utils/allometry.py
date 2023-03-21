@@ -1,8 +1,9 @@
 import numpy as np
+import time
 from pygbif import species
 
 DIAMETER_THRESHOLD = 10
-
+GBIF_FAMILY_CACHE = {}
 
 def get_biomass(name, diameter, basal_diameter):
     # genus, species
@@ -15,9 +16,15 @@ def get_biomass(name, diameter, basal_diameter):
         try:
             family, spg, is_basal_diameter = get_taxa_family_spg(genus, 'sp.')
         except TypeError:
-            pass
+            family = GBIF_FAMILY_CACHE.get(name, None)
     if not family:
-        family = species.name_backbone(name)['family']
+        try:
+            family = species.name_backbone(name)['family']
+            GBIF_FAMILY_CACHE[name] = family
+            time.sleep(1)
+        except:
+            time.sleep(5)
+            family = species.name_backbone(name)['family']
         family = family.lower()
     b1, b2 = get_coeffs(family, spg)
     if is_basal_diameter and not np.isnan(basal_diameter):
