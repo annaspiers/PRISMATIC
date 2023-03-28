@@ -8,6 +8,7 @@ GBIF_FAMILY_CACHE = {}
 def get_biomass(name, diameter, basal_diameter):
     # genus, species
     genus, s = name.lower().split()[:2]
+    name = ' '.join([genus, s])
     family, spg = None, None
     is_basal_diameter = False
     try:
@@ -32,10 +33,12 @@ def get_biomass(name, diameter, basal_diameter):
     elif is_basal_diameter and np.isnan(basal_diameter):
         print('Warning: suppose to use basalStemDiameter,'
               'but it is not available, force to use stemDiameter')
+    elif np.isnan(diameter):
+        diameter = basal_diameter
     if b1 and b2:
-        return cal_biomass(b1, b2, diameter), family
+        return cal_biomass(b1, b2, diameter), family, diameter
     else:
-        return np.nan, family
+        return np.nan, family, diameter
 
 
 def cal_biomass(b1, b2, d):
@@ -104,6 +107,10 @@ def get_coeffs(family, spg):
         return 3.6672, 2.65018
     elif family == 'ribes_roezlii':
         return 3.761, 2.37498
+    elif family == 'universal_shrub':
+        return -3.1478, 2.3750
+    elif family == 'universal_bleaf':
+        return -2.2118, 2.4133
     else:
         return None, None
 
@@ -245,7 +252,15 @@ def get_taxa_family_spg(genus, species):
         # if species in ('integerrimus', 'sp.'):
         return 'ceanothus_integerrimus', None, True
     elif genus == 'ribes':
-        if species in ('roezlii'):
+        if species in ('roezlii', 'sp.'):
             return 'ribes_roezlii', None, True
+
+    # universal case
+    elif genus in ('toxicodendron', 'senecio',
+                   'datura', 'rhamnus', 'carex',
+                   ):
+        return 'universal_shrub', None, True
+    elif genus in ('aesculus', 'sambucus'):
+        return 'universal_bleaf', None, False
     else:
         return None, None, False

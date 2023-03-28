@@ -35,18 +35,21 @@ def preprocess_biomass(data_path,
     sampling_effort_df = pd.read_csv(sampling_effort_path)
     biomass = []
     family = []
+    used_diameter = []
     with tqdm(total=avail_veg_df.shape[0]) as pbar:
         for row in avail_veg_df.itertuples():
             pbar.update(1)
             v = np.nan
             if 'unknown' not in row.scientificName.lower():
-                v, f = get_biomass(row.scientificName,
-                                   row.stemDiameter,
-                                   row.basalStemDiameter)
+                v, f, d = get_biomass(row.scientificName,
+                                      row.stemDiameter,
+                                      row.basalStemDiameter)
             biomass.append(v)
             family.append(f)
+            used_diameter.append(d)
     avail_veg_df['biomass'] = biomass
     avail_veg_df['family'] = family
+    avail_veg_df['used_diameter'] = used_diameter
 
     # save result for diagnostics
     plot_values = {}
@@ -116,7 +119,7 @@ def preprocess_biomass(data_path,
     avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.biomass)].copy()
     avail_veg_df['individualStemNumberDensity'] = 1/avail_veg_df.sampling_area
     avail_veg_df['individualBasalArea'] = \
-        np.pi/4*avail_veg_df.stemDiameter**2
+        np.pi/4*avail_veg_df.used_diameter**2
     avail_veg_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv',
                        index=False)
     plot_level_df = _cal_plot_level_biomass(avail_veg_df, polygons)
