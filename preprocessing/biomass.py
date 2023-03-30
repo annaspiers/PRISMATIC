@@ -36,20 +36,23 @@ def preprocess_biomass(data_path,
     biomass = []
     family = []
     used_diameter = []
+    is_shrub = []
     with tqdm(total=avail_veg_df.shape[0]) as pbar:
         for row in avail_veg_df.itertuples():
             pbar.update(1)
             v = np.nan
-            if 'unknown' not in row.scientificName.lower():
-                v, f, d = get_biomass(row.scientificName,
-                                      row.stemDiameter,
-                                      row.basalStemDiameter)
+            v, f, d, s = get_biomass(row.scientificName,
+                                        row.stemDiameter,
+                                        row.basalStemDiameter,
+                                        row.growthForm)
             biomass.append(v)
             family.append(f)
             used_diameter.append(d)
+            is_shrub.append(s)
     avail_veg_df['biomass'] = biomass
     avail_veg_df['family'] = family
     avail_veg_df['used_diameter'] = used_diameter
+    avail_veg_df['is_shrub'] = is_shrub
 
     # save result for diagnostics
     plot_values = {}
@@ -113,6 +116,13 @@ def preprocess_biomass(data_path,
                     'and '
                     f'subplotID == "central"')
             v = polygons.query(query).area.values[0]
+        try:
+            if row.is_shrub:
+                v = sampling_effort_df.query(f'plotID == "{row.plotID}"').totalSampledAreaShrubSapling.values[0]
+            else:
+                v = sampling_effort_df.query(f'plotID == "{row.plotID}"').totalSampledAreaTrees.values[0]
+        except:
+            pass
         sampling_area.append(v)
 
     avail_veg_df['sampling_area'] = sampling_area

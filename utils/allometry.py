@@ -5,29 +5,39 @@ from pygbif import species
 DIAMETER_THRESHOLD = 10
 GBIF_FAMILY_CACHE = {}
 
-def get_biomass(name, diameter, basal_diameter):
+def get_biomass(name, diameter, basal_diameter, growth_form):
     # genus, species
     genus, s = name.lower().split()[:2]
     name = ' '.join([genus, s])
     family, spg = None, None
     is_basal_diameter = False
-    try:
-        family, spg, is_basal_diameter = get_taxa_family_spg(genus, s)
-    except TypeError:
+    if 'unknown' in name:
+        if np.isnan(diameter) or diameter < 10:
+            family = 'universal_shrub'
+            is_basal_diameter = True
+        else:
+            family = 'universal_bleaf'
+    else:
         try:
-            family, spg, is_basal_diameter = get_taxa_family_spg(genus, 'sp.')
+            family, spg, is_basal_diameter = get_taxa_family_spg(genus, s)
         except TypeError:
-            family = GBIF_FAMILY_CACHE.get(name, None)
-    if not family:
-        try:
-            family = species.name_backbone(name)['family']
-            GBIF_FAMILY_CACHE[name] = family
-            time.sleep(1)
-        except:
-            time.sleep(5)
-            family = species.name_backbone(name)['family']
-        family = family.lower()
+            try:
+                family, spg, is_basal_diameter = get_taxa_family_spg(genus, 'sp.')
+            except TypeError:
+                family = GBIF_FAMILY_CACHE.get(name, None)
+        if not family:
+            try:
+                family = species.name_backbone(name)['family']
+                GBIF_FAMILY_CACHE[name] = family
+                time.sleep(1)
+            except:
+                time.sleep(5)
+                family = species.name_backbone(name)['family']
+            family = family.lower()
     b1, b2 = get_coeffs(family, spg)
+    if 'sapling' in growth_form.lower() or 'shrub' in growth_form.lower():
+        is_basal_diameter = True
+
     if is_basal_diameter and not np.isnan(basal_diameter):
         diameter = basal_diameter
     elif is_basal_diameter and np.isnan(basal_diameter):
@@ -35,10 +45,13 @@ def get_biomass(name, diameter, basal_diameter):
               'but it is not available, force to use stemDiameter')
     elif np.isnan(diameter):
         diameter = basal_diameter
+        is_basal_diameter = True
+    if not np.isnan(diameter) and diameter < 10:
+        is_basal_diameter = True
     if b1 and b2:
-        return cal_biomass(b1, b2, diameter), family, diameter
+        return cal_biomass(b1, b2, diameter), family, diameter, is_basal_diameter
     else:
-        return np.nan, family, diameter
+        return np.nan, family, diameter, is_basal_diameter
 
 
 def cal_biomass(b1, b2, d):
