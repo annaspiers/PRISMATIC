@@ -44,7 +44,7 @@ python main.py sites.global_run_params.run=SJER
 
 
 # run SJER and SOAP
-python main.py sites.global_run_params.run=SJER,SOAP
+python main.py sites.global_run_params.run='[SJER, SOAP]'
 
 # run only SJER, force to rerun preprocess_biomass on SJER
 python main.py sites.global_run_params.run=SJER sites.SJER.2019.force_rerun.preprocess_biomass=True
