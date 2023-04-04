@@ -35,7 +35,7 @@ def get_biomass(name, diameter, basal_diameter, growth_form):
                 family = species.name_backbone(name)['family']
             family = family.lower()
     b1, b2 = get_coeffs(family, spg)
-    if 'sapling' in growth_form.lower() or 'shrub' in growth_form.lower():
+    if isinstance(growth_form, str) and ('sapling' in growth_form.lower() or 'shrub' in growth_form.lower()):
         is_basal_diameter = True
 
     if is_basal_diameter and not np.isnan(basal_diameter):
