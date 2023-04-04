@@ -24,35 +24,36 @@ run:
         clip_laz_by_plots: False
         preprocess_biomass: False
 
-  # SOAP:
-  #   '2019':
-  #     year_lidar: 2019-06
-  #   '2020':
-  #     year_lidar: 2021-07
-  #     force_rerun:
-  #       download_lidar: False
-  #       download_veg_structure_data: False
-  #       preprocess_veg_structure_data: False
-  #       download_polygons: False
-  #       preprocess_polygons: False
-  #       normalize_laz: False
-  #       clip_laz_by_plots: False
-  #       preprocess_biomass: False
+  SOAP:
+    '2019':
+      year_lidar: 2019-06
+    '2020':
+      year_lidar: 2021-07
+      force_rerun:
+        download_lidar: False
+        download_veg_structure_data: False
+        preprocess_veg_structure_data: False
+        download_polygons: False
+        preprocess_polygons: False
+        normalize_laz: False
+        clip_laz_by_plots: False
+        preprocess_biomass: False
 
-  # TEAK:
-  #   '2021':
-  #     year_lidar: 2021-07
-  #     force_rerun:
-  #       download_lidar: False
-  #       download_veg_structure_data: False
-  #       preprocess_veg_structure_data: False
-  #       download_polygons: False
-  #       preprocess_polygons: False
-  #       normalize_laz: False
-  #       clip_laz_by_plots: False
-  #       preprocess_biomass: False
+  TEAK:
+    '2021':
+      year_lidar: 2021-07
+      force_rerun:
+        download_lidar: False
+        download_veg_structure_data: False
+        preprocess_veg_structure_data: False
+        download_polygons: False
+        preprocess_polygons: False
+        normalize_laz: False
+        clip_laz_by_plots: False
+        preprocess_biomass: False
 
 global_run_params:
+  run:
   force_rerun:
     download_lidar: False
     download_veg_structure_data: False
@@ -61,4 +62,4 @@ global_run_params:
     preprocess_polygons: False
     normalize_laz: False
     clip_laz_by_plots: False
-    preprocess_biomass: True
+    preprocess_biomass: False

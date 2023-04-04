@@ -92,56 +92,62 @@ def main(cfg):
     data_path = cfg.paths.data_path
     global cache
 
-    global_run_params = cfg.sites.global_run_params
+    global_force_rerun = cfg.sites.global_run_params.force_rerun
+    global_run = cfg.sites.global_run_params.run
+    if isinstance(global_run, str):
+        global_run = [global_run]
+
     for site, v in cfg.sites.run.items():
-        for year_inventory, p in v.items():
-            rerun_status = {}
-            for k, v in p.force_rerun.items():
-                rerun_status[k] = v or global_run_params.force_rerun.get(k, False)
-            year_lidar = p.year_lidar
-            cache = build_cache(site, year_inventory, year_lidar,
-                                data_path, root_lidar_path)
+        if not global_run or site in global_run:
+            for year_inventory, p in v.items():
+                rerun_status = {}
+                for k, v in p.force_rerun.items():
+                    rerun_status[k] = v or global_force_rerun.get(k, False)
+                year_lidar = p.year_lidar
+                log.info(f'Run process for site: {site}, year: {year_inventory}, year_lidar: {year_lidar}, with rerun status: {rerun_status}')
+                cache = build_cache(site, year_inventory, year_lidar,
+                                    data_path, root_lidar_path)
 
-            # download lidar
-            lidar_path = force_rerun(force=rerun_status)(download_lidar)(site, year_lidar, root_lidar_path)
+                # download lidar
+                lidar_path = force_rerun(force=rerun_status)(download_lidar)(site, year_lidar, root_lidar_path)
 
-            # process inventory
-            _, _ = force_rerun(force=rerun_status)(download_veg_structure_data)(site, data_path)
-            inventory_file_path, \
-                sampling_effort_path = force_rerun(force=rerun_status)(preprocess_veg_structure_data)(site,
-                                                                                                    year_inventory,
-                                                                                                    data_path)
+                # process inventory
+                _, _ = force_rerun(force=rerun_status)(download_veg_structure_data)(site, data_path)
+                inventory_file_path, \
+                    sampling_effort_path = force_rerun(force=rerun_status)(preprocess_veg_structure_data)(site,
+                                                                                                        year_inventory,
+                                                                                                        data_path)
 
-            # process plots
-            neon_plots_path = force_rerun(force=rerun_status)(download_polygons)(data_path)
-            partitioned_plots_path = \
-                force_rerun(force=rerun_status)(preprocess_polygons)(neon_plots_path,
-                                                                    sampling_effort_path,
-                                                                    inventory_file_path,
-                                                                    site,
-                                                                    year_inventory,
-                                                                    data_path)
+                # process plots
+                neon_plots_path = force_rerun(force=rerun_status)(download_polygons)(data_path)
+                partitioned_plots_path = \
+                    force_rerun(force=rerun_status)(preprocess_polygons)(neon_plots_path,
+                                                                        sampling_effort_path,
+                                                                        inventory_file_path,
+                                                                        site,
+                                                                        year_inventory,
+                                                                        data_path)
 
-            # clip lidar data
-            normalized_laz_path = force_rerun(force=rerun_status)(normalize_laz)(lidar_path,
-                                                                                site,
-                                                                                year_inventory,
-                                                                                data_path)
-            force_rerun(force=rerun_status)(clip_laz_by_plots)(normalized_laz_path,
-                                                               partitioned_plots_path,
-                                                               site,
-                                                               year_inventory,
-                                                               data_path,
-                                                               end_result=True)
-
-            # biomass
-            force_rerun(force=rerun_status)(preprocess_biomass)(inventory_file_path,
+                # clip lidar data
+                normalized_laz_path = force_rerun(force=rerun_status)(normalize_laz)(lidar_path,
+                                                                                    site,
+                                                                                    year_inventory,
+                                                                                    data_path)
+                force_rerun(force=rerun_status)(clip_laz_by_plots)(normalized_laz_path,
                                                                 partitioned_plots_path,
-                                                                sampling_effort_path,
                                                                 site,
                                                                 year_inventory,
                                                                 data_path,
                                                                 end_result=True)
+
+                # biomass
+                force_rerun(force=rerun_status)(preprocess_biomass)(inventory_file_path,
+                                                                    partitioned_plots_path,
+                                                                    sampling_effort_path,
+                                                                    site,
+                                                                    year_inventory,
+                                                                    data_path,
+                                                                    end_result=True)
 
     log.info('DONE')
 
