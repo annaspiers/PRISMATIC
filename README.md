@@ -32,6 +32,18 @@ conda create -f environment.yml
 
 `conf/sites/sites.yaml`: you may need to add other sites if you want to process those.
 
+List of processes for each site:
+- `download_lidar`: download lidar data from NEON
+- `download_veg_structure_data`: download vegetation data from NEON
+- `preprocess_veg_structure_data`: process vegetation data and sampling effort
+- `download_polygons`: download polygons data from NEON
+- `preprocess_polygons`: process polygons data
+- `normalize_laz`: normalize laz files
+- `clip_laz_by_plots`: clip the laz files given plots in processed vegetation structure and save to output
+- `preprocess_biomass`: process biomass and save to output
+
+The final result is at `data_path/site/year/output`.
+
 ```
 # run all sites with default params
 python main.py
