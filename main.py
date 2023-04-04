@@ -56,6 +56,12 @@ def build_cache(site, year_inventory, year_lidar, data_path, root_lidar_path):
     _add_to_cache('normalize_laz',
                   str(data_path/site/year_inventory/'normalized_lidar'),
                   l, cache)
+    _add_to_cache('clip_laz_by_plots',
+                  str(data_path/site/year_inventory/'output'),
+                  l, cache)
+    _add_to_cache('preprocess_biomass',
+                  str(data_path/site/year_inventory/'output'),
+                  l, cache)
     return cache
 
 
@@ -69,9 +75,11 @@ def force_rerun(force={}):
             else:
                 is_in_cache = func.__name__ in cache
                 if not is_in_cache:
+                    log.info(f'Not found in cache, run the function: {func.__name__}')
                     result = func(*args, **kwargs)
                     return result
                 else:
+                    log.info(f'Found in cache, use cache and not rerun the function: {func.__name__}')
                     return cache.get(func.__name__, None)
         return wrapper
     return cached
@@ -84,9 +92,12 @@ def main(cfg):
     data_path = cfg.paths.data_path
     global cache
 
-    for site, v in cfg.sites.items():
+    global_run_params = cfg.sites.global_run_params
+    for site, v in cfg.sites.run.items():
         for year_inventory, p in v.items():
-            rerun_status = p.force_rerun
+            rerun_status = {}
+            for k, v in p.force_rerun.items():
+                rerun_status[k] = v or global_run_params.force_rerun.get(k, False)
             year_lidar = p.year_lidar
             cache = build_cache(site, year_inventory, year_lidar,
                                 data_path, root_lidar_path)
@@ -116,21 +127,21 @@ def main(cfg):
                                                                                 site,
                                                                                 year_inventory,
                                                                                 data_path)
-            clip_laz_by_plots(normalized_laz_path,
-                            partitioned_plots_path,
-                            site,
-                            year_inventory,
-                            data_path,
-                            end_result=True)
+            force_rerun(force=rerun_status)(clip_laz_by_plots)(normalized_laz_path,
+                                                               partitioned_plots_path,
+                                                               site,
+                                                               year_inventory,
+                                                               data_path,
+                                                               end_result=True)
 
             # biomass
-            preprocess_biomass(inventory_file_path,
-                            partitioned_plots_path,
-                            sampling_effort_path,
-                            site,
-                            year_inventory,
-                            data_path,
-                            end_result=True)
+            force_rerun(force=rerun_status)(preprocess_biomass)(inventory_file_path,
+                                                                partitioned_plots_path,
+                                                                sampling_effort_path,
+                                                                site,
+                                                                year_inventory,
+                                                                data_path,
+                                                                end_result=True)
 
     log.info('DONE')
 
