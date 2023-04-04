@@ -1,12 +1,23 @@
-- site: SJER
-  year_inventory: 2019
-  year_lidar: 2019-03
-  force_rerun: []
+SJER:
+  '2019':
+    year_lidar: 2019-03
+    force_rerun:
+      download_lidar: False
+      download_veg_structure_data: False
+      preprocess_veg_structure_data: False
+      download_polygons: False
+      preprocess_polygons: False
+      normalize_laz: False
 
-# - site: SJER
-#   year_inventory: 2022
-#   year_lidar: 2021-03
-#   force_rerun: []
+  '2022':
+    year_lidar: 2021-03
+    force_rerun:
+      download_lidar: False
+      download_veg_structure_data: False
+      preprocess_veg_structure_data: False
+      download_polygons: False
+      preprocess_polygons: False
+      normalize_laz: False
 
 # - site: SOAP
 #   year_inventory: 2019
