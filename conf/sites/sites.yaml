@@ -1,2 +1,22 @@
-site: SOAP
-year: 2019
+- site: SJER
+  year_inventory: 2019
+  year_lidar: 2019-03
+  force_rerun: []
+
+# - site: SJER
+#   year_inventory: 2022
+#   year_lidar: 2021-03
+#   force_rerun: []
+
+# - site: SOAP
+#   year_inventory: 2019
+#   year_lidar: 2019-06
+#   force_rerun: []
+# - site: SOAP
+#   year_inventory: 2020
+#   year_lidar: 2021-07
+#   force_rerun: []
+# - site: TEAK
+#   year_inventory: 2021
+#   year_lidar: 2021-07
+#   force_rerun: []

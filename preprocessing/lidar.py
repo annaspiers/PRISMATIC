@@ -8,6 +8,7 @@ import whitebox
 
 from pathlib import Path
 from tqdm import tqdm
+from utils.download_functions import download_aop_files
 
 # add environ
 conda_env_path = Path(sys.executable).parent.parent
@@ -17,13 +18,24 @@ log = logging.getLogger(__name__)
 wht = whitebox.WhiteboxTools()
 wht.set_verbose_mode(False)
 
-def _get_polygon_str(x_cord, y_cord):
-    polygon_str = 'POLYGON(('
-    for x, y in zip(list(x_cord), list(y_cord)):
-        polygon_str += f'{x} {y}, '
-    polygon_str = polygon_str[:-2]
-    polygon_str += '))'
-    return polygon_str
+
+def download_lidar(site, date, lidar_path):
+    lidar_path = Path(lidar_path)
+    product_code = 'DP1.30003.001'
+    path = lidar_path/site/date
+    file_types = ['prj', 'kml', 'shx', 'shp', 'dbf', 'laz']
+    for file_type in file_types:
+        if file_type == 'laz':
+            p = path/'laz'
+        else:
+            p = path/'shape'
+        download_aop_files(product_code,
+                           site,
+                           date,
+                           str(p),
+                           match_string=file_type,
+                           check_size=False)
+    return str(path/'laz')
 
 
 def clip_laz_by_plots(laz_path,
@@ -124,3 +136,12 @@ def normalize_laz(laz_path,
         )
     log.info(f'Normalized LiDAR data for site: {site} / year: {year}')
     return output_path
+
+
+def _get_polygon_str(x_cord, y_cord):
+    polygon_str = 'POLYGON(('
+    for x, y in zip(list(x_cord), list(y_cord)):
+        polygon_str += f'{x} {y}, '
+    polygon_str = polygon_str[:-2]
+    polygon_str += '))'
+    return polygon_str

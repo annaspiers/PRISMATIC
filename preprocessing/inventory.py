@@ -28,9 +28,9 @@ def download_veg_structure_data(site, data_path):
     r_source = robjects.r['source']
     r_source(str(Path(__file__).resolve().parent/'inventory.R'))
     download_veg_structure_data = robjects.r('download_veg_structure_data')
-    output_data_path = download_veg_structure_data(site, data_path)
-    log.info(f'Downloaded inventory data saved at: {output_data_path}')
-
+    veg_structure, plot_sampling_effort = download_veg_structure_data(site, data_path)
+    log.info(f'Downloaded inventory data saved at: {veg_structure}, {plot_sampling_effort}')
+    return veg_structure, plot_sampling_effort
 
 def preprocess_veg_structure_data(site, year, data_path):
     year = str(year)
