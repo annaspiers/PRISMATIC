@@ -112,10 +112,13 @@ def preprocess_biomass(data_path,
                     f'subplotID == "{int(row.subplotID)}"')
             v = polygons.query(query).area.values[0]
         except (IndexError, ValueError):
-            query = (f'plotID == "{row.plotID}" '
-                    'and '
-                    f'subplotID == "central"')
-            v = polygons.query(query).area.values[0]
+            try:
+                query = (f'plotID == "{row.plotID}" '
+                        'and '
+                        f'subplotID == "central"')
+                v = polygons.query(query).area.values[0]
+            except:
+                v = np.nan
         try:
             if row.is_shrub:
                 v = sampling_effort_df.query(f'plotID == "{row.plotID}"').totalSampledAreaShrubSapling.values[0]
@@ -127,6 +130,7 @@ def preprocess_biomass(data_path,
 
     avail_veg_df['sampling_area'] = sampling_area
     avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.biomass)].copy()
+    avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.sampling_area)].copy()
     avail_veg_df['individualStemNumberDensity'] = 1/avail_veg_df.sampling_area
     avail_veg_df['individualBasalArea'] = \
         np.pi/4*avail_veg_df.used_diameter**2
