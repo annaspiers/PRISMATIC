@@ -1,2 +1,2 @@
-data_path: /media/toanngo/My Passport/prismatic/data
-lidar_path: /home/toanngo/Documents/GitHub/prisma/preprocessing/data/lidar_samples #${hydra:runtime.cwd}/data/lidar_samples
+data_path: ${hydra:runtime.cwd}/data
+lidar_path: ${hydra:runtime.cwd}/data/lidar_samples
