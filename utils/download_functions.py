@@ -198,7 +198,7 @@ def download_aop_files(product,
         for i in range(len(files)):
             if match_string is not None:
                 if match_string in files[i]['name']:
-                    print(f"downloading {files[i]['name']} to download_folder")
+                    print(f"downloading {files[i]['name']} to {download_folder}")
                     try:
                         download_file(files[i]['url'],
                                       os.path.join(download_folder,
