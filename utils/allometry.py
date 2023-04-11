@@ -260,7 +260,7 @@ def get_taxa_family_spg(genus, species):
         if species in ('densiflorus'):
             return 'fagaceae_evergreen', None, False
 
-    # lulz
+    # lutz
     elif genus == 'ceanothus':
         # if species in ('integerrimus', 'sp.'):
         return 'ceanothus_integerrimus', None, True
