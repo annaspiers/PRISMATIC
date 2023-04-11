@@ -44,7 +44,7 @@ List of processes for each site:
 - `download_polygons`: download polygons data from NEON
 - `preprocess_polygons`: process polygons data
 - `normalize_laz`: normalize laz files
-- `clip_laz_by_plots`: clip the laz files given plots in processed vegetation structure and save to output
+- `clip_lidar_by_plots`: clip the laz/tif files given plots in processed vegetation structure and save to output
 - `preprocess_biomass`: process biomass and save to output
 
 The final result is at `data_path/site/year/output`.
