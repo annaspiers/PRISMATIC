@@ -7,7 +7,7 @@ from preprocessing.inventory import download_veg_structure_data, \
                                     preprocess_veg_structure_data
 from preprocessing.plots import download_polygons, \
                                 preprocess_polygons
-from preprocessing.lidar import clip_laz_by_plots, \
+from preprocessing.lidar import clip_lidar_by_plots, \
                                 download_lidar, \
                                 normalize_laz
 from preprocessing.biomass import preprocess_biomass
@@ -37,7 +37,8 @@ def build_cache(site, year_inventory, year_lidar, data_path, root_lidar_path):
     l.extend([str(p) for p in root_lidar_path.glob('**/') if p.is_dir()])
     cache = {}
     _add_to_cache('download_lidar',
-                  str(root_lidar_path/site/year_lidar/'laz'),
+                  [str(root_lidar_path/site/year_lidar/'laz'),
+                   str(root_lidar_path/site/year_lidar/'tif')],
                   l, cache)
     _add_to_cache('download_veg_structure_data',
                   [str(data_path/site/'veg_structure.csv'),
@@ -109,7 +110,7 @@ def main(cfg):
                                     data_path, root_lidar_path)
 
                 # download lidar
-                lidar_path = force_rerun(force=rerun_status)(download_lidar)(site, year_lidar, root_lidar_path)
+                laz_path, tif_path = force_rerun(force=rerun_status)(download_lidar)(site, year_lidar, root_lidar_path)
 
                 # process inventory
                 _, _ = force_rerun(force=rerun_status)(download_veg_structure_data)(site, data_path)
@@ -129,16 +130,17 @@ def main(cfg):
                                                                         data_path)
 
                 # clip lidar data
-                normalized_laz_path = force_rerun(force=rerun_status)(normalize_laz)(lidar_path,
-                                                                                    site,
-                                                                                    year_inventory,
-                                                                                    data_path)
-                force_rerun(force=rerun_status)(clip_laz_by_plots)(normalized_laz_path,
-                                                                partitioned_plots_path,
-                                                                site,
-                                                                year_inventory,
-                                                                data_path,
-                                                                end_result=True)
+                normalized_laz_path = force_rerun(force=rerun_status)(normalize_laz)(laz_path,
+                                                                                      site,
+                                                                                      year_inventory,
+                                                                                      data_path)
+                force_rerun(force=rerun_status)(clip_lidar_by_plots)(normalized_laz_path,
+                                                                     tif_path,
+                                                                     partitioned_plots_path,
+                                                                     site,
+                                                                     year_inventory,
+                                                                     data_path,
+                                                                     end_result=True)
 
                 # biomass
                 force_rerun(force=rerun_status)(preprocess_biomass)(inventory_file_path,

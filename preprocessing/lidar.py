@@ -35,17 +35,30 @@ def download_lidar(site, date, lidar_path):
                            str(p),
                            match_string=file_type,
                            check_size=False)
-    return str(path/'laz')
+
+    product_codes = ['DP3.30024.001', 'DP3.30025.001']
+    file_type = 'tif'
+    for product_code in product_codes:
+        p = path/file_type
+        download_aop_files(product_code,
+                           site,
+                           date,
+                           str(p),
+                           match_string=file_type,
+                           check_size=False)
+    return str(path/'laz'), str(path/'tif')
 
 
-def clip_laz_by_plots(laz_path,
-                      site_plots_path,
-                      site,
-                      year,
-                      output_laz_path,
-                      end_result=False):
+def clip_lidar_by_plots(laz_path,
+                        tif_path,
+                        site_plots_path,
+                        site,
+                        year,
+                        output_laz_path,
+                        end_result=False):
     log.info(f'Processing LiDAR data for site: {site} / year: {year}')
     laz_path = Path(laz_path)
+    tif_path = Path(tif_path)
     site_plots_path = Path(site_plots_path)
     year = str(year)
     output_folder = 'clipped_lidar' if not end_result else 'output'
@@ -55,7 +68,7 @@ def clip_laz_by_plots(laz_path,
     output_laz_path.mkdir(parents=True, exist_ok=True)
 
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
-    shp_file = [i for i in site_plots_path.glob('*.shp')][0]
+    shp_file = [i for i in site_plots_path.glob('*.shp') if 'plots' in str(i)][0]
     polygons_utm = gpd.read_file(shp_file)
 
     log.info('Cropping lidar files given all plots...')
@@ -68,7 +81,7 @@ def clip_laz_by_plots(laz_path,
 
     log.info('Merging clipped lidar files...')
     merged_laz_file = str(pp_laz_path/'merge.laz')
-    laz_files = [str(i) for i in pp_laz_path.glob('*.laz')]
+    laz_files = [str(i) for i in pp_laz_path.glob('*.laz') if 'merge' not in str(i)]
     pdal_json = {
         "pipeline": laz_files + [
             {
@@ -112,6 +125,25 @@ def clip_laz_by_plots(laz_path,
         pdal_json_str = json.dumps(pdal_json)
         pipeline = pdal.Pipeline(pdal_json_str)
         pipeline.execute()
+
+    shp_paths = []
+    for row in tqdm(polygons_utm.itertuples()):
+        p = polygons_utm.query(f"plotID == '{row.plotID}' and subplotID == '{row.subplotID}'")
+        saved_path = shp_file.parent/f'{row.plotID}_{row.subplotID}.shp'
+        p.to_file(saved_path)
+        shp_paths.append(saved_path)
+
+    laz_files = [str(i) for i in pp_laz_path.glob('*.laz') if 'merge' not in str(i)]
+    for laz_file in tqdm(laz_files):
+        tif_filename = '_'.join(Path(laz_file).stem.replace('DP1', 'DP3').split('_')[:-4])
+        tif_files = [i for i in tif_path.glob(f'{tif_filename}*')]
+        for tif_file in tqdm(tif_files):
+            for shp_path in tqdm(shp_paths):
+                wht.clip_raster_to_polygon(
+                    str(tif_file),
+                    str(shp_path),
+                    str(output_laz_path/f"{shp_path.stem}_{tif_file.stem.split('_')[-1]}.tif")
+                )
     log.info(f'Processed LiDAR data for site: {site} / year: {year}')
     return str(output_laz_path)
 
