@@ -57,7 +57,7 @@ def build_cache(site, year_inventory, year_lidar, data_path, root_lidar_path):
     _add_to_cache('normalize_laz',
                   str(data_path/site/year_inventory/'normalized_lidar'),
                   l, cache)
-    _add_to_cache('clip_laz_by_plots',
+    _add_to_cache('clip_lidar_by_plots',
                   str(data_path/site/year_inventory/'output'),
                   l, cache)
     _add_to_cache('preprocess_biomass',
