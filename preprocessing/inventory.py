@@ -26,9 +26,11 @@ log = logging.getLogger(__name__)
 def download_veg_structure_data(site, data_path):
     log.info(f'Downloading inventory data for site: {site}')
     r_source = robjects.r['source']
-    r_source(str(Path(__file__).resolve().parent/'inventory.R'))
+    r_source(str(Path(__file__).resolve().parent/'inventory_helper.R'))
     download_veg_structure_data = robjects.r('download_veg_structure_data')
-    veg_structure, plot_sampling_effort = download_veg_structure_data(site, data_path)
+    wd = download_veg_structure_data(site, data_path)
+    veg_structure = f'{wd}/veg_structure.csv'
+    plot_sampling_effort = f'{wd}/plot_sampling_effort.csv'
     log.info(f'Downloaded inventory data saved at: {veg_structure}, {plot_sampling_effort}')
     return veg_structure, plot_sampling_effort
 

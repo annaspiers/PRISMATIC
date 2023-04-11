@@ -34,5 +34,5 @@ download_veg_structure_data <- function(site, data_path) {
     write.csv(df, glue("{wd}/veg_structure.csv"), row.names = FALSE)
     write.csv(df_perplotperyear, glue("{wd}/plot_sampling_effort.csv"),
               row.names = FALSE)
-    return(glue("{wd}/veg_structure.csv"), glue("{wd}/plot_sampling_effort.csv"))
+    return("{wd}")
 }
