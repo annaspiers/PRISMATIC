@@ -8,7 +8,7 @@ Data acquisition and preprocessing for PRISMATIC
 
 # Install
 ```
-conda create -f environment.yml
+conda env create -f environment.yml
 ```
 
 # Todo
