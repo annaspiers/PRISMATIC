@@ -9,7 +9,7 @@ run:
         download_polygons: False
         preprocess_polygons: False
         normalize_laz: False
-        clip_laz_by_plots: False
+        clip_lidar_by_plots: False
         preprocess_biomass: False
 
     '2022':
@@ -21,7 +21,7 @@ run:
         download_polygons: False
         preprocess_polygons: False
         normalize_laz: False
-        clip_laz_by_plots: False
+        clip_lidar_by_plots: False
         preprocess_biomass: False
 
   SOAP:
@@ -34,7 +34,7 @@ run:
         download_polygons: False
         preprocess_polygons: False
         normalize_laz: False
-        clip_laz_by_plots: False
+        clip_lidar_by_plots: False
         preprocess_biomass: False
     '2020':
       year_lidar: 2021-07
@@ -45,7 +45,7 @@ run:
         download_polygons: False
         preprocess_polygons: False
         normalize_laz: False
-        clip_laz_by_plots: False
+        clip_lidar_by_plots: False
         preprocess_biomass: False
 
   TEAK:
@@ -58,7 +58,7 @@ run:
         download_polygons: False
         preprocess_polygons: False
         normalize_laz: False
-        clip_laz_by_plots: False
+        clip_lidar_by_plots: False
         preprocess_biomass: False
 
 global_run_params:
@@ -70,5 +70,5 @@ global_run_params:
     download_polygons: False
     preprocess_polygons: False
     normalize_laz: False
-    clip_laz_by_plots: False
+    clip_lidar_by_plots: False
     preprocess_biomass: False
