@@ -132,4 +132,7 @@ dmypy.json
 .DS_Store
 
 # large data files
-data/lidar_samples/*
+data/
+
+# log files
+outputs/
