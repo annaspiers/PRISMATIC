@@ -130,3 +130,6 @@ dmypy.json
 
 # specific to macs
 .DS_Store
+
+# large data files
+data/lidar_samples/
