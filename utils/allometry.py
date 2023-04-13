@@ -117,9 +117,11 @@ def get_coeffs(family, spg):
     elif family == 'fagaceae_evergreen':
         return -2.2198, 2.4410
     elif family == 'ceanothus_integerrimus':
-        return 3.6672, 2.65018
+        # coeffs in lutz is for mass in g,
+        # so we need to convert to kg
+        return 3.6672 - 3*np.log(10), 2.65018
     elif family == 'ribes_roezlii':
-        return 3.761, 2.37498
+        return 3.761 - 3*np.log(10), 2.37498
     elif family == 'universal_shrub':
         return -3.1478, 2.3750
     elif family == 'universal_bleaf':
