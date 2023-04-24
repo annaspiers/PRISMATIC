@@ -34,14 +34,24 @@ def get_biomass(name, diameter, basal_diameter, growth_form):
                 time.sleep(5)
                 family = species.name_backbone(name)['family']
             family = family.lower()
-    b1, b2 = get_coeffs(family, spg)
-    if isinstance(growth_form, str) and ('sapling' in growth_form.lower() or 'shrub' in growth_form.lower()):
+    b1, b2 = get_coeffs_tree(family, spg)
+    if np.isnan(diameter) or diameter < 10:
+        if not('sapling' in growth_form.lower() or 'tree' in growth_form.lower()):
+            b1_shrub, b2_shrub = get_coeffs_shrub(family, spg)
+            if not b1_shrub:
+                b1_shrub, b2_shrub = get_coeffs_shrub('universal_shrub', spg)
+            if b1_shrub:
+                b1 = b1_shrub
+                b2 = b2_shrub
+                is_basal_diameter = True
+
+    if isinstance(growth_form, str) and ('shrub' in growth_form.lower()):
         is_basal_diameter = True
 
     if is_basal_diameter and not np.isnan(basal_diameter):
         diameter = basal_diameter
     elif is_basal_diameter and np.isnan(basal_diameter):
-        print('Warning: suppose to use basalStemDiameter,'
+        print('Warning: suppose to use basalStemDiameter, '
               'but it is not available, force to use stemDiameter')
     elif np.isnan(diameter):
         diameter = basal_diameter
@@ -49,9 +59,9 @@ def get_biomass(name, diameter, basal_diameter, growth_form):
     if not np.isnan(diameter) and diameter < 10:
         is_basal_diameter = True
     if b1 and b2:
-        return cal_biomass(b1, b2, diameter), family, diameter, is_basal_diameter
+        return cal_biomass(b1, b2, diameter), family, diameter, is_basal_diameter, b1, b2
     else:
-        return np.nan, family, diameter, is_basal_diameter
+        return np.nan, family, diameter, is_basal_diameter, np.nan, np.nan
 
 
 def cal_biomass(b1, b2, d):
@@ -59,7 +69,42 @@ def cal_biomass(b1, b2, d):
     return np.exp(ln_biomass)
 
 
-def get_coeffs(family, spg):
+def get_coeffs_shrub(family, _):
+    a, b = None, None
+    if family in ('arctostaphylos_patula', 'ericaceae'):
+        a, b = 3.3186, 2.6846
+    elif family in ('ceanothus_cordulatus'):
+        a, b = 3.6167, 2.2043
+    elif family in ('ceanothus_integerrimus',
+                    'ceanothus_parvifolius'):
+        a, b = 3.6672, 2.65018
+    elif family == 'chrysolepis_sempervirens':
+        a, b = 3.888, 2.311
+    elif family == 'corylus_cornuta':
+        a, b = 3.570, 2.372
+    elif family == 'cornus_sericea':
+        a, b = 3.315, 2.647
+    elif family == 'leucothoe_davisiae':
+        a, b = 2.749, 2.306
+    elif family in ('rhododendron_occidentale',
+                    'ribes_nevadense',
+                    'ribes_roezlii',
+                    'rosa_bridgesii',
+                    'rubus_parviflorus',
+                    'symphoricarpos_mollis',
+                    'vaccinium uliginosum'
+                    ):
+        a, b = 3.761, 2.37498
+    elif family == 'sambucus_racemosa':
+        a, b = 3.570, 2.372
+    elif family == 'universal_shrub':
+        return -3.1478, 2.3750
+    if a:
+        a = a - 3*np.log(10)
+    return a, b
+
+
+def get_coeffs_tree(family, spg):
     if family == 'abies':
         if spg < 0.35:
             return -2.3123, 2.3482
@@ -116,14 +161,6 @@ def get_coeffs(family, spg):
         return -2.0705, 2.4410
     elif family == 'fagaceae_evergreen':
         return -2.2198, 2.4410
-    elif family == 'ceanothus_integerrimus':
-        # coeffs in lutz is for mass in g,
-        # so we need to convert to kg
-        return 3.6672 - 3*np.log(10), 2.65018
-    elif family == 'ribes_roezlii':
-        return 3.761 - 3*np.log(10), 2.37498
-    elif family == 'universal_shrub':
-        return -3.1478, 2.3750
     elif family == 'universal_bleaf':
         return -2.2118, 2.4133
     else:
@@ -264,7 +301,6 @@ def get_taxa_family_spg(genus, species):
 
     # lutz
     elif genus == 'ceanothus':
-        # if species in ('integerrimus', 'sp.'):
         return 'ceanothus_integerrimus', None, True
     elif genus == 'ribes':
         if species in ('roezlii', 'sp.'):

@@ -34,6 +34,7 @@ def download_veg_structure_data(site, data_path):
     log.info(f'Downloaded inventory data saved at: {veg_structure}, {plot_sampling_effort}')
     return veg_structure, plot_sampling_effort
 
+
 def preprocess_veg_structure_data(site, year, data_path):
     year = str(year)
     site_path = Path(data_path)/site

@@ -37,11 +37,13 @@ def preprocess_biomass(data_path,
     family = []
     used_diameter = []
     is_shrub = []
+    b1 = []
+    b2 = []
     with tqdm(total=avail_veg_df.shape[0]) as pbar:
         for row in avail_veg_df.itertuples():
             pbar.update(1)
             v = np.nan
-            v, f, d, s = get_biomass(row.scientificName,
+            v, f, d, s, b_1, b_2 = get_biomass(row.scientificName,
                                         row.stemDiameter,
                                         row.basalStemDiameter,
                                         row.growthForm)
@@ -49,10 +51,14 @@ def preprocess_biomass(data_path,
             family.append(f)
             used_diameter.append(d)
             is_shrub.append(s)
+            b1.append(b_1)
+            b2.append(b_2)
     avail_veg_df['biomass'] = biomass
     avail_veg_df['family'] = family
     avail_veg_df['used_diameter'] = used_diameter
     avail_veg_df['is_shrub'] = is_shrub
+    avail_veg_df['b1'] = b1
+    avail_veg_df['b2'] = b2
 
     # save result for diagnostics
     plot_values = {}
