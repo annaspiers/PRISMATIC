@@ -4,7 +4,8 @@ import hydra
 
 from pathlib import Path
 from preprocessing.inventory import download_veg_structure_data, \
-                                    preprocess_veg_structure_data
+                                    preprocess_veg_structure_data, \
+                                    download_trait_table
 from preprocessing.plots import download_polygons, \
                                 preprocess_polygons
 from preprocessing.lidar import clip_lidar_by_plots, \
@@ -36,6 +37,9 @@ def build_cache(site, year_inventory, year_lidar, data_path, root_lidar_path):
     l.extend([str(p) for p in data_path.glob('**/*.csv')])
     l.extend([str(p) for p in root_lidar_path.glob('**/') if p.is_dir()])
     cache = {}
+    _add_to_cache('download_trait_table',
+                  str(data_path/'NEON_trait_table.csv'),
+                  l, cache)
     _add_to_cache('download_lidar',
                   [str(root_lidar_path/site/year_lidar/'laz'),
                    str(root_lidar_path/site/year_lidar/'tif')],
@@ -98,6 +102,7 @@ def main(cfg):
     if isinstance(global_run, str):
         global_run = [global_run]
 
+
     for site, v in cfg.sites.run.items():
         if not global_run or site in global_run:
             for year_inventory, p in v.items():
@@ -109,6 +114,10 @@ def main(cfg):
                 cache = build_cache(site, year_inventory, year_lidar,
                                     data_path, root_lidar_path)
 
+                # download neon_trait_table
+                url = cfg.others.neon_trait_table.neon_trait_link
+                neon_trait_table_path = force_rerun(force={'download_trait_table': cfg.others.neon_trait_table.force_rerun})(download_trait_table)(url, data_path)
+
                 # download lidar
                 laz_path, tif_path = force_rerun(force=rerun_status)(download_lidar)(site, year_lidar, root_lidar_path)
 
@@ -116,8 +125,8 @@ def main(cfg):
                 _, _ = force_rerun(force=rerun_status)(download_veg_structure_data)(site, data_path)
                 inventory_file_path, \
                     sampling_effort_path = force_rerun(force=rerun_status)(preprocess_veg_structure_data)(site,
-                                                                                                        year_inventory,
-                                                                                                        data_path)
+                                                                                                          year_inventory,
+                                                                                                          data_path)
 
                 # process plots
                 neon_plots_path = force_rerun(force=rerun_status)(download_polygons)(data_path)
@@ -149,6 +158,7 @@ def main(cfg):
                                                                     site,
                                                                     year_inventory,
                                                                     data_path,
+                                                                    neon_trait_table_path=neon_trait_table_path,
                                                                     end_result=True)
 
     log.info('DONE')

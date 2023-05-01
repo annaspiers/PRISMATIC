@@ -17,6 +17,7 @@ dependencies:
   - r-devtools
   - pip
   - pip:
+    - gdown
     - pygbif
     - geopandas
     - rpy2

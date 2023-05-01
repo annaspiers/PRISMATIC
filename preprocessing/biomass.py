@@ -19,6 +19,7 @@ def preprocess_biomass(data_path,
                        site,
                        year,
                        output_data_path,
+                       neon_trait_table_path=None,
                        end_result=True):
     log.info(f'Processing biomass data for site: {site} / year: {year}')
     veg_df = pd.read_csv(data_path)
@@ -29,9 +30,13 @@ def preprocess_biomass(data_path,
     output_data_path = Path(output_data_path)/site/year/output_folder
     output_data_path.mkdir(parents=True, exist_ok=True)
 
+    neon_trait_table_df = pd.read_csv(neon_trait_table_path)
     avail_veg_df = veg_df[(~pd.isna(veg_df.basalStemDiameter) |
                            ~pd.isna(veg_df.stemDiameter)) &
-                           ~pd.isna(veg_df.plotID)].copy()
+                           ~pd.isna(veg_df.plotID)]
+    avail_veg_df['scientific'] = avail_veg_df.scientificName.str.split().str[:2].str.join(' ')
+    neon_trait_table_df = augment_neon_trait_table(neon_trait_table_df, avail_veg_df)
+    avail_veg_df = pd.merge(avail_veg_df, neon_trait_table_df, on='scientific', how='left').copy().reset_index(drop=True)
     sampling_effort_df = pd.read_csv(sampling_effort_path)
     biomass = []
     family = []
@@ -43,10 +48,7 @@ def preprocess_biomass(data_path,
         for row in avail_veg_df.itertuples():
             pbar.update(1)
             v = np.nan
-            v, f, d, s, b_1, b_2 = get_biomass(row.scientificName,
-                                        row.stemDiameter,
-                                        row.basalStemDiameter,
-                                        row.growthForm)
+            v, f, d, s, b_1, b_2 = get_biomass(row)
             biomass.append(v)
             family.append(f)
             used_diameter.append(d)
@@ -194,3 +196,21 @@ def _cal_plot_level_biomass(df, polygons):
                                             'basalArea': BA,
                                             'biomass': ABCD})
     return plot_level_df
+
+
+def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
+    genus_sp_group = neon_trait_table_df.groupby('genus')
+    sps = []
+    for name, group in genus_sp_group:
+        sp_template = group.iloc[0].copy()
+        sp_template['scientific'] = f"{sp_template['genus']} sp."
+        common_s = set(avail_veg_df.scientific) & set(group.scientific)
+        avail_sps = group[group.scientific.isin(common_s)]
+        if not avail_sps.empty:
+            if avail_sps['n_wood_dens'].sum() != 0:
+                sp_template['wood_dens'] = (avail_sps['wood_dens']*avail_sps['n_wood_dens']).sum()/avail_sps['n_wood_dens'].sum()
+        sps.append(sp_template)
+
+    sps_df = pd.concat(sps, axis=1).T
+    augmented_neon_trait_table_df = pd.concat([neon_trait_table_df, sps_df], axis=0)
+    return augmented_neon_trait_table_df

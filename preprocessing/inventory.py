@@ -1,5 +1,6 @@
 import logging
 import pandas as pd
+import gdown
 import rpy2.robjects as robjects
 
 from pathlib import Path
@@ -21,6 +22,12 @@ COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
         ]
 
 log = logging.getLogger(__name__)
+
+
+def download_trait_table(download_link, data_path):
+    output_path = str(Path(data_path)/'NEON_trait_table.csv')
+    gdown.download(download_link, output_path, quiet=False, fuzzy=True)
+    return output_path
 
 
 def download_veg_structure_data(site, data_path):
