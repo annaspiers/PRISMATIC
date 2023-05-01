@@ -127,3 +127,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# specific to macs
+.DS_Store
+
+# large data files
+data/
+
+# log files
+outputs/
+.Rproj.user
