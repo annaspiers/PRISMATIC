@@ -32,11 +32,18 @@ def preprocess_biomass(data_path,
 
     neon_trait_table_df = pd.read_csv(neon_trait_table_path)
     avail_veg_df = veg_df[(~pd.isna(veg_df.basalStemDiameter) |
-                           ~pd.isna(veg_df.stemDiameter)) &
-                           ~pd.isna(veg_df.plotID)]
-    avail_veg_df['scientific'] = avail_veg_df.scientificName.str.split().str[:2].str.join(' ')
-    neon_trait_table_df = augment_neon_trait_table(neon_trait_table_df, avail_veg_df)
-    avail_veg_df = pd.merge(avail_veg_df, neon_trait_table_df, on='scientific', how='left').copy().reset_index(drop=True)
+                          ~pd.isna(veg_df.stemDiameter)) &
+                          ~pd.isna(veg_df.plotID)]
+    avail_veg_df['scientific'] = \
+        avail_veg_df.scientificName.str.split().str[:2].str.join(' ')
+    neon_trait_table_df = \
+        augment_neon_trait_table(neon_trait_table_df, avail_veg_df)
+    avail_veg_df = (pd.merge(avail_veg_df,
+                             neon_trait_table_df,
+                             on='scientific',
+                             how='left')
+                    .copy()
+                    .reset_index(drop=True))
     sampling_effort_df = pd.read_csv(sampling_effort_path)
     biomass = []
     family = []
@@ -95,10 +102,11 @@ def preprocess_biomass(data_path,
      if label.get_text() in red_color]
     plt.xticks(x_axis, [f"{i[0]} [{i[1]['family'] if i[1] else ''}]"
                         for i in plot_values])
-    plt.xticks(rotation = 90)
+    plt.xticks(rotation=90)
     plt.xlabel("Scientific name")
     plt.ylabel("Number of individuals")
-    plt.title(f"Site: {site}, year: {year}, number of stem/basal stem diameter")
+    plt.title(f'Site: {site}, year: {year}, '
+              'number of stem/basal stem diameter')
     plt.legend()
     output_folder_path = \
         (output_data_path/'..'/'..'/'..'/'diagnostics'/site
@@ -116,23 +124,27 @@ def preprocess_biomass(data_path,
     for row in avail_veg_df.itertuples():
         try:
             query = (f'plotID == "{row.plotID}" '
-                    'and '
-                    f'subplotID == "{int(row.subplotID)}"')
+                     'and '
+                     f'subplotID == "{int(row.subplotID)}"')
             v = polygons.query(query).area.values[0]
         except (IndexError, ValueError):
             try:
                 query = (f'plotID == "{row.plotID}" '
-                        'and '
-                        f'subplotID == "central"')
+                         'and '
+                         f'subplotID == "central"')
                 v = polygons.query(query).area.values[0]
-            except:
+            except (IndexError, ValueError):
                 v = np.nan
         try:
             if row.is_shrub:
-                v = sampling_effort_df.query(f'plotID == "{row.plotID}"').totalSampledAreaShrubSapling.values[0]
+                v = (sampling_effort_df
+                     .query(f'plotID == "{row.plotID}"')
+                     .totalSampledAreaShrubSapling.values[0])
             else:
-                v = sampling_effort_df.query(f'plotID == "{row.plotID}"').totalSampledAreaTrees.values[0]
-        except:
+                v = (sampling_effort_df
+                     .query(f'plotID == "{row.plotID}"')
+                     .totalSampledAreaTrees.values[0])
+        except (IndexError, ValueError):
             pass
         sampling_area.append(v)
 
@@ -143,7 +155,7 @@ def preprocess_biomass(data_path,
     avail_veg_df['individualBasalArea'] = \
         np.pi/4*avail_veg_df.used_diameter**2
     avail_veg_df.to_csv(output_data_path/'pp_veg_structure_IND_IBA_IAGB.csv',
-                       index=False)
+                        index=False)
     plot_level_df = _cal_plot_level_biomass(avail_veg_df, polygons)
     plot_level_df.to_csv(output_data_path
                          / 'plot_level_pp_veg_structure_IND_IBA_IAGB.csv',
@@ -154,8 +166,8 @@ def preprocess_biomass(data_path,
         .str.lower()
         .str.contains('dead')]
     avail_veg_df_live.to_csv(output_data_path
-                            / 'pp_veg_structure_IND_IBA_IAGB_live.csv',
-                            index=False)
+                             / 'pp_veg_structure_IND_IBA_IAGB_live.csv',
+                             index=False)
 
     plot_level_df_live = _cal_plot_level_biomass(avail_veg_df_live, polygons)
     plot_level_df_live.to_csv(output_data_path
@@ -186,9 +198,9 @@ def _cal_plot_level_biomass(df, polygons):
         subplots.append(subplot_id)
         ND.append(group.individualStemNumberDensity.sum())
         BA.append((group.individualStemNumberDensity *
-                    group.individualBasalArea).sum())
+                   group.individualBasalArea).sum())
         ABCD.append((group.individualStemNumberDensity *
-                        group.biomass).sum())
+                     group.biomass).sum())
 
     plot_level_df = pd.DataFrame.from_dict({'plotID': plots,
                                             'subplotID': subplots,
@@ -206,11 +218,13 @@ def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
         sp_template['scientific'] = f"{sp_template['genus']} sp."
         common_s = set(avail_veg_df.scientific) & set(group.scientific)
         avail_sps = group[group.scientific.isin(common_s)]
-        if not avail_sps.empty:
-            if avail_sps['n_wood_dens'].sum() != 0:
-                sp_template['wood_dens'] = (avail_sps['wood_dens']*avail_sps['n_wood_dens']).sum()/avail_sps['n_wood_dens'].sum()
+        if not avail_sps.empty and avail_sps['n_wood_dens'].sum() != 0:
+            sp_template['wood_dens'] = \
+                ((avail_sps['wood_dens']*avail_sps['n_wood_dens']).sum()
+                 / avail_sps['n_wood_dens'].sum())
         sps.append(sp_template)
 
     sps_df = pd.concat(sps, axis=1).T
-    augmented_neon_trait_table_df = pd.concat([neon_trait_table_df, sps_df], axis=0)
+    augmented_neon_trait_table_df = \
+        pd.concat([neon_trait_table_df, sps_df], axis=0)
     return augmented_neon_trait_table_df

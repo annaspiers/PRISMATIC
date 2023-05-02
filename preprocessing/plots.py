@@ -100,7 +100,7 @@ def preprocess_polygons(input_data_path,
             sampling_area = sampling_effort.query(query)
             if isinstance(sampling_area.subplotsSampled.values[0], str):
                 sampled_subplots = sampling_area.subplotsSampled.values[0]
-        except:
+        except (IndexError, ValueError):
             pass
         subplots = [v.strip() for v in sampled_subplots.split('|')]
         sampling_area_trees = SUBPLOT_AREA_UNIT
@@ -119,7 +119,6 @@ def preprocess_polygons(input_data_path,
                                                      .geometry
                                                      .is_empty]
             tree_in_plot = sum(plot_polygon.contains(veg_gdf_position_list))
-            
             if plot_id not in processed_plots or \
                tree_in_plot > processed_plots[plot_id]:
                 processed_plots[plot_id] = tree_in_plot
@@ -166,7 +165,8 @@ def preprocess_polygons(input_data_path,
                 with open(f_name, 'w') as f:
                     json.dump(veg_plot_metadata, f, indent=4)
 
-    df = gpd.GeoDataFrame(data=zip(names, subplot_ids, ps), columns=['plotID', 'subplotID', 'geometry'],
+    df = gpd.GeoDataFrame(data=zip(names, subplot_ids, ps),
+                          columns=['plotID', 'subplotID', 'geometry'],
                           crs=polygons_site_utm.crs)
     output_folder_path = \
         output_data_path/site/year/INVENTORY_PLOTS_FOLDER

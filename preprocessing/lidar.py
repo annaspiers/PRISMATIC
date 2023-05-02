@@ -68,7 +68,9 @@ def clip_lidar_by_plots(laz_path,
     output_laz_path.mkdir(parents=True, exist_ok=True)
 
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
-    shp_file = [i for i in site_plots_path.glob('*.shp') if 'plots' in str(i)][0]
+    shp_file = [i for i in
+                site_plots_path.glob('*.shp')
+                if 'plots' in str(i)][0]
     polygons_utm = gpd.read_file(shp_file)
 
     log.info('Cropping lidar files given all plots...')
@@ -81,7 +83,9 @@ def clip_lidar_by_plots(laz_path,
 
     log.info('Merging clipped lidar files...')
     merged_laz_file = str(pp_laz_path/'merge.laz')
-    laz_files = [str(i) for i in pp_laz_path.glob('*.laz') if 'merge' not in str(i)]
+    laz_files = [str(i) for i in
+                 pp_laz_path.glob('*.laz')
+                 if 'merge' not in str(i)]
     pdal_json = {
         "pipeline": laz_files + [
             {
@@ -117,7 +121,8 @@ def clip_lidar_by_plots(laz_path,
                 },
                 {
                     "type": "writers.las",
-                    "filename": f"{str(output_laz_path)}/{row.plotID}_{row.subplotID}.laz",
+                    "filename": (f'{str(output_laz_path)}'
+                                 f'/{row.plotID}_{row.subplotID}.laz'),
                     "extra_dims": "all"
                 }
             ]
@@ -128,21 +133,29 @@ def clip_lidar_by_plots(laz_path,
 
     shp_paths = []
     for row in tqdm(polygons_utm.itertuples()):
-        p = polygons_utm.query(f"plotID == '{row.plotID}' and subplotID == '{row.subplotID}'")
+        p = polygons_utm.query(f"plotID == '{row.plotID}' "
+                               f"and subplotID == '{row.subplotID}'")
         saved_path = shp_file.parent/f'{row.plotID}_{row.subplotID}.shp'
         p.to_file(saved_path)
         shp_paths.append(saved_path)
 
-    laz_files = [str(i) for i in pp_laz_path.glob('*.laz') if 'merge' not in str(i)]
+    laz_files = [str(i) for i in
+                 pp_laz_path.glob('*.laz')
+                 if 'merge' not in str(i)]
     for laz_file in tqdm(laz_files):
-        tif_filename = '_'.join(Path(laz_file).stem.replace('DP1', 'DP3').split('_')[:-4])
+        tif_filename = '_'.join(Path(laz_file)
+                                .stem
+                                .replace('DP1', 'DP3')
+                                .split('_')[:-4])
         tif_files = [i for i in tif_path.glob(f'{tif_filename}*')]
         for tif_file in tqdm(tif_files):
             for shp_path in tqdm(shp_paths):
+                output_file_name = \
+                    f"{shp_path.stem}_{tif_file.stem.split('_')[-1]}.tif"
                 wht.clip_raster_to_polygon(
                     str(tif_file),
                     str(shp_path),
-                    str(output_laz_path/f"{shp_path.stem}_{tif_file.stem.split('_')[-1]}.tif")
+                    str(output_laz_path/output_file_name)
                 )
     log.info(f'Processed LiDAR data for site: {site} / year: {year}')
     return str(output_laz_path)

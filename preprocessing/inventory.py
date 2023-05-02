@@ -38,7 +38,8 @@ def download_veg_structure_data(site, data_path):
     wd = download_veg_structure_data(site, data_path)
     veg_structure = f'{wd}/veg_structure.csv'
     plot_sampling_effort = f'{wd}/plot_sampling_effort.csv'
-    log.info(f'Downloaded inventory data saved at: {veg_structure}, {plot_sampling_effort}')
+    log.info('Downloaded inventory data saved at: '
+             f'{veg_structure}, {plot_sampling_effort}')
     return veg_structure, plot_sampling_effort
 
 
