@@ -16,6 +16,10 @@ For MacOS M1/M2 users:
  - It does not work with R arch arm64, so you will need to reinstall R arch x86_64, follow this guide [here](https://github.com/rpy2/rpy2/issues/900#issuecomment-1499431341).
  - `Library not loaded: /opt/X11/lib/libX11.6.dylib`: run this command: `brew install xquartz --cask`
     - If you need to install `brew`, run this command: `$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+
+GDAL, OSR:
+ - To import GDAL, use: `from osgeo import gdal, osr`
+
 # Todo
  - [x] Data acquisition and data processing of inventory data
  - [x] Data acquisition and data processing of NEON plots
