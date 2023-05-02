@@ -43,16 +43,17 @@ def get_biomass(data):
                                       data.stemDiameter,
                                       data.basalStemDiameter)
         # check growth form discrepancy between neon_data and neon_trait_table
-        if (('shrub' in growth_form and
-             ('tree' in data.growthForm or 'sapling' in data.growthForm))
-            or
-            ('shrub' in data.growthForm and
-             ('tree' in growth_form or 'sapling' in growth_form))):
-            log.warning(f'{data.individualID}, {name}, {family}, '
-                        'growth form discrepancy between '
-                        f'neon_data ({data.growthForm}) '
-                        f'and neon_trait_table ({data.growth_form})')
-            growth_form = data.growthForm
+        if isinstance(data.growthForm, str):
+            if (('shrub' in growth_form and
+                ('tree' in data.growthForm or 'sapling' in data.growthForm))
+                or
+                ('shrub' in data.growthForm and
+                ('tree' in growth_form or 'sapling' in growth_form))):
+                log.warning(f'{data.individualID}, {name}, {family}, '
+                            'growth form discrepancy between '
+                            f'neon_data ({data.growthForm}) '
+                            f'and neon_trait_table ({data.growth_form})')
+                growth_form = data.growthForm
     except AttributeError:
         # The invididual has scientific name but it is not in neon_trait_table.
         # We assume the individual is unknown and raise a warning
