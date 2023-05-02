@@ -7,6 +7,28 @@ log = logging.getLogger(__name__)
 
 
 def get_biomass(data):
+    """Calculate biomass of individual tree/shrub
+    Growth form:
+        - Value: tree, shrub
+    Logic:
+        - By default we use the growth form from the neon_trait_table.
+        - Use neon_data if there is a discrepancy between neon_data
+          and neon_trait_table.
+        - If invididual is unkown, it is a universal_shrub if diameter < 10
+          else universal_tree.
+        - Use stem diameter if it is tree, else use basal stem diameter.
+          If stem diameter is not available, use basal stem diameter
+          and vice versa.
+
+    Parameters
+    ----------
+    data : pandas.Series
+        data is the information of the invididual
+
+    Returns
+    -------
+    biomass, individual family, used_diameter, is_shrub, coeff_1, coeff_2
+    """
     name = genus = family = leaf_phen = growth_form = spg = None
     is_unknown = True if 'unknown' in data.scientificName.lower() else False
     try:
@@ -20,6 +42,7 @@ def get_biomass(data):
                                       data.wood_dens,
                                       data.stemDiameter,
                                       data.basalStemDiameter)
+        # check growth form discrepancy between neon_data and neon_trait_table
         if (('shrub' in growth_form and
              ('tree' in data.growthForm or 'sapling' in data.growthForm))
             or
@@ -27,10 +50,13 @@ def get_biomass(data):
              ('tree' in growth_form or 'sapling' in growth_form))):
             log.warning(f'{data.individualID}, {name}, {family}, '
                         'growth form discrepancy between '
-                        f'neon data ({data.growthForm}) '
+                        f'neon_data ({data.growthForm}) '
                         f'and neon_trait_table ({data.growth_form})')
             growth_form = data.growthForm
     except AttributeError:
+        # The invididual has scientific name but it is not in neon_trait_table.
+        # We assume the individual is unknown and raise a warning
+        # for further action.
         if not is_unknown:
             log.warning(f'{data.individualID}, {data.scientific} '
                         'does not exist in neon_trait_table.')
@@ -44,12 +70,16 @@ def get_biomass(data):
         else:
             family = 'universal_bleaf'
             growth_form = 'tree'
-    b1, b2 = get_coeffs_tree(name, genus, family, leaf_phen, spg)
+
+    # assume the invididual is tree, get coeffs
+    b1, b2 = _get_coeffs_tree(name, genus, family, leaf_phen, spg)
+
+    # overwrite the coeffs if the individual is shrub
     if np.isnan(diameter) or diameter < 10:
         if not ('sapling' in growth_form.lower()
                 or 'tree' in growth_form.lower()):
             b1_shrub, b2_shrub, is_universal_shrub = \
-                get_coeffs_shrub(name, genus, family, leaf_phen, spg)
+                _get_coeffs_shrub(name, genus, family, leaf_phen, spg)
             if is_universal_shrub and family != 'universal_shrub':
                 log.warning(f'{data.individualID}, {name}, {family}, '
                             'exists in neon_trait_table '
@@ -62,6 +92,8 @@ def get_biomass(data):
             b2 = b2_shrub
         is_basal_diameter = True
 
+    # use the corresponding diameter, but if it is not available,
+    # use the other one.
     if is_basal_diameter and not np.isnan(basal_diameter):
         diameter = basal_diameter
     elif is_basal_diameter and np.isnan(basal_diameter):
@@ -75,20 +107,63 @@ def get_biomass(data):
                     'but it is not available so '
                     'using basalStemDiameter instead.')
         diameter = basal_diameter
+
+    # finally, if we find the coeffs, then do the calculation.
+    # else return np.nan value as biomass.
     if b1 and b2:
-        return cal_biomass(b1, b2, diameter), family, \
+        return _cal_biomass(b1, b2, diameter), family, \
                diameter, is_basal_diameter, b1, b2
     else:
         return np.nan, family, diameter, \
                is_basal_diameter, np.nan, np.nan
 
 
-def cal_biomass(b1, b2, d):
+def _cal_biomass(b1, b2, d):
+    """Biomass formula
+       ln(biomass) = b1 + b2*ln(diameter)
+
+    Parameters
+    ----------
+    b1 : float
+        coefficient 1
+    b2 : float
+        coefficient 2
+    d : float
+        diameter (either stem diameter or basal stem diameter)
+
+    Returns
+    -------
+    float
+        biomass value of the invididual
+    """
     ln_biomass = b1 + b2*np.log(d)
     return np.exp(ln_biomass)
 
 
-def get_coeffs_shrub(name, genus, family, leaf_phen, spg):
+def _get_coeffs_shrub(name, genus, family, leaf_phen, spg):
+    """Get coefficents for shrub (from Lutz paper)
+       Lutz paper uses gram (g) as biomass weight unit
+       so we need to correct the coefficient 1 by - 3*np.log(10)
+       to convert the biomass to kilogram (kg).
+
+    Parameters
+    ----------
+    name : str
+        scientific name
+    genus : str
+        genus
+    family : str
+        family
+    leaf_phen : str
+        leaf phenology
+    spg : float
+        wood density
+
+    Returns
+    -------
+    (float, float)
+        coefficient 1, coefficient 2
+    """
     is_universal_shrub = False
     if name == 'arctostaphylos patula' or family == 'ericaceae':
         a, b = 3.3186, 2.6846
@@ -123,7 +198,27 @@ def get_coeffs_shrub(name, genus, family, leaf_phen, spg):
     return a, b, is_universal_shrub
 
 
-def get_coeffs_tree(name, genus, family, leaf_phen, spg):
+def _get_coeffs_tree(name, genus, family, leaf_phen, spg):
+    """Get coefficents for tree (from Chojnacky 2014 paper)
+
+    Parameters
+    ----------
+    name : str
+        scientific name
+    genus : str
+        genus
+    family : str
+        family
+    leaf_phen : str
+        leaf phenology
+    spg : float
+        wood density
+
+    Returns
+    -------
+    (float, float)
+        coefficient 1, coefficient 2
+    """
     if genus == 'abies':
         if spg < 0.35:
             return -2.3123, 2.3482
