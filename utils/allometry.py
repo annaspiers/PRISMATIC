@@ -23,6 +23,12 @@ def get_biomass(data):
                                       data.wood_dens,
                                       data.stemDiameter,
                                       data.basalStemDiameter)
+        if (('shrub' in growth_form and ('tree' in data.growthForm or 'sapling' in data.growthForm))
+            or
+            ('shrub' in data.growthForm and ('tree' in growth_form or 'sapling' in growth_form))):
+            log.warning(f'{data.individualID}, {name}, {family} growth form discrepancy between '
+                        f'neon data ({data.growthForm}) and the trait table ({data.growth_form})')
+            growth_form = data.growthForm
     except AttributeError:
         if not is_unknown:
             log.warning(f'{data.individualID}, {data.scientific} does not exist in neon_trait_table.')
