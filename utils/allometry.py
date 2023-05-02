@@ -1,10 +1,7 @@
 import numpy as np
 import logging
-import time
-from pygbif import species
 
 DIAMETER_THRESHOLD = 10
-GBIF_FAMILY_CACHE = {}
 
 log = logging.getLogger(__name__)
 
@@ -23,15 +20,20 @@ def get_biomass(data):
                                       data.wood_dens,
                                       data.stemDiameter,
                                       data.basalStemDiameter)
-        if (('shrub' in growth_form and ('tree' in data.growthForm or 'sapling' in data.growthForm))
+        if (('shrub' in growth_form and
+             ('tree' in data.growthForm or 'sapling' in data.growthForm))
             or
-            ('shrub' in data.growthForm and ('tree' in growth_form or 'sapling' in growth_form))):
-            log.warning(f'{data.individualID}, {name}, {family} growth form discrepancy between '
-                        f'neon data ({data.growthForm}) and the trait table ({data.growth_form})')
+            ('shrub' in data.growthForm and
+             ('tree' in growth_form or 'sapling' in growth_form))):
+            log.warning(f'{data.individualID}, {name}, {family}, '
+                        'growth form discrepancy between '
+                        f'neon data ({data.growthForm}) '
+                        f'and neon_trait_table ({data.growth_form})')
             growth_form = data.growthForm
     except AttributeError:
         if not is_unknown:
-            log.warning(f'{data.individualID}, {data.scientific} does not exist in neon_trait_table.')
+            log.warning(f'{data.individualID}, {data.scientific} '
+                        'does not exist in neon_trait_table.')
         is_unknown = True
         diameter, basal_diameter = data.stemDiameter, data.basalStemDiameter
     is_basal_diameter = False
@@ -44,12 +46,18 @@ def get_biomass(data):
             growth_form = 'tree'
     b1, b2 = get_coeffs_tree(name, genus, family, leaf_phen, spg)
     if np.isnan(diameter) or diameter < 10:
-        if not('sapling' in growth_form.lower() or 'tree' in growth_form.lower()):
-            b1_shrub, b2_shrub, is_universal_shrub = get_coeffs_shrub(name, genus, family, leaf_phen, spg)
+        if not ('sapling' in growth_form.lower()
+                or 'tree' in growth_form.lower()):
+            b1_shrub, b2_shrub, is_universal_shrub = \
+                get_coeffs_shrub(name, genus, family, leaf_phen, spg)
             if is_universal_shrub and family != 'universal_shrub':
-                log.warning(f'{data.individualID}, {name}, {family}, exists in neon_trait_table but it does not have the coefficients. '
+                log.warning(f'{data.individualID}, {name}, {family}, '
+                            'exists in neon_trait_table '
+                            'but it does not have the coefficients. '
                             'It is now treated as universal shrub. '
-                            'Please update the coefficients or ignore this warning if this is expected behavior.')
+                            'Please update the coefficients '
+                            'or ignore this warning '
+                            'if this is expected behavior.')
             b1 = b1_shrub
             b2 = b2_shrub
         is_basal_diameter = True
@@ -57,16 +65,22 @@ def get_biomass(data):
     if is_basal_diameter and not np.isnan(basal_diameter):
         diameter = basal_diameter
     elif is_basal_diameter and np.isnan(basal_diameter):
-        log.warning(f'{data.individualID}, {name}, {family}, supposes to use basalStemDiameter, '
-                     'but it is not available so using stemDiameter instead.')
+        log.warning(f'{data.individualID}, {name}, {family}, '
+                    'supposes to use basalStemDiameter, '
+                    'but it is not available so '
+                    'using stemDiameter instead.')
     if np.isnan(diameter):
-        log.warning(f'{data.individualID}, {name}, {family}, supposes to use stemDiameter, '
-                     'but it is not available so using basalStemDiameter instead.')
+        log.warning(f'{data.individualID}, {name}, {family}, '
+                    'supposes to use stemDiameter, '
+                    'but it is not available so '
+                    'using basalStemDiameter instead.')
         diameter = basal_diameter
     if b1 and b2:
-        return cal_biomass(b1, b2, diameter), family, diameter, is_basal_diameter, b1, b2
+        return cal_biomass(b1, b2, diameter), family, \
+               diameter, is_basal_diameter, b1, b2
     else:
-        return np.nan, family, diameter, is_basal_diameter, np.nan, np.nan
+        return np.nan, family, diameter, \
+               is_basal_diameter, np.nan, np.nan
 
 
 def cal_biomass(b1, b2, d):
@@ -81,7 +95,7 @@ def get_coeffs_shrub(name, genus, family, leaf_phen, spg):
     elif name == 'ceanothus cordulatus':
         a, b = 3.6167, 2.2043
     elif name in ('ceanothus integerrimus',
-                  'ceanothus parvifolius'):
+                  'ceanothus parvifolius') or genus == 'ceanothus':
         a, b = 3.6672, 2.65018
     elif name == 'chrysolepis sempervirens':
         a, b = 3.888, 2.311
@@ -92,13 +106,13 @@ def get_coeffs_shrub(name, genus, family, leaf_phen, spg):
     elif name == 'leucothoe davisiae':
         a, b = 2.749, 2.306
     elif name in ('rhododendron occidentale',
-                    'ribes nevadense',
-                    'ribes roezlii',
-                    'rosa bridgesii',
-                    'rubus parviflorus',
-                    'symphoricarpos mollis',
-                    'vaccinium uliginosum'
-                    ):
+                  'ribes nevadense',
+                  'ribes roezlii',
+                  'rosa bridgesii',
+                  'rubus parviflorus',
+                  'symphoricarpos mollis',
+                  'vaccinium uliginosum'
+                  ):
         a, b = 3.761, 2.37498
     elif family == 'sambucus racemosa':
         a, b = 3.570, 2.372
@@ -164,159 +178,9 @@ def get_coeffs_tree(name, genus, family, leaf_phen, spg):
         return -2.5095, 2.5437
     elif family == 'fagaceae' and leaf_phen == 'deciduous':
         return -2.0705, 2.4410
-    elif family == 'fagaceae'and leaf_phen == 'evergreen':
+    elif family == 'fagaceae' and leaf_phen == 'evergreen':
         return -2.2198, 2.4410
     elif family == 'universal_bleaf':
         return -2.2118, 2.4133
     else:
         return None, None
-
-
-def get_taxa_family_spg(genus, species):
-    if genus == 'abies':
-        if species in ('balsamea', 'fraseri', 'lasiocarpa'):
-            return 'abies', 0.34, False
-        elif species in ('amabilis', 'concolor',
-                         'grandis', 'magnifica',
-                         'procera', 'sp.'):
-            return 'abies', 0.36, False
-
-    elif genus == 'thuja':
-        if species in ('occidentalis'):
-            return 'cupressaceae', 0.29, False
-    elif genus in ('calocedrus', 'sequoiadendron'):
-        if species in ('decurrens', 'giganteum'):
-            return 'cupressaceae', 0.35, False
-    elif genus in ('chamaecyparis', 'juniperus'):
-        if species in ('nookatensis', 'virginiana'):
-            return 'cupressaceae', 0.41, False
-
-    elif genus == 'larix':
-        if species in ('laricina', 'occidentalis', 'sp.'):
-            return 'larix', None, False
-
-    elif genus == 'picea':
-        if species in ('engelmannii', 'sitchensis'):
-            return 'picea', 0.34, False
-        if species in ('abies', 'glauca', 'mariana', 'rubens'):
-            return 'picea', 0.36, False
-
-    elif genus == 'pinus':
-        if species in ('albicaulis', 'arizonica', 'banksiana',
-                       'contorta', 'jeffreyi', 'lambertiana',
-                       'leiophylla', 'monticola', 'ponderosa',
-                       'resinosa', 'strobus', 'sp.'):
-            return 'pinus', 0.44, False
-        elif species in ('echinata', 'elliottii', 'palustris',
-                         'rigida', 'taeda'):
-            return 'pinus', 0.45, False
-
-    elif genus == 'pseudotsuga':
-        if species in 'menziesii':
-            return 'pseudotsuga', None, False
-
-    elif genus == 'tsuga':
-        if species in ('canadensis'):
-            return 'tsuga', 0.39, False
-        elif species in ('heterophylla', 'mertensiana'):
-            return 'tsuga', 0.4, False
-
-    elif genus == 'acer':
-        if species in ('macrophyllum', 'pensylvanicum', 'rubrum',
-                       'saccharinum', 'spicatum'):
-            return 'aceraceae', 0.49, False
-        elif species in ('saccharum'):
-            return 'aceraceae', 0.5, False
-
-    elif genus == 'alnus':
-        if species in ('rubra', 'sp.'):
-            return 'betulaceae', 0.39, False
-        elif species in ('papyrifera', 'populifolia'):
-            return 'betulaceae', 0.45, False
-        elif species in ('alleghaniensis'):
-            return 'betulaceae', 0.55, False
-        elif species in ('lenta'):
-            return 'betulaceae', 0.6, False
-    elif genus == 'ostrya':
-        if species in ('virginiana'):
-            return 'betulaceae', 0.6, False
-
-    elif genus == 'cornus':
-        if species in ('florida'):
-            return 'cornaceae', None, False
-    elif genus == 'nyssa':
-        if species in ('aquatica', 'sylvatica'):
-            return 'cornaceae', None, False
-    elif genus == 'arbutus':
-        if species in ('menziesii'):
-            return 'ericaceae', None, False
-    elif genus == 'oxydendrum':
-        if species in ('arboreum'):
-            return 'ericaceae', None, False
-    elif genus == 'umbellularia':
-        if species in ('californica'):
-            return 'ericaceae', None, False
-    elif genus == 'sassafras':
-        if species in ('albidum'):
-            return 'lauraceae', None, False
-    elif genus == 'platanus':
-        if species in ('occidentalis'):
-            return 'platanaceae', None, False
-    elif genus == 'amelanchier':
-        if species in ('sp.'):
-            return 'rosaceae', None, False
-    elif genus == 'prunus':
-        if species in ('pensylvanica', 'serotina', 'virginiana'):
-            return 'rosaceae', None, False
-    elif genus == 'sorbus':
-        if species in ('americana'):
-            return 'rosaceae', None, False
-    elif genus == 'ulmus':
-        if species in ('americana', 'sp.'):
-            return 'ulmaceae', None, False
-
-    elif genus == 'carya':
-        if species in ('illinoinensis', 'ovata', 'sp.'):
-            return 'juglandaceae', None, False
-
-    elif genus == 'robinia':
-        if species == 'pseudoacacia':
-            return 'fabaceae', None, False
-
-    elif genus == 'castanea':
-        if species in ('dentata'):
-            return 'fagaceae_deciduous', None, False
-    elif genus == 'fagus':
-        if species in ('grandifolia'):
-            return 'fagaceae_deciduous', None, False
-    elif genus == 'quercus':
-        if species in ('alba', 'coccinea', 'ellipsoidalis', 'falcata',
-                       'macrocarpa', 'nigra', 'prinus', 'rubra',
-                       'stellata', 'velutina', 'sp.'):
-            return 'fagaceae_deciduous', None, False
-        elif species in ('douglasii', 'laurifolia', 'minima',
-                         'chrysolepis'):
-            return 'fagaceae_evergreen', None, False
-    elif genus == 'chrysolepis':
-        if species in ('chrysophylla'):
-            return 'fagaceae_evergreen', None, False
-    elif genus == 'lithocarpus':
-        if species in ('densiflorus'):
-            return 'fagaceae_evergreen', None, False
-
-    # lutz
-    elif genus == 'ceanothus':
-        return 'ceanothus_integerrimus', None, True
-    elif genus == 'ribes':
-        if species in ('roezlii', 'sp.'):
-            return 'ribes_roezlii', None, True
-
-    # universal case
-    elif genus in ('toxicodendron', 'senecio',
-                   'datura', 'rhamnus', 'carex',
-                   ):
-        return 'universal_shrub', None, True
-    elif genus in ('aesculus', 'sambucus'):
-        return 'universal_bleaf', None, False
-    else:
-        return None, None, False

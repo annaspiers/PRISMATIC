@@ -226,5 +226,7 @@ def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
 
     sps_df = pd.concat(sps, axis=1).T
     augmented_neon_trait_table_df = \
-        pd.concat([neon_trait_table_df, sps_df], axis=0)
+        (pd.concat([neon_trait_table_df, sps_df], axis=0)
+         .copy()
+         .reset_index(drop=True))
     return augmented_neon_trait_table_df
