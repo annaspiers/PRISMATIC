@@ -19,10 +19,27 @@ wht = whitebox.WhiteboxTools()
 wht.set_verbose_mode(False)
 
 
-def download_lidar(site, date, lidar_path):
+def download_lidar(site, year, lidar_path):
+    """Download lidar data (raw and raster) for site-year
+
+    Parameters
+    ----------
+    site : str
+        Site name
+    year : str
+        Lidar year
+    lidar_path : str
+        Path to store the downloaded data
+
+    Returns
+    -------
+    (str, str)
+        Path to the result lidar folder ('*/laz')
+        and the result raster folder ('*/tif')
+    """
     lidar_path = Path(lidar_path)
     product_code = 'DP1.30003.001'
-    path = lidar_path/site/date
+    path = lidar_path/site/year
     file_types = ['prj', 'kml', 'shx', 'shp', 'dbf', 'laz']
     for file_type in file_types:
         if file_type == 'laz':
@@ -31,7 +48,7 @@ def download_lidar(site, date, lidar_path):
             p = path/'shape'
         download_aop_files(product_code,
                            site,
-                           date,
+                           year,
                            str(p),
                            match_string=file_type,
                            check_size=False)
@@ -42,7 +59,7 @@ def download_lidar(site, date, lidar_path):
         p = path/file_type
         download_aop_files(product_code,
                            site,
-                           date,
+                           year,
                            str(p),
                            match_string=file_type,
                            check_size=False)
@@ -56,6 +73,33 @@ def clip_lidar_by_plots(laz_path,
                         year,
                         output_laz_path,
                         end_result=False):
+    """_summary_
+
+    Parameters
+    ----------
+    laz_path : str
+        Path to the lidar folder
+        Format '*/laz'
+    tif_path : str
+        Path to the raster folder
+        Format '*/tif'
+    site_plots_path : str
+        _description_
+    site : str
+        Site name
+    year : str
+        Inventory year
+    output_laz_path : str
+         Default output data root
+    end_result : bool, optional
+        If this is the end result,
+        redirect the result into '*/output' folder.
+
+    Returns
+    -------
+    str
+        Path to the folder that the result of this function is saved to
+    """
     log.info(f'Processing LiDAR data for site: {site} / year: {year}')
     laz_path = Path(laz_path)
     tif_path = Path(tif_path)
@@ -166,6 +210,28 @@ def normalize_laz(laz_path,
                   year,
                   output_path,
                   end_result=False):
+    """Normalize laz files
+
+    Parameters
+    ----------
+    laz_path : str
+        Path to the lidar folder
+        Format '*/laz'
+    site : str
+        Site name
+    year : str
+        Inventory year
+    output_path : str
+        Default output data root
+    end_result : bool, optional
+        If this is the end result,
+        redirect the result into '*/output' folder.
+
+    Returns
+    -------
+    str
+        Path to the folder that the result of this function is saved to
+    """
     log.info(f'Normalizing LiDAR data for site: {site} / year: {year}')
     laz_path = Path(laz_path)
     year = str(year)
@@ -184,6 +250,9 @@ def normalize_laz(laz_path,
 
 
 def _get_polygon_str(x_cord, y_cord):
+    """
+    Prepare the polygon string for clipping with PDAL
+    """
     polygon_str = 'POLYGON(('
     for x, y in zip(list(x_cord), list(y_cord)):
         polygon_str += f'{x} {y}, '

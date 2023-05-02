@@ -19,8 +19,40 @@ def preprocess_biomass(data_path,
                        site,
                        year,
                        output_data_path,
-                       neon_trait_table_path=None,
+                       neon_trait_table_path,
                        end_result=True):
+    """Calculate biomass for all invidivuals in neon_data
+
+    Parameters
+    ----------
+    data_path : str
+        Path to the site-year vegetation structure file.
+        Format '*/pp_veg_structure.csv'
+    site_plots_path : str
+        Path to the clipped plots result folder.
+        This is the resulted folder from preprocessing/plots.py,
+        function preprocess_polygons().
+        Format '*/inventory_plots'
+    sampling_effort_path : str
+        Path to the site-year plot sampling effort file.
+        Format '*/pp_plot_sampling_effort.csv'
+    site : str
+        Site name
+    year : str
+        Inventory year
+    output_data_path : str
+        Default output data root
+    neon_trait_table_path : str
+        Path to the neon_trait_table (Marcos is the maintainer)
+    end_result : bool, optional
+        If this is the end result,
+        redirect the result into '*/output' folder.
+
+    Returns
+    -------
+    str
+        Path to the folder that the result of this function is saved to
+    """
     log.info(f'Processing biomass data for site: {site} / year: {year}')
     veg_df = pd.read_csv(data_path)
     site_plots_path = Path(site_plots_path)
@@ -31,19 +63,41 @@ def preprocess_biomass(data_path,
     output_data_path.mkdir(parents=True, exist_ok=True)
 
     neon_trait_table_df = pd.read_csv(neon_trait_table_path)
+
+    # remove individuals do not have both stem diameter and basal stem diameter
+    # and invidividuals do not belong into any plotID.
     avail_veg_df = veg_df[(~pd.isna(veg_df.basalStemDiameter) |
                           ~pd.isna(veg_df.stemDiameter)) &
                           ~pd.isna(veg_df.plotID)]
+
+    # neon_data sientific name also has author name,
+    # for example,
+    # Arctostaphylos viscida Parry ssp. mariposa (Dudley) P.V. Wells
+    # we only need the first two elements for scientific name.
     avail_veg_df['scientific'] = \
         avail_veg_df.scientificName.str.split().str[:2].str.join(' ')
+
+    # neon_trait_table does not have universal species, e.g Pinus sp.
+    # so we augment the table with those.
+    # Logic (Pinus sp. for example):
+    # 1. If there are known Pinus species in any of the site plots,
+    #    use weighted average/sampling to fill in the Pinus sp.
+    # 2. If there are no known Pinus species in any of the site plots,
+    #    use weighted average/sampling from the look-up table to fill in.
+    # 3. If there are no Pinus spieces in the look-up table,
+    #    use sampling from all plants of the Pinaceae family from the table.
+    # TODO: 2. is implemented, need to add the logic for 1. and 3.
     neon_trait_table_df = \
         augment_neon_trait_table(neon_trait_table_df, avail_veg_df)
+
+    # left join the neon_data and neon_trait_table
     avail_veg_df = (pd.merge(avail_veg_df,
                              neon_trait_table_df,
                              on='scientific',
                              how='left')
                     .copy()
                     .reset_index(drop=True))
+
     sampling_effort_df = pd.read_csv(sampling_effort_path)
     biomass = []
     family = []
@@ -51,6 +105,7 @@ def preprocess_biomass(data_path,
     is_shrub = []
     b1 = []
     b2 = []
+    # iterate through each invididual and calculate biomass
     with tqdm(total=avail_veg_df.shape[0]) as pbar:
         for row in avail_veg_df.itertuples():
             pbar.update(1)
@@ -69,7 +124,7 @@ def preprocess_biomass(data_path,
     avail_veg_df['b1'] = b1
     avail_veg_df['b2'] = b2
 
-    # save result for diagnostics
+    # save result to diagnostics folder
     plot_values = {}
     for name, group in avail_veg_df.groupby('scientificName'):
         name = ' '.join(name.split()[:2])
@@ -120,6 +175,8 @@ def preprocess_biomass(data_path,
     polygons = gpd.read_file(shp_file)
     polygons['area'] = polygons.area
 
+    # get the sampling area of each individual
+    # depending on the growth form (shrub/tree)
     sampling_area = []
     for row in avail_veg_df.itertuples():
         try:
@@ -149,6 +206,9 @@ def preprocess_biomass(data_path,
         sampling_area.append(v)
 
     avail_veg_df['sampling_area'] = sampling_area
+
+    # refine the result by eliminate invididuals
+    # with nan biomass and sampling effort
     avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.biomass)].copy()
     avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.sampling_area)].copy()
     avail_veg_df['individualStemNumberDensity'] = 1/avail_veg_df.sampling_area
@@ -180,6 +240,20 @@ def preprocess_biomass(data_path,
 
 
 def _cal_plot_level_biomass(df, polygons):
+    """From individual biomass and polygons, calculate plot-level biomass
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Dataframe of invididual biomass
+    polygons : geopandas.GeoDataFrame
+        Geo dataframe of all plot polygons at the site
+
+    Returns
+    -------
+    pandas.DataFrame
+        Plot-level biomass dataframe
+    """
     plots = []
     subplots = []
     ND = []
@@ -213,7 +287,7 @@ def _cal_plot_level_biomass(df, polygons):
 def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
     genus_sp_group = neon_trait_table_df.groupby('genus')
     sps = []
-    for name, group in genus_sp_group:
+    for _, group in genus_sp_group:
         sp_template = group.iloc[0].copy()
         sp_template['scientific'] = f"{sp_template['genus']} sp."
         common_s = set(avail_veg_df.scientific) & set(group.scientific)

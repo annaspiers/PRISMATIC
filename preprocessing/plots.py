@@ -22,6 +22,19 @@ log = logging.getLogger(__name__)
 
 
 def download_polygons(data_path):
+    """Download polygons for all sites
+
+    Parameters
+    ----------
+    data_path : str
+        Path to root of result folder
+
+    Returns
+    -------
+    str
+        Path to the polygons folder
+        Format '*/All_NEON_TOS_Plots_V9'
+    """
     data_path = Path(data_path)
     zip_filename = Path(NEON_POLYGONS_LINK).name
     zip_data_path = data_path/zip_filename
@@ -42,12 +55,39 @@ def preprocess_polygons(input_data_path,
                         inventory_path,
                         site, year,
                         output_data_path):
+    """Process polygons and clip to 400m2 plots.
+
+    Parameters
+    ----------
+    input_data_path : str
+        Path to the plots of all sites.
+        Format '*/All_NEON_TOS_Plots_V9'
+    sampling_effort_path : str
+        Path to the site-year plot sampling effort file.
+        Format '*/pp_plot_sampling_effort.csv'
+    inventory_path : str
+        Path to the site-year vegetation structure file.
+        Format '*/pp_veg_structure.csv'
+    site : str
+        Site name
+    year : str
+        Inventory year
+    output_data_path : str
+        Default output data root
+
+    Returns
+    -------
+    str
+        Path to the folder that the result of this function is saved to
+    """
     log.info(f'Processing polygons for site: {site} / '
              f'year: {year} given inventory')
     input_data_path = Path(input_data_path)
     output_data_path = Path(output_data_path)
     year = str(year)
 
+    # read polygons from the polygons input folder
+    # match the vegetation structure with the exact coord from the polygon data
     shp_file = [i for i in input_data_path.glob('*Polygons*.shp')][0]
     polygons = gpd.read_file(shp_file)
     sampling_effort = pd.read_csv(sampling_effort_path)
@@ -73,6 +113,7 @@ def preprocess_polygons(input_data_path,
     ps = []
     processed_plots = {}
     for plot_id, group in polygons_site_utm.groupby('plotID'):
+        # calculate summarization data of the plot
         veg_plot_metadata = {
             'plot_id': plot_id,
             'total_ind': None,
@@ -94,6 +135,13 @@ def preprocess_polygons(input_data_path,
         veg_plot_metadata['total_ind_stem_lt_10'] = \
             sum(veg_gdf.stemDiameter < 10)
 
+        # Logic:
+        # - If the sample suplot is '31|31|40|41',
+        #   then they measure individuals
+        #   in the middle of the plot (400m2).
+        # - Else, they sample each suplot. For example if it is 30|31,
+        #   then they sample each subplot individually.
+        #   The result is 2 supblot 400m2.
         sampled_subplots = '31 | 32 |  40 | 41'
         try:
             query = f'plotID == "{plot_id}"'

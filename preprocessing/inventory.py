@@ -25,12 +25,18 @@ log = logging.getLogger(__name__)
 
 
 def download_trait_table(download_link, data_path):
+    """
+    Download neon_trait_table (Marcos is the maintainer)
+    """
     output_path = str(Path(data_path)/'NEON_trait_table.csv')
     gdown.download(download_link, output_path, quiet=False, fuzzy=True)
     return output_path
 
 
 def download_veg_structure_data(site, data_path):
+    """
+    Download vegetation structure and plot sampling effort of the site
+    """
     log.info(f'Downloading inventory data for site: {site}')
     r_source = robjects.r['source']
     r_source(str(Path(__file__).resolve().parent/'inventory_helper.R'))
@@ -44,6 +50,9 @@ def download_veg_structure_data(site, data_path):
 
 
 def preprocess_veg_structure_data(site, year, data_path):
+    """
+    Filter vegetation structure and plot sampling to the year
+    """
     year = str(year)
     site_path = Path(data_path)/site
     df = pd.read_csv(site_path/'veg_structure.csv')
