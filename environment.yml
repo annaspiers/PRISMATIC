@@ -20,7 +20,7 @@ dependencies:
     - gdown
     - pygbif
     - geopandas
-    - rpy2
+    - rpy2>=3.5.11
     - tqdm
     - laspy[lazrs, laszip]
     - open3d

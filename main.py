@@ -10,6 +10,7 @@ from preprocessing.lidar import clip_lidar_by_plots, \
                                 download_lidar, \
                                 normalize_laz
 from preprocessing.biomass import preprocess_biomass
+from preprocessing.lad import preprocess_lad
 from utils.utils import build_cache, force_rerun
 
 log = logging.getLogger(__name__)
@@ -95,12 +96,22 @@ def main(cfg):
                                                        site,
                                                        year_inventory,
                                                        data_path))
+                clipped_laz_path = (force_rerun(cache,
+                                                force=rerun_status)
+                                    (clip_lidar_by_plots)
+                                    (normalized_laz_path,
+                                     tif_path,
+                                     partitioned_plots_path,
+                                     site,
+                                     year_inventory,
+                                     data_path,
+                                     end_result=True))
+
+                # leaf area density
                 (force_rerun(cache,
                              force=rerun_status)
-                 (clip_lidar_by_plots)
-                 (normalized_laz_path,
-                  tif_path,
-                  partitioned_plots_path,
+                 (preprocess_lad)
+                 (clipped_laz_path,
                   site,
                   year_inventory,
                   data_path,
