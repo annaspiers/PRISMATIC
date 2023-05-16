@@ -137,3 +137,6 @@ data/
 # log files
 outputs/
 .Rproj.user
+
+# R files
+*.Rproj
