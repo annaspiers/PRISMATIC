@@ -1,11 +1,11 @@
-library(leafR)
+library(lidR)
 options(stringsAsFactors = FALSE)
 
-calc_leaf_area_density <- function(laz_path) {
+calc_leaf_area_density <- function(laz_path, dz=0.5, z0=1) {
     # Calculate LAD from voxelization
-    lad_voxels = lad.voxels(laz_path,
-                            grain.size = 2)
-
-    lad_profile = lad.profile(lad_voxels)
+    laz_data = readLAS(laz_path)
+    lad_profile = LAD(laz_data@data$Z,
+                      dz=dz,
+                      z0=z0)
     return(lad_profile)
 }
