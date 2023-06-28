@@ -17,10 +17,12 @@ def preprocess_lad(laz_path, site, year, output_data_path, end_result=True):
     log.info(f'Preprocessing leaf area density for site: {site}')
     year = str(year)
     output_folder = 'output' if end_result else 'lad'
+    output_folder_diagnostics_path = (Path(output_data_path)/'diagnostics'/site
+                                      / year/LAD_FOLDER)
+    output_folder_diagnostics_path.mkdir(parents=True, exist_ok=True)
     output_data_path = Path(output_data_path)/site/year/output_folder
     output_data_path.mkdir(parents=True, exist_ok=True)
-    output_folder_diagnostics_path = (output_data_path/'diagnostics'/site
-                                      / year/LAD_FOLDER)
+
 
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'leaf_area_density_helper.R'))
@@ -36,13 +38,14 @@ def preprocess_lad(laz_path, site, year, output_data_path, end_result=True):
             infl_points = calculate_infl_points(df)
             fig = plot_diagnotics(df, infl_points)
             fig.savefig(output_folder_diagnostics_path/f'{laz_file.stem}_lad.png')
+            plt.close()
         except Exception:
             df = empty_df
             infl_points = {}
             log.error(f'Cannot preprocess leaf area density for site: {site}, {laz_file.stem}')
         df.to_csv(output_data_path/f'{laz_file.stem}_lad.csv')
         with open(output_data_path/f'{laz_file.stem}_lad.json', 'w') as f:
-            json.dump(infl_points, f)
+            json.dumps(infl_points, default=str)
     return str(output_data_path)
 
 def calculate_infl_points(df):
@@ -56,15 +59,46 @@ def calculate_infl_points(df):
     horizontal_infls = np.where(np.diff(np.sign(smooth_d2)) > 0)[0]
     vertical_infls = np.where(np.diff(np.sign(smooth_d2)) < 0)[0]
 
-    return {'max_idx': max_infls,
-            'min_idx': min_infls,
-            'horizontal_idx': horizontal_infls,
-            'vertical_idx': vertical_infls}
+    # get layers
+    points = sorted(list(np.concatenate((max_infls, min_infls, horizontal_infls, vertical_infls))))
+
+    hor_ver_layers = []
+    for i in range(len(points)-1):
+        if points[i] in vertical_infls and points[i+1] in horizontal_infls:
+            if i+2 < len(points)-1 and (points[i+2] in min_infls or points[i+2] in vertical_infls):
+                hor_ver_layers.append([points[i], points[i+2]])
+            else:
+                hor_ver_layers.append([points[i], points[i+1]])
+
+    points_in_hor_ver_layers = [item for sublist in hor_ver_layers for item in sublist]
+
+    max_peak_layers = []
+    for i in range(len(points)-1):
+        if points[i] in max_infls:
+            # extend down
+            distance_from_i_down = 0
+            while i - distance_from_i_down >= 0 and points[i-distance_from_i_down] not in points_in_hor_ver_layers and points[i-distance_from_i_down] not in min_infls:
+                distance_from_i_down += 1
+            # extend up
+            distance_from_i_up = 0
+            while i + distance_from_i_up < len(points) - 1 and points[i+distance_from_i_up] not in points_in_hor_ver_layers and points[i+distance_from_i_up] not in min_infls:
+                distance_from_i_up += 1
+            max_peak_layers.append([points[i - distance_from_i_down], points[i + distance_from_i_up]])
+
+    layer_idx = sorted(set([item for sublist in hor_ver_layers + max_peak_layers for item in sublist]))
+
+    return {'max_idx': max_infls.tolist(),
+            'min_idx': min_infls.tolist(),
+            'horizontal_idx': horizontal_infls.tolist(),
+            'vertical_idx': vertical_infls.tolist(),
+            'layer_idx': layer_idx,
+            }
 
 def plot_diagnotics(df, infl_points):
     lad = df.lad/np.max(df.lad)
-    z = df.height.values
+    z = df.z.values
     smooth = gaussian_filter1d(lad, 1)
+
     smooth_d1 = np.gradient(smooth)
     smooth_d2 = np.gradient(smooth_d1)
 
@@ -72,7 +106,7 @@ def plot_diagnotics(df, infl_points):
     min_infls = infl_points['min_idx']
     horizontal_infls = infl_points['horizontal_idx']
     vertical_infls = infl_points['vertical_idx']
-    fig = plt.figure(figsize=(8, 15))
+    fig = plt.figure(figsize=(15, 15))
     plt.plot(smooth, z, label='Smoothed LAD')
     smooth_d1 = np.gradient(smooth)
     plt.plot(smooth_d1, z, color='black', label='Smoothed LAD 1st derivative', linestyle='--')
@@ -91,6 +125,10 @@ def plot_diagnotics(df, infl_points):
         plt.plot(smooth[infl], z[infl], marker="o", markersize=5, markeredgecolor="green", markerfacecolor="green", label=f'horizontal infl Point {i}')
     for i, infl in enumerate(vertical_infls, 1):
         plt.plot(smooth[infl], z[infl], marker="o", markersize=5, markeredgecolor="orange", markerfacecolor="orange", label=f'vertical infl Point {i}')
+
+    layer_idx = infl_points['layer_idx']
+    for i in layer_idx:
+        plt.axhline(y=z[i], linestyle='--', color='g')
     plt.grid()
     plt.legend(bbox_to_anchor=(1.1, 1.0))
     return fig
