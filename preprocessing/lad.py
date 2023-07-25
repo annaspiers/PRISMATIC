@@ -3,6 +3,7 @@ import pandas as pd
 import rpy2.robjects as ro
 from rpy2.robjects import pandas2ri
 import numpy as np
+from scipy.integrate import trapz
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import argrelextrema
 import json
@@ -13,7 +14,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 LAD_FOLDER = 'lad'
 
-def preprocess_lad(laz_path, site, year, output_data_path, end_result=True):
+def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, end_result=True):
     log.info(f'Preprocessing leaf area density for site: {site}')
     year = str(year)
     output_folder = 'output' if end_result else 'lad'
@@ -22,7 +23,6 @@ def preprocess_lad(laz_path, site, year, output_data_path, end_result=True):
     output_folder_diagnostics_path.mkdir(parents=True, exist_ok=True)
     output_data_path = Path(output_data_path)/site/year/output_folder
     output_data_path.mkdir(parents=True, exist_ok=True)
-
 
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'leaf_area_density_helper.R'))
@@ -34,19 +34,51 @@ def preprocess_lad(laz_path, site, year, output_data_path, end_result=True):
         try:
             r_df = preprocess_lad_func(str(laz_file))
             with (ro.default_converter + pandas2ri.converter).context():
-                df = ro.conversion.get_conversion().rpy2py(r_df)
-            infl_points = calculate_infl_points(df)
-            fig = plot_diagnotics(df, infl_points)
+                lad_df = ro.conversion.get_conversion().rpy2py(r_df)
+            infl_points = calculate_infl_points(lad_df)
+            fig = plot_diagnotics(lad_df, infl_points)
             fig.savefig(output_folder_diagnostics_path/f'{laz_file.stem}_lad.png')
             plt.close()
         except Exception:
-            df = empty_df
+            lad_df = empty_df
             infl_points = {}
             log.error(f'Cannot preprocess leaf area density for site: {site}, {laz_file.stem}')
-        df.to_csv(output_data_path/f'{laz_file.stem}_lad.csv')
+        lad_df.to_csv(output_data_path/f'{laz_file.stem}_lad.csv')
         with open(output_data_path/f'{laz_file.stem}_lad.json', 'w') as f:
-            json.dumps(infl_points, default=str)
+            f.write(json.dumps(infl_points))
+
+        # calculate SND
+        inventory_df = pd.read_csv(inventory_path)
+        calculate_snd(inventory_df, lad_df, infl_points)
     return str(output_data_path)
+
+def calculate_snd(inventory_df, lad_df, infl_points):
+    layer_height = infl_points['layer_height']
+    snd = 0
+    # from the 0 -> last layer
+    for h1, i in enumerate(layer_height):
+        if i == 0:
+            h0 = 0
+        layer_lad = lad_df.query(f'{h0} <= z and z <= {h1}')
+        layer_lai = trapz(layer_lad.lad.values,
+                          layer_lad.z.values,
+                          dx=0.5)
+        layer_inventory_df = inventory_df.query(f'{h0} <= height and height <= {h1}')
+        layer_ila = calculate_ila(layer_inventory_df)
+        snd += layer_lai/layer_ila
+
+    # from last layer -> sky
+    layer_lad = lad_df.query(f'z <= {h1}')
+    layer_lai = trapz(layer_lad.lad.values,
+                      layer_lad.z.values,
+                      dx=0.5)
+    layer_inventory_df = inventory_df.query(f'height <= {h1}')
+    layer_ila = calculate_ila(layer_inventory_df)
+    snd += layer_lai/layer_ila
+    return snd
+
+def calculate_ila(inventory_df):
+    return 0.1
 
 def calculate_infl_points(df):
     lad = df.lad/np.max(df.lad)
@@ -87,12 +119,12 @@ def calculate_infl_points(df):
 
     layer_idx = sorted(set([item for sublist in hor_ver_layers + max_peak_layers for item in sublist]))
 
-    return {'max_idx': max_infls.tolist(),
-            'min_idx': min_infls.tolist(),
-            'horizontal_idx': horizontal_infls.tolist(),
-            'vertical_idx': vertical_infls.tolist(),
-            'layer_idx': layer_idx,
-            }
+    return {'max_idx': max_infls.astype('int32').tolist(),
+            'min_idx': min_infls.astype('int32').tolist(),
+            'horizontal_idx': horizontal_infls.astype('int32').tolist(),
+            'vertical_idx': vertical_infls.astype('int32').tolist(),
+            'layer_idx': np.array(layer_idx).astype('int32').tolist(),
+            'layer_height': df.z[layer_idx].astype('float32').tolist()}
 
 def plot_diagnotics(df, infl_points):
     lad = df.lad/np.max(df.lad)

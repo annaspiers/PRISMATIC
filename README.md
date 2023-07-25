@@ -20,6 +20,9 @@ For MacOS M1/M2 users:
 GDAL, OSR:
  - To import GDAL, use: `from osgeo import gdal, osr`
 
+Cannot install leafR:
+ - sudo aptitude install libgdal-dev
+
 # Todo
  - [x] Data acquisition and data processing of inventory data
  - [x] Data acquisition and data processing of NEON plots
@@ -32,6 +35,8 @@ GDAL, OSR:
  - [x] Add diagnostics
  - [x] Add logging
  - [x] Refactor configuration files
+ - [x] Calculate Leaf Area Density
+ - [x] Segment LAD into levels
 
 # Usage
 
@@ -50,6 +55,7 @@ List of processes for each site:
 - `normalize_laz`: normalize laz files
 - `clip_lidar_by_plots`: clip the laz/tif files given plots in processed vegetation structure and save to output
 - `preprocess_biomass`: process biomass and save to output
+- `preprocess_lad`: process Leaf Area Density and save to output
 
 The final result is at `data_path/site/year/output`.
 
