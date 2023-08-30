@@ -1,2 +1,2 @@
-data_path: ${hydra:runtime.cwd}/data
-lidar_path: ${hydra:runtime.cwd}/data/lidar_samples
+data_path: ${hydra:runtime.cwd}/data/inventory
+lidar_path: ${hydra:runtime.cwd}/data/lidar
