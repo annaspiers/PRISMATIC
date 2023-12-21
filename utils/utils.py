@@ -17,46 +17,50 @@ def _add_to_cache(func_name, ps, l, cache):
         cache[func_name] = ps
 
 
-def build_cache(site, year_inventory, year_lidar, data_path, root_lidar_path):
+def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, data_out_path):
     l = []
-    data_path = Path(data_path)
-    root_lidar_path = Path(root_lidar_path)
-    l.extend([str(p) for p in data_path.glob('**/') if p.is_dir()])
-    l.extend([str(p) for p in data_path.glob('**/*.csv')])
-    l.extend([str(p) for p in root_lidar_path.glob('**/') if p.is_dir()])
+    data_raw_aop_path = Path(data_raw_aop_path)
+    data_raw_inv_path = Path(data_raw_inv_path)
+    data_out_path = Path(data_out_path)
+    l.extend([str(p) for p in data_raw_aop_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_raw_inv_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_raw_inv_path.glob('**/*.csv')])
+    l.extend([str(p) for p in data_out_path.glob('**/') if p.is_dir()])
     cache = {}
+    # Download raw data
     _add_to_cache('download_trait_table',
-                  str(data_path/'NEON_trait_table.csv'),
+                  str(data_raw_inv_path/'NEON_trait_table.csv'),
                   l, cache)
     _add_to_cache('download_lidar',
-                  [str(root_lidar_path/site/year_lidar/'laz'),
-                   str(root_lidar_path/site/year_lidar/'tif')],
+                  [str(data_raw_aop_path/site/year_aop/'laz'),
+                   str(data_raw_aop_path/site/year_aop/'tif')],
                   l, cache)
     _add_to_cache('download_veg_structure_data',
-                  [str(data_path/site/'veg_structure.csv'),
-                   str(data_path/site/'plot_sampling_effort.csv')],
-                  l, cache)
-    _add_to_cache('preprocess_veg_structure_data',
-                  [str(data_path/site/year_inventory/'pp_veg_structure.csv'),
-                   str(data_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
+                  [str(data_raw_inv_path/site/'veg_structure.csv'),
+                   str(data_raw_inv_path/site/'plot_sampling_effort.csv')],
                   l, cache)
     _add_to_cache('download_polygons',
-                  str(data_path/'All_NEON_TOS_Plots_V9'),
+                  str(data_raw_inv_path/'All_NEON_TOS_Plots_V9'),
+                  l, cache)    
+    _add_to_cache('preprocess_veg_structure_data',
+                  [str(data_raw_inv_path/site/year_inventory/'pp_veg_structure.csv'),
+                   str(data_raw_inv_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
                   l, cache)
+    # Process raw data
     _add_to_cache('preprocess_polygons',
-                  str(data_path/site/year_inventory/'inventory_plots'),
+                  str(data_out_path/site/year_inventory/'inventory_plots'),
                   l, cache)
     _add_to_cache('normalize_laz',
-                  str(data_path/site/year_inventory/'normalized_lidar'),
+                  str(data_out_path/site/year_inventory/'normalized_lidar_tiles'),
                   l, cache)
     _add_to_cache('clip_lidar_by_plots',
-                  str(data_path/site/year_inventory/'output'),
+                  str(data_out_path/site/year_inventory/'clipped_to_plots'),
                   l, cache)
     _add_to_cache('preprocess_biomass',
-                  str(data_path/site/year_inventory/'output'),
+                  str(data_out_path/site/year_inventory/'biomass'),
                   l, cache)
     _add_to_cache('preprocess_lad',
-                  str(data_path/site/year_inventory/'output'),
+                  str(data_out_path/site/year_inventory/'lad'),
                   l, cache)
     return cache
 

@@ -1,6 +1,12 @@
 import logging
 import hydra
 
+import os 
+os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R') 
+# so that this line works in inventory.py: import rpy2.robjects as robjects
+# solution from https://github.com/rpy2/rpy2/issues/882
+# generalized with help from https://stackoverflow.com/questions/36539623/how-do-i-find-the-name-of-the-conda-environment-in-which-my-code-is-running
+
 from preprocessing.inventory import download_veg_structure_data, \
                                     preprocess_veg_structure_data, \
                                     download_trait_table
@@ -19,8 +25,10 @@ log = logging.getLogger(__name__)
 @hydra.main(version_base='1.2', config_path='conf', config_name='config')
 def main(cfg):
     log.info(f'Run with configuration: {cfg}')
-    root_lidar_path = cfg.paths.lidar_path
-    data_path = cfg.paths.data_path
+    # data_raw_path = cfg.paths.data_raw_path
+    data_raw_aop_path = cfg.paths.data_raw_aop_path
+    data_raw_inv_path = cfg.paths.data_raw_inv_path
+    data_out_path = cfg.paths.data_out_path
 
     global_force_rerun = cfg.sites.global_run_params.force_rerun
     global_run = cfg.sites.global_run_params.run
@@ -33,13 +41,13 @@ def main(cfg):
                 rerun_status = {}
                 for k, v in p.force_rerun.items():
                     rerun_status[k] = v or global_force_rerun.get(k, False)
-                year_lidar = p.year_lidar
+                year_aop = p.year_aop
                 log.info(f'Run process for site: {site}, '
-                         f'year: {year_inventory}, year_lidar: {year_lidar}, '
+                         f'year: {year_inventory}, year_aop: {year_aop}, '
                          f'with rerun status: {rerun_status}')
-                cache = build_cache(site, year_inventory, year_lidar,
-                                    data_path, root_lidar_path)
-
+                cache = build_cache(site, year_inventory, year_aop,
+                                    data_raw_aop_path, data_raw_inv_path, data_out_path)
+                
                 # download neon_trait_table
                 url = cfg.others.neon_trait_table.neon_trait_link
                 trait_table_path = (force_rerun(cache,
@@ -50,34 +58,34 @@ def main(cfg):
                                                      .neon_trait_table
                                                      .force_rerun)})
                                     (download_trait_table)
-                                    (url, data_path))
-
-                # download lidar
-                laz_path, tif_path = (force_rerun(cache,
-                                                  force=rerun_status)
-                                      (download_lidar)
-                                      (site,
-                                       year_lidar,
-                                       root_lidar_path))
+                                    (url, data_raw_inv_path))
 
                 # process inventory
                 _, _ = (force_rerun(cache,
                                     force=rerun_status)
-                        (download_veg_structure_data)
-                        (site, data_path))
+                        (download_veg_structure_data) #ais how to automate this to enter 72?
+                        (site, data_raw_inv_path))
                 inventory_file_path, \
                     sampling_effort_path = (force_rerun(cache,
                                                         force=rerun_status)
                                             (preprocess_veg_structure_data)
                                             (site,
                                              year_inventory,
-                                             data_path))
-
-                # process plots
+                                             data_raw_inv_path))
                 neon_plots_path = (force_rerun(cache,
                                                force=rerun_status)
                                    (download_polygons)
-                                   (data_path))
+                                   (data_raw_inv_path))
+                
+                # download lidar
+                laz_path, tif_path = (force_rerun(cache,
+                                                  force=rerun_status)
+                                      (download_lidar)
+                                      (site,
+                                       year_aop,
+                                       data_raw_aop_path))
+                
+                # process plots                
                 partitioned_plots_path = \
                     (force_rerun(cache,
                                  force=rerun_status)
@@ -87,7 +95,7 @@ def main(cfg):
                       inventory_file_path,
                       site,
                       year_inventory,
-                      data_path))
+                      data_out_path))
 
                 # clip lidar data
                 normalized_laz_path = (force_rerun(cache,
@@ -95,7 +103,7 @@ def main(cfg):
                                        (normalize_laz)(laz_path,
                                                        site,
                                                        year_inventory,
-                                                       data_path))
+                                                       data_out_path))
                 clipped_laz_path = (force_rerun(cache,
                                                 force=rerun_status)
                                     (clip_lidar_by_plots)
@@ -104,7 +112,7 @@ def main(cfg):
                                      partitioned_plots_path,
                                      site,
                                      year_inventory,
-                                     data_path,
+                                     data_out_path,
                                      end_result=True))
 
                 # leaf area density
@@ -112,10 +120,11 @@ def main(cfg):
                              force=rerun_status)
                  (preprocess_lad)
                  (clipped_laz_path,
+                  inventory_file_path,
                   site,
                   year_inventory,
-                  data_path,
-                  end_result=True))
+                  data_out_path,
+                  end_result=False))
 
                 # biomass
                 (force_rerun(cache,
@@ -125,9 +134,11 @@ def main(cfg):
                                       sampling_effort_path,
                                       site,
                                       year_inventory,
-                                      data_path,
+                                      data_out_path,
                                       neon_trait_table_path=trait_table_path,
-                                      end_result=True))
+                                      end_result=False))
+                
+                
 
     log.info('DONE')
 

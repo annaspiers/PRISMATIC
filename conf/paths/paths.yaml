@@ -1,2 +1,3 @@
-data_path: ${hydra:runtime.cwd}/data
-lidar_path: ${hydra:runtime.cwd}/data/lidar_samples
+data_out_path: ${hydra:runtime.cwd}/data/processed
+data_raw_aop_path: ${hydra:runtime.cwd}/data/raw/aop
+data_raw_inv_path: ${hydra:runtime.cwd}/data/raw/inventory

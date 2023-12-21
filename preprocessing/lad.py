@@ -56,7 +56,7 @@ def calculate_snd(inventory_df, lad_df, infl_points):
     layer_height = infl_points['layer_height']
     snd = 0
     # from the 0 -> last layer
-    for h1, i in enumerate(layer_height):
+    for i, h1 in enumerate(layer_height):
         if i == 0:
             h0 = 0
         layer_lad = lad_df.query(f'{h0} <= z and z <= {h1}')
