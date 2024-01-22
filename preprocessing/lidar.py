@@ -40,9 +40,10 @@ def download_lidar(site, year, lidar_path):
     lidar_path = Path(lidar_path)
     product_code = 'DP1.30003.001'
     path = lidar_path/site/year
-    file_types = ['prj', 'kml', 'shx', 'shp', 'dbf', 'laz']
+    file_types = ['prj', 'shx', 'shp', 'dbf', 'laz']
     for file_type in file_types:
         if file_type == 'laz':
+            file_type = '_classified_point_cloud_colorized.laz'
             p = path/'laz'
         else:
             p = path/'shape'
