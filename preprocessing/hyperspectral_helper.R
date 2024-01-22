@@ -1,0 +1,686 @@
+# This script is where packages are installed and parameters are defined for
+# the other scripts within this workflow.
+
+#install.packages("dplyr")
+library(stringr)
+library(raster)
+library(dplyr)
+library(sf)
+
+# Load custom supporting functions 
+source("../utils/hyperspectral_tools.R")
+
+stack_hyperspectral <- function(h5, out_dir){
+    # written by Scholl et al from https://github.com/earthlab/neon-veg
+
+    # this function is called in prep_aop_imagery
+
+  # This function creates a rasterstack object for the specified HDF5 
+  # filename. 
+  #
+  # Args: 
+  # h5
+  #   character string filename of HDF5 file 
+  # out_dir
+  #   directory for output files where the wavelengths will be written to
+  #   a text file for further analysis
+  #
+  # Returns:
+  # s
+  #   RasterStack (collection of Raster layers with the same spatial extent
+  #   and resolution) containing nrows x ncols x nbands, based on the 
+  #   resolution and number of bands in the HDF5 file. This RasterStack
+  #   can then be clipped using Spatial vector layers. 
+  #
+  
+  # list the contents of HDF5 file
+  h5_struct <- rhdf5::h5ls(h5, all=T)
+  
+  # construct the string using "/Reflectance/Metadata/Coordinate_System",
+  # without explicitly using a site code 
+  crs_tag <- h5_struct$group[grepl("/Reflectance/Metadata/Coordinate_System", 
+                                   h5_struct$group)][1] 
+  
+  # read coordinate reference system data
+  crs_info <- rhdf5::h5read(h5, crs_tag)
+  
+  # convert "UTM" to lowercase "utm" for proper usage later
+  crs_info$Proj4 <- sf::st_crs(chartr("UTM", "utm", crs_info$Proj4))
+  
+  # get attributes for the Reflectance dataset.
+  # construct the string using "/Reflectance/Reflectance_Data"" 
+  refl_tag <- paste0(h5_struct$group[grepl("/Reflectance", 
+                                           h5_struct$group)][1],
+                     "/Reflectance_Data")
+  
+  # read the reflectance metadata
+  refl_info <- rhdf5::h5readAttributes(h5,refl_tag)
+  
+  # get the dimensions of the reflectance data
+  n_rows <- refl_info$Dimensions[1]
+  n_cols <- refl_info$Dimensions[2]
+  n_bands <- refl_info$Dimensions[3]
+  
+  # print dimensions 
+  # print(paste0("# Rows: ", as.character(n_rows)))
+  # print(paste0("# Columns: ", as.character(n_cols)))
+  # print(paste0("# Bands: ", as.character(n_bands)))
+  
+  # read the wavelengths of the hyperspectral image bands
+  wavelength_tag <- paste0(h5_struct$group[grepl("/Reflectance/Metadata/Spectral_Data", 
+                                                 h5_struct$group)][1],
+                           "/Wavelength")
+  wavelengths <- rhdf5::h5read(h5,
+                               wavelength_tag)
+  
+  # define spatial extent: extract resolution and origin coordinates
+  map_info <- unlist(strsplit(crs_info$Map_Info, 
+                              split = ", "))
+  res_x <- as.numeric(map_info[6])
+  res_y <- as.numeric(map_info[7])
+  x_min <- as.numeric(map_info[4])
+  y_max <- as.numeric(map_info[5])
+  
+  # calculate the maximum X and minimum Y values 
+  x_max <- (x_min + (n_cols * res_x))
+  y_min <- (y_max - (n_rows * res_y))
+  tile_extent <- raster::extent(x_min, x_max, y_min, y_max)
+  # print("tile extent")
+  # print(tile_extent)
+  
+  # read reflectance data for all bands
+  refl <- rhdf5::h5read(h5, refl_tag,
+                        index = list(1:n_bands, 1:n_cols, 1:n_rows))
+  
+  # view and apply scale factor to convert integer values to reflectance [0,1]
+  # and data ignore value
+  scale_factor <- refl_info$Scale_Factor
+  data_ignore <- refl_info$Data_Ignore_Value
+  refl[refl == data_ignore] <- NA 
+  refl_scaled <- refl / scale_factor
+  
+  # create georeferenced raster using band 1 
+  r1 <- (refl_scaled[1,,]) # convert first band to matrix
+  # transpose the image pixels for proper orientation to match
+  # the other layers. create a raster for this band and assign
+  # the CRS.
+  # print("Transposing reflectance data for proper orientation")
+  r1 <- raster::t(raster::raster(r1, crs = crs_info$Proj4))
+  extent(r1) <- tile_extent
+  
+  # start the raster stack with first band 
+  s <- raster::stack(r1)
+  
+  # loop through bands and create a giant rasterstack with 426 (n_bands) bands
+  for(b in 2:n_bands){
+    
+    # create raster with current band
+    r <- (refl_scaled[b,,]) # convert to matrix
+    r <- raster::t(raster::raster(r, crs = crs_info$Proj4))
+    extent(r) <- tile_extent
+    
+    # add additional band to the stack with the addLayer function
+    s <- raster::addLayer(s, r)
+    
+  }
+  
+  # adjust the names for each layer in raster stack to correspond to wavelength
+  names(s) <- round(wavelengths)
+  
+  # write wavelengths to a text file 
+  # write the exact wavelengths to file for future use 
+  write.table(data.frame(wavelengths = wavelengths),
+              file.path(out_dir,"wavelengths.txt"),
+              row.names=FALSE)
+  
+  # return the stacked hyperspectral data to clip with vector files 
+  return(s)
+}
+
+
+prep_aop_imagery <- function(site, year, hs_L3_path, tif_path, data_out_path) {
+    # modified from Scholl et al from https://github.com/earthlab/neon-veg
+    
+    # ais change prep_aop_imagery to stack only 1km x 1km tiles
+    # ais add plotting aop imagery from script 6
+
+    # output directory for stacked AOP data
+    stacked_aop_data_dir <- file.path({data_out_path}, {site}, {year}, "stacked_aop")
+    if (!dir.exists(stacked_aop_data_dir)) {
+      dir.create(stacked_aop_data_dir)
+    }
+
+    # list the files in each data directory; filter results based on file type
+    h5_ls <- list.files(path = file.path({hs_L3_path}),
+                        pattern = "reflectance.h5", recursive=T, full.names=T)
+    chm_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_CHM.tif", recursive = T, full.names = T)
+    slope_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_slope.tif", recursive=T, full.names=T)
+    aspect_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_aspect.tif", recursive=T, full.names=T)
+    rgb_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_image.tif", recursive=T, full.names=T)
+    savi_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_SAVI.tif", recursive=T, full.names=T)
+    pri_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_PRI.tif", recursive=T, full.names=T)
+    ndvi_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_NDVI.tif", recursive=T, full.names=T)
+    evi_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_EVI.tif", recursive=T, full.names=T)
+    arvi_ls <- list.files(path = file.path({tif_path}),
+                        pattern = "_ARVI.tif", recursive=T, full.names=T)
+
+    # create data cubes with AOP-derived features for each tile
+    for (h5 in h5_ls) {
+
+      # each current hyperspectral tile must be read and stacked into a
+      # georeferenced rasterstack (so it can be clipped with fpoint/polygon
+      # shapefiles). The process of creating a rasterstack takes a while for
+      # each tile, so after creating each rasterstack once, each object gets
+      # written to a file.
+
+      # Build up the rasterstack filename by parsing out the easting/northing
+      # coordinates from the current h5 filename.
+
+      # parse the UTM easting and northing values from the current h5 filename
+      easting <- stringr::str_split(tail(str_split(h5, "/")[[1]],n=1),"_")[[1]][5]
+      northing <- stringr::str_split(tail(str_split(h5, "/")[[1]],n=1),"_")[[1]][6]
+      # combine them with an underscore; use this to find corresponding tiles
+      # of various remote sensing data
+      east_north_string <- paste0(easting,"_",northing)
+
+      message(paste0("Stacking ",east_north_string,", AOP tile ",match(h5,h5_ls)," out of ",length(h5_ls)))
+
+      # generate a filename for the stacked AOP data
+      stacked_aop_data_filename = file.path(stacked_aop_data_dir,
+                                  paste0("stacked_aop_data_",
+                                        east_north_string, ".tif"))
+      if (file.exists(stacked_aop_data_filename)) {
+
+        # if it exists, read that instead of re-generating the same rasterstack.
+        message("stacked_aop_data already created for current tile.")
+
+        # restore / read the rasterstack from file
+        next
+
+      } else {
+
+        # if it doesn't exist, create the features from the aop data to file 
+        # hyperspectral and lidar features ------------------------------------
+
+        # read the corresponding remote sensing data layers for current tile
+        h5 <- stack_hyperspectral(grep(east_north_string, h5_ls, value=TRUE), {stacked_aop_data_dir})
+        chm <- raster::raster(grep(east_north_string, chm_ls, value=TRUE)) #problem line
+
+        if (xmin(h5) != xmin(chm)) {
+          message("different extents of h5 and chm")
+          next
+        }
+
+        slope <- raster::raster(grep(east_north_string, slope_ls, value=TRUE))
+        aspect <- raster::raster(grep(east_north_string, aspect_ls, value=TRUE))
+
+        thresh_mat <- matrix(c(0,45,0, 45,135,1, 135,225,2, 225,315,3, 315,360,0),
+                            ncol=3, byrow=TRUE)
+        aspect_cat <- raster::reclassify(x=aspect, rcl=thresh_mat)
+
+        # Vegetation indices
+        savi <- raster::raster(grep(east_north_string, savi_ls, value=TRUE))
+        pri <- raster::raster(grep(east_north_string, pri_ls, value=TRUE))
+        ndvi <- raster::raster(grep(east_north_string, ndvi_ls, value=TRUE))
+        evi <- raster::raster(grep(east_north_string, evi_ls, value=TRUE))
+        arvi <- raster::raster(grep(east_north_string, arvi_ls, value=TRUE))
+
+        # set the raster name for each layer to be simply the name of the data 
+        # (i.e. "aspect") as opposed to the full filename 
+        # (i.e. ""NEON_D13_NIWO_DP3_452000_4431000_aspect")
+        
+        names(chm) <- "chm"
+        names(slope) <- "slope"
+        names(aspect_cat) <- "aspect_cat"
+        names(savi) <- "savi"
+        names(pri) <- "pri"
+        names(ndvi) <- "ndvi"
+        names(evi) <- "evi"
+        names(arvi) <- "arvi"
+
+        # RGB features
+        # The RGB data tile has 10,000 x 10,000 pixels, 10cm res
+        # All other layers tiles have 1,000 x 1,000 pixels, 1 meter res
+        # Aggregate red, green, blue intensities within each coarser grid cell using
+        # statistics such as mean and standard deviation.
+
+          # rgb data has 3 bands. read each one individually
+          rgb_red <- raster::raster(grep(east_north_string, rgb_ls, value = T), band = 1)
+          rgb_green <- raster::raster(grep(east_north_string, rgb_ls, value = T), band = 2)
+          rgb_blue <- raster::raster(grep(east_north_string, rgb_ls, value = T), band = 3)
+
+          # The "fact" parameter of the raster::aggregate function is the number of cells
+          # in each direction (horizontal and vertically) to aggregate across.
+          # Since the RGB data has a spatial resolution that is 1/10th of the 
+          # other data layers (10cm compared to 1m), fact should be 10 to produce 
+          # an output raster with 1000 x 1000 pixels. 
+          # mean intensity per 1m x 1m grid cell 
+          rgb_meanR <- raster::aggregate(rgb_red, fact = 10, fun = mean)
+          rgb_meanG <- raster::aggregate(rgb_green, fact = 10, fun = mean)
+          rgb_meanB <- raster::aggregate(rgb_blue, fact = 10, fun = mean)
+
+          # standard deviation of intensity per 1m x 1m grid cell 
+          rgb_sdR <- raster::aggregate(rgb_red, fact = 10, fun = sd)
+          rgb_sdG <- raster::aggregate(rgb_green, fact = 10, fun = sd)
+          rgb_sdB <- raster::aggregate(rgb_blue, fact = 10, fun = sd)
+
+          # set the names of each layer to reflect the metric it contains
+          names(rgb_meanR) <- "rgb_meanR" # mean intensity
+          names(rgb_meanG) <- "rgb_meanG"
+          names(rgb_meanB) <- "rgb_meanB"
+          names(rgb_sdR) <- "rgb_sdR"     # standard deviation of intensity
+          names(rgb_sdG) <- "rgb_sdG"
+          names(rgb_sdB) <- "rgb_sdB"
+
+          # stack up all the RGB features
+          rgb_features <- raster::stack(rgb_meanR, rgb_meanG, rgb_meanB,
+                                        rgb_sdR, rgb_sdG, rgb_sdB)
+
+        # Create the pixel number grid as a layer to add to the data cube.
+        # this one keeps track of individual pixel ID's to avoid duplicate
+        # spectra being extracted. Basically, assign an integer ID to each
+        # pixel in the 1000x1000 raster. This raster needs to have the same
+        # dimensions, extent, and crs as the other layers so they can be stacked
+        # together. create a vector of IDs from 1 to the number of pixels in one band
+        pixelID <- 1:(dim(chm)[1]*dim(chm)[2]) #1:(nrow(s) * ncol(s))
+        # add tile east, north coordinates 
+        #pixelID <- paste(pixelID, east_north_string, sep="_")
+        # reshape this 1D vector into a 2D matrix 
+        dim(pixelID) <- c(dim(chm)[1],dim(chm)[2]) #c(nrow(s),ncol(s))
+        # create a raster layer of pixel numbers 
+        pixelNumbers <- raster::raster(pixelID, crs = crs(chm)) 
+        extent(pixelNumbers) <- extent(chm) 
+        names(pixelNumbers) <- "pixelNumber"
+
+        # Create similar layers to keep track of the tile where the pixel is located
+        eastingID <- rep(as.numeric(easting), times = (dim(chm)[1] * dim(chm)[2]))
+        northingID <- rep(as.numeric(northing), times = (dim(chm)[1] * dim(chm)[2]))
+        # reshape to be two-dimensional
+        dim(eastingID) <- c(dim(chm)[1],dim(chm)[2])
+        dim(northingID) <- c(dim(chm)[1],dim(chm)[2])
+        # create rasters to contain the easting and northing values
+        eastingIDs <- raster::raster(eastingID, crs = crs(chm))
+        northingIDs <- raster::raster(northingID, crs = crs(chm))
+        # assign extent and CRS to match the other layers in the stack
+        extent(eastingIDs) <- extent(chm)
+        extent(northingIDs) <- extent(chm)
+        names(eastingIDs) <- "eastingIDs"
+        names(northingIDs) <- "northingIDs"
+
+
+        # now, all the remote sensing data have been read in for the current
+        # tile. add each one to the hyperspectral data stack along with the
+        # layer to keep track of pixel number within the tile.
+        stacked_aop_data <- raster::stack(h5, chm, slope, aspect_cat, savi,
+                                            pri, ndvi, evi, arvi, 
+                                            rgb_features, pixelNumbers, 
+                                            eastingIDs, northingIDs)
+        crs(stacked_aop_data) <- crs(chm)
+
+        # save the stacked AOP data to file for easy clipping later
+        stacked_aop_data_terra <- terra::rast(stacked_aop_data) 
+        # ^ convert to terra raster so that the layer names are saved with the .tif
+        terra::writeRaster(stacked_aop_data_terra, file = stacked_aop_data_filename)
+      }
+    }
+    return("{stacked_aop_data_dir}")
+}
+
+
+create_tree_crown_polygons <- function(site, year, biomass_path, data_out_path, px_thresh=2) {
+  # modified from Scholl et al from https://github.com/earthlab/neon-veg
+    
+  # Create geospatial features (points, polygons with half the maximum crown diameter) 
+  # for every tree in the NEON woody vegetation data set that intersect with independent 
+  # pixels in the AOP data 
+  # Analog to 02-create_tree_features.R and 03-process_tree_features.R
+  # from https://github.com/earthlab/neon-veg
+
+   # px_thresh is the area threshold (# of of 1m pixels) to filter out small tree crowns
+
+  # output directory for training data
+  training_data_dir <- file.path({data_out_path}, {site}, {year}, "training")
+  if (!dir.exists(training_data_dir)) {
+    dir.create(training_data_dir)
+  }
+
+  live_trees_path <- file.path({biomass_path},"pp_veg_structure_IND_IBA_IAGB_live.csv")
+
+  # Load cleaned inventory data for site and year
+  # ais this is live trees only. should figure out how to incorporate dead trees
+  veg_ind <- read.csv(live_trees_path) %>%
+    dplyr::rename(easting = adjEasting, 
+          northing = adjNorthing,
+          # Rename columns so they're unique when truncated when saving shp 
+          lat = adjDecimalLatitude,
+          long = adjDecimalLongitude,
+          elev = adjElevation,
+          elevUncert = adjElevationUncertainty,
+          indStemDens = individualStemNumberDensity,
+          indBA = individualBasalArea,
+          dendroH = dendrometerHeight,
+          dendroGap = dendrometerGap,
+          dendroCond = dendrometerCondition,
+          bStemDiam = basalStemDiameter,
+          bStemMeasHgt = basalStemDiameterMsrmntHeight,
+          sciNameFull = scientificName,
+          sp_gen = scientific,
+          wood_dens1 = wood.dens,
+          wood_dens2 = wood_dens) #ais what is the source of columns in this df? NEON or our own changes?
+
+  # Remove all rows with missing an easting or northing coordinate
+  veg_has_coords <- veg_ind[complete.cases(veg_ind[, c("northing", "easting")]),]
+
+  # Keep only the entries with crown diameter and tree height
+  # since these measurements are needed to create and compare polygons.
+  # ais future work: include ninetyCrownDiameter? 
+  veg_has_coords_size <- veg_has_coords[complete.cases(veg_has_coords$height) & 
+                      complete.cases(veg_has_coords$maxCrownDiameter),]
+
+  # Assign a PFT to each individual
+  # ais need to make this an exhaustive match for all sites, not just SOAP
+  # ais use neon trait table from Marcos?
+  veg_training <- veg_has_coords_size %>%
+    mutate(pft =  ifelse(growthForm == "small shrub" | growthForm == "single shrub" ,"shrub_PFT",
+                    ifelse(taxonID=="PIPO" | taxonID=="PILA" | taxonID=="PINUS", "pine_PFT", 
+                    ifelse(taxonID=="CADE27", "cedar_PFT", 
+                    ifelse(taxonID=="ABCO" | taxonID=="ABMA" , "fir_PFT", 
+                    ifelse(taxonID=="QUCH2" | taxonID=="QUKE"| taxonID=="QUERC", "oak_PFT", 
+                    ifelse(taxonID=="ARVIM" | taxonID=="CECU" | taxonID=="CEMOG" | 
+                            taxonID=="CEIN3" | taxonID=="RIRO" | taxonID=="FRCA6" | 
+                            taxonID=="RHIL" | taxonID=="AECA" | taxonID=="SANI4" | 
+                            taxonID=="CEANO", "shrub_PFT", "other"))))))) 
+
+  write.csv(veg_training, file = file.path(training_data_dir, "vst_training.csv"))
+
+  coord_ref <- sf::st_crs(32611)
+  #  ais ^ will need to change this from being hardcoded to finding
+  # the UTM zone that any data are associated
+  
+  # Convert the data frame to an SF object 
+  veg_training_pts_sf <- sf::st_as_sf(veg_training,
+                                  coords = c("easting", "northing"),
+                                  crs = coord_ref)
+  # sf::st_write(obj = veg_training_pts_sf,
+  #              dsn = file.path(training_data_dir, "veg_points_all.shp"),
+  #              delete_dsn = TRUE)
+  
+  # Generate a list of AOP tiles that overlap with the inventory data
+  tiles <- list_tiles_with_veg(veg_df = veg_training,
+                               out_dir = training_data_dir)
+  
+  # # plot all mapped stem locations
+  # ggplot2::ggplot() +
+  #   ggplot2::geom_sf(data = mapped_stems_sf) +
+  #   ggplot2::ggtitle("Map of Stem Locations")
+
+  # Write shapefile with CIRCULAR POLYGONS for all mapped stems with 
+  # height & crown diameter. Size: 1/2 Maximum crown diameter
+  polys_half_diam <- sf::st_buffer(veg_training_pts_sf,
+                      dist = round((veg_training_pts_sf$maxCrownDiameter/4),
+                      digits = 1))
+  # sf::st_write(obj = polys_half_diam,
+  #     dsn = file.path(training_data_dir, "veg_polygons_half_diam.shp"),
+  #     delete_dsn = TRUE)
+
+  # Apply area threshold to remove small polygons (smaller than 4 1m pixels)---------------------------
+  # 2. An area threshold is then applied to remove any small trees area values 
+  # less than the area of four hyperspectral pixels. This threshold 
+  # was selected with the coarser resolution of the hyperspectral and LiDAR data 
+  # products in mind. By preserving the trees with larger crowns, it is believed 
+  # that purer spectra will be extracted for them for the training data sets, 
+  # as opposed to extracting mixed pixels which signal from smaller plants and 
+  # background materials or neighboring vegetation. 
+
+  # Define the area threshold in units of [m^2]
+  # Area of RGB pixel, 10cm by 10cm
+  px_area_rgb <- 0.1 * 0.1 #[m^2]
+  # Gridded LiDAR products and HS pixels are 1m x 1m
+  px_area_hs <- 100 * px_area_rgb #[m^2]
+  # Multiply area of 1 HS pixel by the number of pixels; 
+  # as defined in the main script by the px_thresh variable
+  thresh <- px_area_hs * px_thresh #[m^2]
+
+  # Remove half-diam polygons with area < n hyperspectral pixels 
+  polygons_thresh_half_diam <- polys_half_diam %>% 
+    dplyr::mutate(area_m2 = sf::st_area(polys_half_diam)) %>% 
+    dplyr::filter(as.numeric(area_m2) > thresh)
+
+  # Clip shorter polygons with taller polygons -----------------------------
+
+  polygons_clipped_half_diam <- clip_overlap(polygons_thresh_half_diam, thresh)
+
+  # Check and fix/delete invalid geometries.
+  # Remove invalid geometries if the reason
+  # for invalidity is "Too few points in geometry component[453729.741 4433259.265]"
+  # since there are too few points to create a valid polygon. 
+  # Use the reason = TRUE paramater in sf::st_isvalid to see the reason. 
+  polygons_clipped_half_diam_is_valid <- sf::st_is_valid(x = polygons_clipped_half_diam)
+
+  # polygons_clipped_valid <- lwgeom::st_make_valid(polygons_clipped)
+  polygons_clipped_half_diam_valid <- polygons_clipped_half_diam %>% 
+    dplyr::filter(polygons_clipped_half_diam_is_valid)
+
+
+  # Write shapefile with clipped tree crown polygons half the max crown diameter 
+  training_shp_path <- file.path(training_data_dir, "veg_polys_half_diam_clipped_overlap.shp")
+  sf::st_write(obj = polygons_clipped_half_diam_valid,
+              dsn = training_shp_path,
+              delete_dsn = TRUE)
+
+  return(training_shp_path)
+}
+
+
+extract_spectra_from_polygon <- function(site, year, data_out_path, stacked_aop_path, 
+                                          shp_path, use_case, aggregate_from_1m_to_2m_res=F, 
+                                          ic_type=NULL) {
+  # modified from Scholl et al from https://github.com/earthlab/neon-veg
+    
+  # Extract features (remote sensing data) for each sample (pixel) within the
+  # specified shapefile (containing polygons that correspond to trees at the NEON site)
+  # Analog to 07-extract_training_features.R from https://github.com/earthlab/neon-veg
+
+  # use_case is "train" or "predict"
+
+  training_data_dir <- file.path({data_out_path}, {site}, {year}, "training")
+  
+  # Extract features (remote sensing data) for each sample (plot) within the 
+  # specified shapefile (random 20m x 20m plot, FATES patch)
+
+  # loop through stacked AOP data and extract features   
+  stacked_aop_list <- list.files(stacked_aop_path, 
+                                 full.names = TRUE, pattern=".tif")
+
+  # clip data cube - extract features
+  # get a description of the shapefile to use for naming outputs
+  shapefile_filename <- shp_path
+  shapefile_description <- tools::file_path_sans_ext(basename(shapefile_filename))
+  
+  shp_sf <- sf::st_read(shapefile_filename)
+  shp_coords <- shp_sf %>% # add columns for the center location of each plot
+    sf::st_centroid() %>%  # get the centroids first for polygon geometries
+    sf::st_coordinates() %>%
+    as.data.frame()
+
+  # add new columns for the plot center coordinates
+  shp_sf$center_X <- shp_coords$X
+  shp_sf$center_Y <- shp_coords$Y
+
+  # create column to track shape ID 
+  # if training, this is the tree crown boundary
+  # if predicting, this is the plot boundary)
+  if ( "PLOTID" %in% colnames(shp_sf) ) { 
+    # case happens when predicting
+    shp_sf <- shp_sf %>%
+      dplyr::rename(shapeID=PLOTID)
+  } else {
+    shp_sf$shapeID <- paste0("tree_crown_", rownames(shp_sf)) 
+  }
+
+  # not sure why I would need this here
+  # plot_side_length <- sqrt(st_area(shp_sf[1,]))
+
+  #tiles_with_veg <- read.table(file.path({data_out_path}, {site}, {year}, "training", "tiles_with_veg.txt"))
+  # ^ ais filter loop below to step through only the tiles with veg, saved in the txt file above
+
+  # loop through AOP tiles 
+  for (stacked_aop_filename in stacked_aop_list) { 
+    
+    # read current tile of stacked AOP data 
+    stacked_aop_data <- raster::stack(stacked_aop_filename) 
+    
+    # construct the easting northing string for naming outputs
+    east_north_string <- paste0(stacked_aop_data$eastingIDs[1], "_",
+                                stacked_aop_data$northingIDs[1])
+
+    # If csv file already exists, skip
+    if (file.exists(file.path(training_data_dir,paste0("extracted_features_",
+                                        east_north_string, "_",shapefile_description,".csv")))) {
+                                          next
+                                        }
+                           
+    print(paste0("Extracting features in tile: ",basename(stacked_aop_filename)))    
+    
+    # # Save spatial extent of tile
+    # ext <- st_as_sf(as(extent(stacked_aop_data),"SpatialPolygons")) 
+    # st_crs(ext) <- st_crs(stacked_aop_data) 
+    # write_sf(ext,file.path(training_data_dir,"stacked_aop_extent",
+    #                       paste0(east_north_string,".shp")))
+    
+    # figure out which plots are within the current tile by comparing each
+    # X,Y coordinate to the extent of the current tile 
+    shapes_in <- shp_sf %>% 
+      dplyr::filter(center_X >= raster::extent(stacked_aop_data)[1] & 
+                      center_X < raster::extent(stacked_aop_data)[2] & 
+                      center_Y >= raster::extent(stacked_aop_data)[3] & 
+                      center_Y  < raster::extent(stacked_aop_data)[4]) 
+    
+    ifelse(use_case == "train", 
+          print(paste0(as.character(nrow(shapes_in))," trees in current tile")),
+          print(paste0(as.character(nrow(shapes_in))," plots in current tile")))
+      
+    # if no polygons are within the current tile, skip to the next one
+    if (nrow(shapes_in)==0){
+      print("no shapes located within current tile... skipping to next shapefile")
+      next
+    }
+    
+    # Aggregate to 2m resolution from 1m
+    if (aggregate_from_1m_to_2m_res == T) {
+      stacked_aop_data <- raster::aggregate(stacked_aop_data,2) 
+      # takes 5min for a 1kmx1km tile
+    }
+    
+    # clip the hyperspectral raster stack with the polygons within current tile.
+    # the returned objects are data frames, each row corresponds to a pixel in the
+    # hyperspectral imagery. The ID number refers to which tree that the 
+    # the pixel belongs to. A large polygon will lead to many extracted pixels
+    # (many rows in the output data frame), whereas tree stem points will
+    # lead to a single extracted pixel per tree. 
+    
+    # Use a for-loop rather than the following so that the shpaeID 
+    # can be appended to each extracted_spectra row
+    # extracted_spectra <- raster::extract(stacked_aop_data, 
+    #                                      shapes_in, 
+    #                                      df = TRUE)
+   extracted_spectra <- data.frame()
+    for (shape in 1:nrow(shapes_in)) {
+      extracted_spectra_temp <- extract(stacked_aop_data, 
+                                        as_Spatial(shapes_in[shape,]),
+                                        df = TRUE)
+      extracted_spectra_temp$shapeID = shapes_in$shapeID[shape]
+      extracted_spectra <- rbind(extracted_spectra,extracted_spectra_temp)
+    } # ais takes less than 2.5 hrs for 139 plots - parallelize?
+    
+      # VS-NOTE TO DO: 
+      # adjust this extract step to only get pixels WITHIN each tree polygon,
+      # also try calculating the percentage that each pixel is within a polygon
+      # and keep only pixels with > 50% overlap 
+      
+      # merge the extracted spectra and other data values with the tree info 
+      shapes_metadata <- tibble(shapes_in)
+
+      # # create a list of increasing integer counts to keep track of how many rows 
+      # # (pixels or spectra) belong to each tree 
+      # for (j in unique(extracted_spectra$shapeID)){
+      #   if(j==1){
+      #     pixel_count = 1:sum(extracted_spectra$shapeID==j)
+      #   }
+      #   else{
+      #     pixel_count = append(pixel_count, 1:sum(extracted_spectra$shapeID==j))
+      #   }
+      # }
+      
+      # combine the additional data with each spectrum for writing to file.
+      # remove the geometry column to avoid issues when writing to csv later 
+      spectra_write <- merge(shapes_metadata,
+                            extracted_spectra,
+                            by="shapeID") %>% 
+        dplyr::select(shapeID, everything()) %>% 
+        dplyr::select(-geometry)
+      
+      # write extracted spectra and other remote sensing data values to file 
+      write.csv(spectra_write, 
+                file = file.path(training_data_dir,
+                                paste0("extracted_features_",
+                                        east_north_string, "_",
+                                        shapefile_description,
+                                        ".csv")),
+                row.names = FALSE) 
+    }  
+
+  # combine all extracted features into a single .csv
+  training_dir_ls <- list.files(training_data_dir, full.names = TRUE)
+
+  # refine the output csv selection 
+  csvs <- training_dir_ls[grepl(paste0("*000_", shapefile_description, ".csv"), training_dir_ls)]
+
+  # combine all .csv data into a single data frame 
+  for (c in 1:length(csvs)){
+    print(csvs[c])
+    csv <- read.csv(csvs[c])
+    
+    if(c==1){
+      spectra_all <- csv
+    } else {
+      spectra_all <- rbind(spectra_all, csv) #AIS check if extracted features CSV has already been made
+    }
+  }
+
+  # remove the unneccessary column "X.1"
+  #spectra_all <- spectra_all %>% dplyr::select(-X.1)
+
+  # write ALL the spectra to a single .csv file 
+  if (use_case == "train") {
+    extracted_features_filename <- file.path(training_data_dir,
+                                              paste0(shapefile_description,
+                                                      "-extracted_features_train.csv"))
+  } else if (use_case == "predict") {
+    if (ic_type=="rs_inv_plots") {
+      extracted_features_filename <- file.path(training_data_dir,
+                                              paste0(shapefile_description,
+                                                      "-extracted_features_inv.csv"))
+    } else if (ic_type == "rs_random_plots") {
+      extracted_features_filename <- file.path(training_data_dir,
+                                              paste0(shapefile_description,
+                                                      "-extracted_features_random.csv"))
+    } else {
+      print("need to specify dataset type for prediction")
+    }
+  } 
+  
+  write.csv(spectra_all, file=extracted_features_filename,
+            row.names = FALSE)
+
+  # delete the individual csv files for each tile 
+  file.remove(csvs)
+}
