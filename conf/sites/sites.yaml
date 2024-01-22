@@ -12,6 +12,11 @@ run:
         clip_lidar_by_plots: False
         preprocess_lad: False
         preprocess_biomass: False
+        download_hs_L3_tiles: False
+        prep_aop_imagery: False
+        create_training_data: True
+        # ais add to each site/year below too
+
   #   '2020':
   #     year_aop: 2021-07
   #     force_rerun:
