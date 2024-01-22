@@ -285,6 +285,7 @@ def _cal_plot_level_biomass(df, polygons):
 
 
 def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
+    """ais insert header"""
     genus_sp_group = neon_trait_table_df.groupby('genus')
     sps = []
     for _, group in genus_sp_group:
