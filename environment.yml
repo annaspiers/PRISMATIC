@@ -12,9 +12,9 @@ dependencies:
   - mapclassify
   - matplotlib
   - r-base
-  - r-sp
   - r-raster
   - r-devtools
+  - r-sf
   - pip
   - pip:
     - gdown
