@@ -17,6 +17,10 @@ from preprocessing.lidar import clip_lidar_by_plots, \
                                 normalize_laz
 from preprocessing.biomass import preprocess_biomass
 from preprocessing.lad import preprocess_lad
+from preprocessing.hyperspectral import download_hs_L3_tiles, \
+                                        prep_aop_imagery, \
+                                        create_training_data
+
 from utils.utils import build_cache, force_rerun
 
 log = logging.getLogger(__name__)
@@ -28,7 +32,8 @@ def main(cfg):
     # data_raw_path = cfg.paths.data_raw_path
     data_raw_aop_path = cfg.paths.data_raw_aop_path
     data_raw_inv_path = cfg.paths.data_raw_inv_path
-    data_out_path = cfg.paths.data_out_path
+    data_int_path = cfg.paths.data_int_path
+    data_final_path = cfg.paths.data_final_path
 
     global_force_rerun = cfg.sites.global_run_params.force_rerun
     global_run = cfg.sites.global_run_params.run
@@ -46,7 +51,7 @@ def main(cfg):
                          f'year: {year_inventory}, year_aop: {year_aop}, '
                          f'with rerun status: {rerun_status}')
                 cache = build_cache(site, year_inventory, year_aop,
-                                    data_raw_aop_path, data_raw_inv_path, data_out_path)
+                                    data_raw_aop_path, data_raw_inv_path, data_int_path)
                 
                 # download neon_trait_table
                 url = cfg.others.neon_trait_table.neon_trait_link
@@ -77,6 +82,7 @@ def main(cfg):
                                    (download_polygons)
                                    (data_raw_inv_path))
                 
+        # LIDAR
                 # download lidar
                 laz_path, tif_path = (force_rerun(cache,
                                                   force=rerun_status)
@@ -95,7 +101,7 @@ def main(cfg):
                       inventory_file_path,
                       site,
                       year_inventory,
-                      data_out_path))
+                      data_int_path))
 
                 # clip lidar data
                 normalized_laz_path = (force_rerun(cache,
@@ -103,7 +109,7 @@ def main(cfg):
                                        (normalize_laz)(laz_path,
                                                        site,
                                                        year_inventory,
-                                                       data_out_path))
+                                                       data_int_path))
                 clipped_laz_path = (force_rerun(cache,
                                                 force=rerun_status)
                                     (clip_lidar_by_plots)
@@ -112,7 +118,7 @@ def main(cfg):
                                      partitioned_plots_path,
                                      site,
                                      year_inventory,
-                                     data_out_path,
+                                     data_int_path,
                                      end_result=True))
 
                 # leaf area density
@@ -123,25 +129,74 @@ def main(cfg):
                   inventory_file_path,
                   site,
                   year_inventory,
-                  data_out_path,
+                  data_int_path,
                   end_result=False))
 
                 # biomass
-                (force_rerun(cache,
+                biomass_path = (force_rerun(cache,
                              force=rerun_status)
-                 (preprocess_biomass)(inventory_file_path,
+                                (preprocess_biomass)
+                                (inventory_file_path,
                                       partitioned_plots_path,
                                       sampling_effort_path,
                                       site,
                                       year_inventory,
-                                      data_out_path,
+                                      data_int_path,
                                       neon_trait_table_path=trait_table_path,
-                                      end_result=False))
+                                      end_result=False)) 
+                #ais check warnings for utils.allometry - lots of species not detected in neon_trait_table
                 
+        # HYPERSPECTRAL
+                # download hs data
+                hs_L3_path, tif_path = (force_rerun(cache,
+                                                  force=rerun_status)
+                                      (download_hs_L3_tiles)
+                                      (site,
+                                       year_aop,
+                                       data_raw_aop_path))
                 
+                # prep NEON AOP data
+                stacked_aop_path = (force_rerun(cache,
+                                                  force=rerun_status)
+                                      (prep_aop_imagery)
+                                      (site,
+                                       year_inventory,
+                                       hs_L3_path, 
+                                       tif_path,
+                                       data_int_path))
+                
+                training_spectra_path = (force_rerun(cache,
+                                                  force=rerun_status)
+                                      (create_training_data)
+                                      (site,
+                                       year_inventory,
+                                       biomass_path,
+                                       data_int_path,
+                                       stacked_aop_path,
+                                       use_case="train")) 
+                #ais I create the shp for tree crown polygons used for training within this function, 
+                #so I end up not tracking it externally. What's the best practice? Is this ok?
+                # also where is the best place for aggregate_from_1m_to_2m_res and ic_type to be 
+                # specified manually by user in extract_spectra_from_polygon in hypersepctral_helper.R
+                
+                    
+                # train classification model (specify in yaml whether using corrected/uncorrected hs data)
+                
+        # GENERATE FATES INITIAL CONDITIONS
+                # with RS data
+                # 1) first half of preprocessing/generate_ic_remotesensing.R
+                # 2) neon-veg-SOAPpfts/11-predict-pft.R
+                # 3) preprocessing/main.py with preprocess_lad==T for force run in sites.yaml
+                # 4) second half of step (1)
 
+
+    # when adding new content to main.py
+        # import functions at top of main.py
+        # add functions to run in body of main,py
+        # track in utils.py
+        # track rerun in sites.yaml
+            
     log.info('DONE')
-
 
 if __name__ == '__main__':
     main()
