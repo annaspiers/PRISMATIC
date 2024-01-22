@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
-        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName',
+        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName','taxonID',
         'taxonRank', 'adjNorthing', 'adjEasting', 'adjCoordinateUncertainty',
         'adjDecimalLatitude', 'adjDecimalLongitude',
         'adjElevation', 'adjElevationUncertainty',
