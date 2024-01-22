@@ -46,6 +46,11 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
                   [str(data_raw_inv_path/site/year_inventory/'pp_veg_structure.csv'),
                    str(data_raw_inv_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
                   l, cache)
+    _add_to_cache('download_hs_L3_tiles',
+                  [str(data_raw_aop_path/site/year_aop/'hs_L3_h5'),
+                   str(data_raw_aop_path/site/year_aop/'tif')],
+                  l, cache)
+    
     # Process raw data
     _add_to_cache('preprocess_polygons',
                   str(data_out_path/site/year_inventory/'inventory_plots'),
@@ -62,6 +67,13 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
     _add_to_cache('preprocess_lad',
                   str(data_out_path/site/year_inventory/'lad'),
                   l, cache)
+    _add_to_cache('prep_aop_imagery',
+                  str(data_out_path/site/year_inventory/'stacked_aop'),
+                  l, cache)
+    _add_to_cache('create_training_data',
+                  str(data_out_path/site/year_inventory/'training'),
+                  l, cache)
+    
     return cache
 
 
