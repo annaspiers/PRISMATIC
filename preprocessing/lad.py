@@ -36,7 +36,7 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, end_r
             with (ro.default_converter + pandas2ri.converter).context():
                 lad_df = ro.conversion.get_conversion().rpy2py(r_df)
             infl_points = calculate_infl_points(lad_df)
-            fig = plot_diagnotics(lad_df, infl_points)
+            fig = plot_diagnostics(lad_df, infl_points)
             fig.savefig(output_folder_diagnostics_path/f'{laz_file.stem}_lad.png')
             plt.close()
         except Exception:
@@ -126,7 +126,7 @@ def calculate_infl_points(df):
             'layer_idx': np.array(layer_idx).astype('int32').tolist(),
             'layer_height': df.z[layer_idx].astype('float32').tolist()}
 
-def plot_diagnotics(df, infl_points):
+def plot_diagnostics(df, infl_points):
     lad = df.lad/np.max(df.lad)
     z = df.z.values
     smooth = gaussian_filter1d(lad, 1)
