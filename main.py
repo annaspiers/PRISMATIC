@@ -19,7 +19,8 @@ from preprocessing.biomass import preprocess_biomass
 from preprocessing.lad import preprocess_lad
 from preprocessing.hyperspectral import download_hs_L3_tiles, \
                                         prep_aop_imagery, \
-                                        create_training_data
+                                        create_training_data, \
+                                        train_pft_classifier
 
 from utils.utils import build_cache, force_rerun
 
@@ -50,8 +51,8 @@ def main(cfg):
                 log.info(f'Run process for site: {site}, '
                          f'year: {year_inventory}, year_aop: {year_aop}, '
                          f'with rerun status: {rerun_status}')
-                cache = build_cache(site, year_inventory, year_aop,
-                                    data_raw_aop_path, data_raw_inv_path, data_int_path)
+                cache = build_cache(site, year_inventory, year_aop, data_raw_aop_path, 
+                                    data_raw_inv_path, data_int_path, data_final_path)
                 
                 # download neon_trait_table
                 url = cfg.others.neon_trait_table.neon_trait_link
@@ -155,7 +156,7 @@ def main(cfg):
                                        year_aop,
                                        data_raw_aop_path))
                 
-                # prep NEON AOP data
+                # prep NEON AOP data for classifier
                 stacked_aop_path = (force_rerun(cache,
                                                   force=rerun_status)
                                       (prep_aop_imagery)
@@ -165,7 +166,8 @@ def main(cfg):
                                        tif_path,
                                        data_int_path))
                 
-                training_spectra_path = (force_rerun(cache,
+                training_crown_shp_path, \
+                    training_spectra_csv_path = (force_rerun(cache,
                                                   force=rerun_status)
                                       (create_training_data)
                                       (site,
@@ -173,21 +175,26 @@ def main(cfg):
                                        biomass_path,
                                        data_int_path,
                                        stacked_aop_path,
-                                       use_case="train")) 
-                #ais I create the shp for tree crown polygons used for training within this function, 
-                #so I end up not tracking it externally. What's the best practice? Is this ok?
-                # also where is the best place for aggregate_from_1m_to_2m_res and ic_type to be 
-                # specified manually by user in extract_spectra_from_polygon in hypersepctral_helper.R
+                                       px_thresh=2,
+                                       use_case="train",
+                                       aggregate_from_1m_to_2m_res=False)) 
                 
-                    
-                # train classification model (specify in yaml whether using corrected/uncorrected hs data)
+                # Train model
+                rf_model_path = (force_rerun(cache,
+                                                  force=rerun_status)
+                                      (train_pft_classifier)
+                                      (site,
+                                       year_inventory,
+                                       stacked_aop_path,
+                                       training_crown_shp_path, 
+                                       training_spectra_csv_path, 
+                                       data_int_path,
+                                       pcaInsteadOfWavelengths=True, 
+                                       ntree=5000, 
+                                       randomMinSamples=False, 
+                                       independentValidationSet=True)) # ais specify in yaml whether using corrected/uncorrected hs data
+
                 
-        # GENERATE FATES INITIAL CONDITIONS
-                # with RS data
-                # 1) first half of preprocessing/generate_ic_remotesensing.R
-                # 2) neon-veg-SOAPpfts/11-predict-pft.R
-                # 3) preprocessing/main.py with preprocess_lad==T for force run in sites.yaml
-                # 4) second half of step (1)
 
 
     # when adding new content to main.py
@@ -195,6 +202,8 @@ def main(cfg):
         # add functions to run in body of main,py
         # track in utils.py
         # track rerun in sites.yaml
+        # add to function_workflow.drawio and data structure diagram
+        # push to github
             
     log.info('DONE')
 

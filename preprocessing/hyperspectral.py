@@ -17,16 +17,6 @@ log = logging.getLogger(__name__)
 # wht = whitebox.WhiteboxTools()
 # wht.set_verbose_mode(False)
 
-# ais work on today -------------------------------------
-# by end of today: successfully run create_training_data
-# then: write function for 08-classify_pft, 09-assess_accuracy, 10-create_figures (and 01_main as needed)
-# then: 11-predict_pft (and 01_main as needed)
-
-# to do later
-# save tifs into their own data product subfolders e.g. raw/aop/tif/chm
-# combine lidar and hs aop downloads into one step? think on this
-# add 06-plot_aop_imagery function for example tile - is this helpful 
-    # even since we have the full tile saved in stacked aop?
 
 def download_hs_L3_tiles(site, year, data_raw_aop_path):
     """Download raw, uncorrected hyperspectral data (raw and raster) for site-year
@@ -38,7 +28,7 @@ def download_hs_L3_tiles(site, year, data_raw_aop_path):
         Site name
     year : str
         Year of aop collection
-    data_out_path : str
+    data_raw_aop_path : str
         Path to store the downloaded data
 
     Returns
@@ -92,7 +82,7 @@ def download_hs_L3_tiles(site, year, data_raw_aop_path):
     return str(path/'hs_L3_tiles'), str(path/'tif')
 
 
-def prep_aop_imagery(site, year, hs_L3_path, tif_path, data_out_path):
+def prep_aop_imagery(site, year, hs_L3_path, tif_path, data_int_path):
     """Stack the AOP remote sensing imagery and prepare it for
      extracting descriptive features for classification. 
      Analog to 05-prep_aop_imagery.R from https://github.com/earthlab/neon-veg 
@@ -121,14 +111,15 @@ def prep_aop_imagery(site, year, hs_L3_path, tif_path, data_out_path):
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
     prep_aop_imagery = ro.r('prep_aop_imagery')
-    stacked_aop_path = prep_aop_imagery(site, year, hs_L3_path, tif_path, data_out_path)
+    stacked_aop_path = prep_aop_imagery(site, year, hs_L3_path, tif_path, data_int_path)
     log.info('Downloaded inventory data saved at: '
              f'{stacked_aop_path}')
     return stacked_aop_path
 
 
 
-def create_training_data(site, year, data_out_path, stacked_aop_path, use_case):
+def create_training_data(site, year, biomass_path, data_int_path, stacked_aop_path, px_thresh, use_case,
+                         aggregate_from_1m_to_2m_res):
     """Create geospatial features (points, polygons with half the maximum crown diameter) 
         for every tree in the NEON woody vegetation data set. 
         Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
@@ -139,58 +130,77 @@ def create_training_data(site, year, data_out_path, stacked_aop_path, use_case):
         Extract features (remote sensing data) for each sample (pixel) within the 
         specified shapefile (containing polygons that correspond to trees at the NEON site)
         Analog to 07-extract_training_features.R from https://github.com/earthlab/neon-veg 
-
     """
 
     # Create features (points or polygons) for each tree 
     log.info(f'Creating tree crown training data features for: {site} {year}')
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    r_source(str(Path(os.getcwd()+'/utils/hyperspectral_tools.R')))
 
     # Create tree polygons
     create_tree_crown_polygons = ro.r('create_tree_crown_polygons')
-    training_shp_path = create_tree_crown_polygons(site, year, biomass_path, data_out_path)
+    training_shp_path = create_tree_crown_polygons(site, year, biomass_path, data_int_path, px_thresh)
     log.info('Clipped tree crown polygons data saved at: '
              f'{training_shp_path}')
     
     # Extract training data from AOP data with tree polygons
     extract_spectra_from_polygon = ro.r('extract_spectra_from_polygon')
-    training_spectra_path = extract_spectra_from_polygon(site, year, data_out_path, stacked_aop_path, 
-                                                         training_shp_path, use_case)
+    training_spectra_path = extract_spectra_from_polygon(site, year, data_int_path, stacked_aop_path, 
+                                                         training_shp_path, use_case, aggregate_from_1m_to_2m_res)
     log.info('Spectral features for training data saved at: '
              f'{training_spectra_path}')
-    return training_spectra_path
+    
+    return training_shp_path, training_spectra_path
 
-# def train_pft_classifier(site, year, data_out_path):
-#     """Create geospatial features (points, polygons with half the maximum crown diameter) 
-#         for every tree in the NEON woody vegetation data set. 
-#         Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
 
-#         Generate polygons that intersect with independent pixels in the AOP data 
-#         Analog to 03-process_tree_features.R from https://github.com/earthlab/neon-veg 
 
-#         Extract features (remote sensing data) for each sample (pixel) within the 
-#         specified shapefile (containing polygons that correspond to trees at the NEON site)
-#         Analog to 07-extract_training_features.R from https://github.com/earthlab/neon-veg 
+def train_pft_classifier(site, year, stacked_aop_path, training_shp_path, training_spectra_path, data_int_path,
+                         pcaInsteadOfWavelengths, ntree, randomMinSamples, independentValidationSet):
+    """Train a Random Forest (RF) model to classify tree PFT using in-situ tree
+        measurements for PFT labels and remote sensing data as descriptive features
+        Analog to 08-classify_species.R from https://github.com/earthlab/neon-veg 
 
+        Evaluate classifier performance: Out-of-Bag accuracy, independent
+        validation set accuracy, and Cohen's kappa. Generate confusion matrix
+        to show the classification accuracy for each PFT. 
+        Analog to 09-assess_accuracy.R from https://github.com/earthlab/neon-veg 
+    """
+    
+    log.info(f'Creating tree crown training data features for: {site} {year}')
+    r_source = ro.r['source']
+    r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    r_source(str(Path(os.getcwd()+'/utils/hyperspectral_tools.R')))
+
+    # Train random forest model 
+    train_pft_classifier = ro.r('train_pft_classifier')
+    rf_model_path = train_pft_classifier(site, year, stacked_aop_path, training_shp_path, training_spectra_path, data_int_path,
+                                         pcaInsteadOfWavelengths, ntree, randomMinSamples, independentValidationSet)
+    log.info('Trained PFT classifier saved in this folder: '
+             f'{rf_model_path}')
+    
+    return rf_model_path
+
+
+
+# def predict_pft(site, year, data_int_path): AIS OR IS THIS JUST GENERATE_IC???
+#     """Analog to 11-predict_pft.R from neon-veg-SOAPpfts
 #     """
 
-#     # Create features (points or polygons) for each tree 
-#     log.info(f'Creating tree crown training data features for: {site} {year}')
-#     r_source = ro.r['source']
-#     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+# create generate_fates_init_conditions script in new subfolder (not preprocessing/)
+                    # GENERATE FATES INITIAL CONDITIONS
+                            # with RS data
+                            # 1) first half of preprocessing/generate_ic_remotesensing.R
+                            # 2) neon-veg-SOAPpfts/11-predict-pft.R
+                            # 3) preprocessing/main.py with preprocess_lad==T for force run in sites.yaml
+                            # 4) second half of step (1)
 
-#     # Create tree polygons
-#     create_tree_crown_polygons = ro.r('create_tree_crown_polygons')
-#     training_shp_path = create_tree_crown_polygons(site, year, biomass_path, data_out_path)
-#     log.info('Clipped tree crown polygons data saved at: '
-#              f'{training_shp_path}')
-    
 #     return ???
 
-# create functions train_PFT_classifier and predict_PFT 
-    # train_PFT_classifier()
-    # Analog to 08, 09, 10 from https://github.com/earthlab/neon-veg
-    # 
-    # predict_PFT()
-    # Analog to 11-predict_pft.R from neon-veg-SOAPpfts
+# to do later
+# save tifs into their own data product subfolders e.g. raw/aop/tif/chm
+# combine lidar and hs aop downloads into one step? think on this
+# add 06-plot_aop_imagery function for example tile - is this helpful -maybe combine with script 10 function?
+    # even since we have the full tile saved in stacked aop?
+# create function for script 10 - save plots in diagnostics folder?
+# check through functions in 00 script

@@ -14,7 +14,8 @@ run:
         preprocess_biomass: False
         download_hs_L3_tiles: False
         prep_aop_imagery: False
-        create_training_data: True
+        create_training_data: False
+        train_pft_classifier: False
         # ais add to each site/year below too
 
   #   '2020':

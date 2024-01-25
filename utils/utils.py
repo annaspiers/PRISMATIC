@@ -17,15 +17,19 @@ def _add_to_cache(func_name, ps, l, cache):
         cache[func_name] = ps
 
 
-def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, data_out_path):
+def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, data_int_path, data_final_path):
     l = []
     data_raw_aop_path = Path(data_raw_aop_path)
     data_raw_inv_path = Path(data_raw_inv_path)
-    data_out_path = Path(data_out_path)
+    data_int_path = Path(data_int_path)
+    data_final_path = Path(data_final_path)
     l.extend([str(p) for p in data_raw_aop_path.glob('**/') if p.is_dir()])
     l.extend([str(p) for p in data_raw_inv_path.glob('**/') if p.is_dir()])
     l.extend([str(p) for p in data_raw_inv_path.glob('**/*.csv')])
-    l.extend([str(p) for p in data_out_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_int_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_int_path.glob('**/*.csv')])
+    l.extend([str(p) for p in data_int_path.glob('**/*.shp')])
+    l.extend([str(p) for p in data_final_path.glob('**/') if p.is_dir()])
     cache = {}
     # Download raw data
     _add_to_cache('download_trait_table',
@@ -53,25 +57,29 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
     
     # Process raw data
     _add_to_cache('preprocess_polygons',
-                  str(data_out_path/site/year_inventory/'inventory_plots'),
+                  str(data_int_path/site/year_inventory/'inventory_plots'),
                   l, cache)
     _add_to_cache('normalize_laz',
-                  str(data_out_path/site/year_inventory/'normalized_lidar_tiles'),
+                  str(data_int_path/site/year_inventory/'normalized_lidar_tiles'),
                   l, cache)
     _add_to_cache('clip_lidar_by_plots',
-                  str(data_out_path/site/year_inventory/'clipped_to_plots'),
+                  str(data_int_path/site/year_inventory/'clipped_to_plots'),
                   l, cache)
     _add_to_cache('preprocess_biomass',
-                  str(data_out_path/site/year_inventory/'biomass'),
+                  str(data_int_path/site/year_inventory/'biomass'),
                   l, cache)
     _add_to_cache('preprocess_lad',
-                  str(data_out_path/site/year_inventory/'lad'),
+                  str(data_int_path/site/year_inventory/'lad'),
                   l, cache)
     _add_to_cache('prep_aop_imagery',
-                  str(data_out_path/site/year_inventory/'stacked_aop'),
+                  str(data_int_path/site/year_inventory/'stacked_aop'),
                   l, cache)
     _add_to_cache('create_training_data',
-                  str(data_out_path/site/year_inventory/'training'),
+                  [str(data_int_path/site/year_inventory/'training'/'tree_crowns_training.shp'),
+                   str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_train.csv')],
+                  l, cache)
+    _add_to_cache('train_pft_classifier',
+                  str(data_int_path/site/year_inventory/'training/rf_tree_crowns_training'),
                   l, cache)
     
     return cache

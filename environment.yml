@@ -15,6 +15,13 @@ dependencies:
   - r-raster
   - r-devtools
   - r-sf
+  - r-ggplot2
+  - r-dplyr
+  - r-caret
+  - r-ggbiplot
+  - r-cowplot
+  - r-rfUtilities
+  - r-gridextra
   - pip
   - pip:
     - gdown
