@@ -32,8 +32,10 @@ list_tiles_with_veg <- function(veg_df, out_dir){
   tiles <- unique(easting_northings[,c('e','n')])
   
   # order by ascending tile coordinates 
-  tiles <- tiles %>%
+  tiles_raw <- tiles %>%
     arrange(e)
+
+  tiles <- gsub("e+05","00000", tiles_raw, fixed=T)
   
   # write to text file 
   tile_names <- paste(tiles$e, tiles$n, sep="_")
