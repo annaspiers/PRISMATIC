@@ -14,7 +14,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 LAD_FOLDER = 'lad'
 
-def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, end_result=True):
+def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, use_case, end_result):
     log.info(f'Preprocessing leaf area density for site: {site}')
     year = str(year)
     output_folder = 'output' if end_result else 'lad'
@@ -47,9 +47,10 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, end_r
         with open(output_data_path/f'{laz_file.stem}_lad.json', 'w') as f:
             f.write(json.dumps(infl_points))
 
-        # calculate SND
-        inventory_df = pd.read_csv(inventory_path)
-        calculate_snd(inventory_df, lad_df, infl_points)
+        if use_case=="train":
+            # calculate SND
+            inventory_df = pd.read_csv(inventory_path)
+            calculate_snd(inventory_df, lad_df, infl_points)
     return str(output_data_path)
 
 def calculate_snd(inventory_df, lad_df, infl_points):
