@@ -41,8 +41,10 @@ Cannot install leafR:
 # Usage
 
 `conf/paths/paths.yaml`: you may need to update the path.
-- `data_path`: where to save processed data.
-- `lidar_path`: where to download/load lidar files to.
+- `data_raw_inv_path`: where to save processed data.
+- `data_raw_aop_path`: where to save raw NEON Airborne Observatory Platform (AOP) data.
+- `data_int_path`: where to save processed data.
+- `data_final_path`: where to save final-formatted data.
 
 `conf/sites/sites.yaml`: you may need to add other sites if you want to process those.
 
@@ -56,8 +58,18 @@ List of processes for each site:
 - `clip_lidar_by_plots`: clip the laz/tif files given plots in processed vegetation structure and save to output
 - `preprocess_biomass`: process biomass and save to output
 - `preprocess_lad`: process Leaf Area Density and save to output
+- `download_hs_L3_tiles`: download imaging spectroscopy data from NEON
+- `prep_aop_imagery`: prepare NEON AOP imagery for plant functional type (PFT) classifier
+- `create_training_data`: generate training data for PFT classifier
+- `train_pft_classifier`: train PFT classifier
+- `generate_initial_conditions`: generate FATES initial conditions (cohort and patch files)
 
-The final result is at `data_path/site/year/output`.
+We generate FATES intital conditions in three types: 
+- `ic_type == field_inv_plots`: initialization from NEON forest inventory plots
+- `ic_type == rs_inv_plots`: initialization from *remote sensing data over* NEON forest inventory plots
+- `ic_type == rs_random_plots`: initialization from remote sensing data over *plots randomly generated across entire NEON site*
+
+The final result is at `data_final_path/site/year/ic_type`.
 
 ```
 # run all sites with default params
@@ -68,7 +80,6 @@ python main.py sites.global_run_params.force_rerun.preprocess_biomass=True
 
 # run only SJER
 python main.py sites.global_run_params.run=SJER
-
 
 # run SJER and SOAP
 python main.py sites.global_run_params.run='[SJER, SOAP]'
