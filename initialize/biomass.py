@@ -30,7 +30,7 @@ def preprocess_biomass(data_path,
         Format '*/pp_veg_structure.csv'
     site_plots_path : str
         Path to the clipped plots result folder.
-        This is the resulted folder from preprocessing/plots.py,
+        This is the resulted folder from inititalize/plots.py,
         function preprocess_polygons().
         Format '*/inventory_plots'
     sampling_effort_path : str
