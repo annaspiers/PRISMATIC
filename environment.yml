@@ -12,7 +12,6 @@ dependencies:
   - mapclassify
   - matplotlib
   - r-base
-  - r-raster
   - r-devtools
   - r-sf
   - r-ggplot2
@@ -22,6 +21,17 @@ dependencies:
   - r-cowplot
   - r-rfUtilities
   - r-gridextra
+  - r-lidR
+  - r-randomForest
+  - r-assertthat
+  - r-stringr
+  - r-bvls #bvls()
+  - r-tidyr #pivot_longer()
+  - r-terra
+  - r-neonUtilities
+  - r-neonOS
+  - r-geoNEON
+  - r-glue
   - pip
   - pip:
     - gdown
