@@ -6,7 +6,7 @@ import glob
 import rpy2.robjects as ro
 
 from pathlib import Path
-from preprocessing.lad import preprocess_lad
+from inititalize.lad import preprocess_lad
 
 # add environ
 conda_env_path = Path(sys.executable).parent.parent
@@ -34,7 +34,7 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
     log.info(f'Generating initial conditions for: {site} {year_inv}')
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'initial_conditions_helper.R'))
-    r_source(str(Path(os.getcwd()+'/preprocessing/hyperspectral_helper.R')))
+    r_source(str(Path(os.getcwd()+'/inititalize/hyperspectral_helper.R')))
     r_source(str(Path(os.getcwd()+'/utils/hyperspectral_tools.R')))
 
     ic_type_path = str(data_final_path+'/'+site+'/'+year_inv+'/'+ic_type) #needs to be str to be input
@@ -110,14 +110,6 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
 
     return cohort_path, patch_path
 
-# create generate_fates_init_conditions script in new subfolder (not preprocessing/)
-    # GENERATE FATES INITIAL CONDITIONS
-        # with RS data
-        # 1) generate random plots: first half of preprocessing/generate_ic_remotesensing.R
-        # 2) predict pfts on new plots: neon-veg-SOAPpfts/11-predict-pft.R
-        # 3) generate lad profiles on new plots: preprocessing/main.py with preprocess_lad==T for force run in sites.yaml
-        # 4) generate cohort and patch files: second half of step (1)
-
 # # TEST CASE
 # site='SOAP',
 # year_inv='2019',
@@ -131,12 +123,12 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
 # n_plots = 1000
 # min_distance = 20
 # plot_length = 20
-# data_raw_aop_path = "/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/raw/aop",
-# data_int_path="/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/intermediate", 
-# data_final_path='/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/final',
-# rf_model_path = "/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/intermediate/SOAP/2019/training/rf_tree_crowns_training/rf_model_tree_crowns-training.RData",
-# stacked_aop_path = "/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/intermediate/SOAP/2019/stacked_aop",
-# biomass_path='/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/intermediate/SOAP/2019/biomass',
+# data_raw_aop_path = "/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/raw/aop",
+# data_int_path="/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate", 
+# data_final_path='/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/final',
+# rf_model_path = "/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/training/rf_tree_crowns_training/rf_model_tree_crowns-training.RData",
+# stacked_aop_path = "/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/stacked_aop",
+# biomass_path='/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/biomass',
                        
 # test = generate_initial_conditions(site=site[0],
 #                             year_inv=year_inv[0],
@@ -156,7 +148,7 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
 #                                         pcaInsteadOfWavelengths = pcaInsteadOfWavelengths)
 
 # 2+2
-# # to do later ais (preprocessing/hyperspectral.py)
+# # to do later ais (inititalize/hyperspectral.py)
 # add argument name before input in every function call in main.py 
 # save tifs into their own data product subfolders e.g. raw/aop/tif/chm
 # combine lidar and hs aop downloads into one step? think on this
