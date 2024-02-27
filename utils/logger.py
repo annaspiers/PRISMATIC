@@ -28,7 +28,7 @@ class Logger(logging.Logger):
             log_ts_fmt = '%Y%m%d%H%M%S'
             timestamp_str = self.log_file_timestamp.strftime(log_ts_fmt)
             self.log_file_name = \
-                f'prismatic_preprocessing_report_{timestamp_str}.log'
+                f'prismatic_inititalizing_report_{timestamp_str}.log'
             if not os.path.exists(self.log_dir):
                 os.makedirs(self.log_dir)
             self.log_path = os.path.join(self.log_dir, self.log_file_name)
