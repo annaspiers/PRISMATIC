@@ -14,8 +14,6 @@ conda_env_path = Path(sys.executable).parent.parent
 os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
 
 log = logging.getLogger(__name__)
-# wht = whitebox.WhiteboxTools()
-# wht.set_verbose_mode(False)
 
 
 def download_hs_L3_tiles(site, year, data_raw_aop_path):
@@ -118,8 +116,8 @@ def prep_aop_imagery(site, year, hs_L3_path, tif_path, data_int_path):
 
 
 
-def create_training_data(site, year, biomass_path, data_int_path, stacked_aop_path, px_thresh, use_case,
-                         aggregate_from_1m_to_2m_res):
+def create_training_data(site, year, biomass_path, data_int_path, data_final_path, stacked_aop_path, 
+                         px_thresh, use_case, ic_type, aggregate_from_1m_to_2m_res):
     """Create geospatial features (points, polygons with half the maximum crown diameter) 
         for every tree in the NEON woody vegetation data set. 
         Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
@@ -146,8 +144,14 @@ def create_training_data(site, year, biomass_path, data_int_path, stacked_aop_pa
     
     # Extract training data from AOP data with tree polygons
     extract_spectra_from_polygon = ro.r('extract_spectra_from_polygon')
-    training_spectra_path = extract_spectra_from_polygon(site, year, data_int_path, stacked_aop_path, 
-                                                         training_shp_path, use_case, aggregate_from_1m_to_2m_res)
+    training_spectra_path = extract_spectra_from_polygon(site=site, 
+                                                         year=year, 
+                                                         data_int_path=data_int_path, 
+                                                         data_final_path=data_final_path, 
+                                                         stacked_aop_path=stacked_aop_path, 
+                                                         shp_path=training_shp_path[0], 
+                                                         use_case="train", 
+                                                         aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res)
     log.info('Spectral features for training data saved at: '
              f'{training_spectra_path}')
     
@@ -181,26 +185,3 @@ def train_pft_classifier(site, year, stacked_aop_path, training_shp_path, traini
     
     return rf_model_path
 
-
-
-# def predict_pft(site, year, data_int_path): AIS OR IS THIS JUST GENERATE_IC???
-#     """Analog to 11-predict_pft.R from neon-veg-SOAPpfts
-#     """
-
-# create generate_fates_init_conditions script in new subfolder (not preprocessing/)
-                    # GENERATE FATES INITIAL CONDITIONS
-                            # with RS data
-                            # 1) first half of preprocessing/generate_ic_remotesensing.R
-                            # 2) neon-veg-SOAPpfts/11-predict-pft.R
-                            # 3) preprocessing/main.py with preprocess_lad==T for force run in sites.yaml
-                            # 4) second half of step (1)
-
-#     return ???
-
-# to do later
-# save tifs into their own data product subfolders e.g. raw/aop/tif/chm
-# combine lidar and hs aop downloads into one step? think on this
-# add 06-plot_aop_imagery function for example tile - is this helpful -maybe combine with script 10 function?
-    # even since we have the full tile saved in stacked aop?
-# create function for script 10 - save plots in diagnostics folder?
-# check through functions in 00 script

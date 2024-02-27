@@ -1,8 +1,3 @@
-# library(stringr)
-# library(raster)
-# library(dplyr)
-# library(sf)
-
 st_erase <- function(x, y) sf::st_difference(x, st_union(st_combine(y))) 
 # ^ from https://r-spatial.github.io/sf/reference/geos_binary_ops.html
 # keeps only columns from original sf object
@@ -32,10 +27,11 @@ list_tiles_with_veg <- function(veg_df, out_dir){
   tiles <- unique(easting_northings[,c('e','n')])
   
   # order by ascending tile coordinates 
-  tiles_raw <- tiles %>%
+  tiles <- tiles %>%
     arrange(e)
-
-  tiles <- gsub("e+05","00000", tiles_raw, fixed=T)
+    
+  tiles$e <- gsub("e+05","00000", tiles$e, fixed=T)
+  tiles$n <- gsub("e+05","00000", tiles$n, fixed=T)
   
   # write to text file 
   tile_names <- paste(tiles$e, tiles$n, sep="_")
@@ -340,4 +336,100 @@ plot_variable_importance <- function(rf_model, rf_output_dir) {
                               nrow = 1) 
   ggsave(filename = file.path(rf_output_dir, "variable_importance.png"), 
          plot = var_imp_plot, width = 10, units = "in", dpi = 500)
+}
+
+
+
+filter_out_wavelengths <- function(wavelengths, layer_names){
+    # define the "bad bands" wavelength ranges in nanometers, where atmospheric 
+    # absorption creates unreliable reflectance values. 
+    bad_band_window_1 <- c(1340, 1445)
+    bad_band_window_2 <- c(1790, 1955)
+    #ais ^hardcoded here probably isn't the best
+    
+    # remove the bad bands from the list of wavelengths 
+    remove_bands <- wavelengths[(wavelengths > bad_band_window_1[1] & 
+                                     wavelengths < bad_band_window_1[2]) | 
+                                    (wavelengths > bad_band_window_2[1] & 
+                                         wavelengths < bad_band_window_2[2])]
+    
+    # Make sure printed wavelengths and stacked AOP wavelengths match
+    if (!all(paste0("X", as.character(base::round(wavelengths))) == 
+             layer_names[1:length(wavelengths)])) {
+        message("wavelengths do not match between wavelength.txt and the stacked imagery")
+    }
+    
+    # create a LUT that matches actual wavelength values with the column names,
+    # X followed by the base::rounded wavelength values. 
+    # Remove the rows that are within the bad band ranges. 
+    wavelength_lut <- data.frame(wavelength = wavelengths,
+                                 xwavelength = paste0("X", as.character(base::round(wavelengths))),
+                                 stringsAsFactors = FALSE) %>% 
+        filter(!wavelength %in% remove_bands)
+    
+    return(wavelength_lut)
+}
+
+
+
+prep_features_for_RF <- function(extracted_features_filename, featureNames) {
+    # read the spectra values extracted from the data cube 
+    df <- read.csv(extracted_features_filename) %>%
+        #dplyr::select(-rowname) %>%
+        mutate(dfID = paste(eastingIDs, northingIDs, 
+                             pixelNumber, sep = "_") ) %>%
+        # remove gbase::round pixels ais
+        filter(chm>0) %>% 
+        # also reset the factor levels (in case there are dropped pft levels)
+        droplevels()
+    
+    features_df <- df %>% 
+        # filter the data to contain only the features of interest 
+        dplyr::select(shapeID, all_of(featureNames))
+    
+    return(features_df)
+}
+
+
+
+apply_PCA <- function(df, wavelengths, output_dir, nPCs=3) {
+
+  #ais find a way to automate determining nPCs
+    # elbow plot
+    # factoextra::fviz_eig(hs_pca)
+    # features_final <- cbind(features, hs_pca$x[,1:nPCs]) %>% # add first n PCs to features df
+    #     # create unique ID for each pixel in the input imagery,
+    #     mutate(dfIDs = paste(plotID, pixelNumber, eastingIDs, northingIDs, 
+    #                          sep = "_")) %>%
+    #     dplyr::select(c(plotID, subplotID, chm, slope, aspect_cat, ARVI, EVI, NDVI,
+    #                     PRI, SAVI, rgb_meanR, rgb_meanG, rgb_meanB, rgb_sdR, rgb_sdG,
+    #                     rgb_sdB, rgb_mean_sd_R, rgb_mean_sd_G, rgb_mean_sd_B,
+    #                     PC1, PC2, PC3, dfIDs, pixelNumber)) 
+    # ais ^ find a way to automate identifying nPCs rather than hardcoding it
+
+    # remove the individual spectral reflectance bands from the training data
+    features_noWavelengths <- df %>% dplyr::select(-c(wavelengths$xwavelength))
+    
+    # PCA: calculate Principal Components 
+    hs <- df %>% dplyr::select(c(wavelengths$xwavelength)) %>% as.matrix()
+    hs_pca <- stats::prcomp(hs, center = TRUE, scale. = TRUE)
+    # summary(hs_pca) ais print pc summary info somewhere?
+    # add first n PCs to features data frame
+    features <- cbind(features_noWavelengths, hs_pca$x[,1:nPCs]) 
+    
+    # visualize where each sample falls on a plot with PC2 vs PC1 
+    ggbiplot::ggbiplot(hs_pca,
+                       choices = 1:2, # which PCs to plot
+                       obs.scale = 1, var.scale = 1, # scale observations & variables
+                       var.axes=FALSE, # remove arrows
+                       groups = df$pft, # color the points by PFT
+                       ellipse = TRUE, # draw ellipse abase::round each group
+                       circle = TRUE ) + # draw circle abase::round center of data set
+        ggtitle("PCA biplot, PC1 and PC2") +
+        scale_color_brewer(palette="Spectral") +
+        theme_bw()
+    # save to file
+    ggplot2::ggsave(file.path(output_dir,"pcaPlot.pdf"))
+    
+    return(features)
 }
