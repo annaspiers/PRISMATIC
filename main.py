@@ -8,17 +8,17 @@ os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R')
 # find-the-name-of-the-conda-environment-in-which-my-code-is-running
 
 from utils.utils import build_cache, force_rerun
-from preprocessing.inventory import download_veg_structure_data, \
+from inititalize.inventory import download_veg_structure_data, \
                                     preprocess_veg_structure_data, \
                                     download_trait_table
-from preprocessing.plots import download_polygons, \
+from inititalize.plots import download_polygons, \
                                 preprocess_polygons
-from preprocessing.lidar import clip_lidar_by_plots, \
+from inititalize.lidar import clip_lidar_by_plots, \
                                 download_lidar, \
                                 normalize_laz
-from preprocessing.biomass import preprocess_biomass
-from preprocessing.lad import preprocess_lad
-from preprocessing.hyperspectral import download_hs_L3_tiles, \
+from inititalize.biomass import preprocess_biomass
+from inititalize.lad import preprocess_lad
+from inititalize.hyperspectral import download_hs_L3_tiles, \
                                         prep_aop_imagery, \
                                         create_training_data, \
                                         train_pft_classifier
@@ -244,10 +244,10 @@ if __name__ == '__main__':
 
 # PROJECT FOLLOWUPS
 # What function generates the individual plot shp files? We know where plots.shp comes from
-# E.g., /Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/intermediate/SOAP/2019/inventory_plots/SOAP_003_central.dbf
+# E.g., /Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/inventory_plots/SOAP_003_central.dbf
 # Solution: generated in clip_lidar_by_plots()
-# Don’t save intermediate files saved in “/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/intermediate/SOAP/2019/clipped_lidar_tiles”
-# Should the y-axis be biomass instead of number of individuals? /Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/intermediate/diagnostics/SOAP/2019/biomass_plots/SOAP.png
+# Don’t save intermediate files saved in “/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/clipped_lidar_tiles”
+# Should the y-axis be biomass instead of number of individuals? /Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/diagnostics/SOAP/2019/biomass_plots/SOAP.png
 # Calculate_ila is a dummy function, returning 0.1
 # Diagnostics lad profiles are plotted with legend cut off
 # The function download_urls in utils/download_functions is not called anywhere
