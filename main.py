@@ -1,6 +1,13 @@
 import logging
 import hydra
 
+import os 
+os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R') 
+# so that this line works in inventory.py: import rpy2.robjects as robjects
+# solution from https://github.com/rpy2/rpy2/issues/882
+# generalized with help from https://stackoverflow.com/questions/36539623/how-do-i-find-the-name-of-the-conda-environment-in-which-my-code-is-running
+
+
 from preprocessing.inventory import download_veg_structure_data, \
                                     preprocess_veg_structure_data, \
                                     download_trait_table
@@ -53,8 +60,7 @@ def main(cfg):
                                     (url, data_path))
 
                 # download lidar
-                laz_path, tif_path = (force_rerun(cache,
-                                                  force=rerun_status)
+                laz_path, tif_path = (force_rerun(cache, force=rerun_status)
                                       (download_lidar)
                                       (site,
                                        year_lidar,
@@ -108,10 +114,11 @@ def main(cfg):
                                      end_result=True))
 
                 # leaf area density
-                (force_rerun(cache,
+                (force_rerun(cache, 
                              force=rerun_status)
                  (preprocess_lad)
                  (clipped_laz_path,
+                  inventory_file_path,
                   site,
                   year_inventory,
                   data_path,

@@ -13,8 +13,11 @@ dependencies:
   - matplotlib
   - r-base
   - r-sp
+  - r-sf
   - r-raster
   - r-devtools
+  - r-lidr
+  - rpy2
   - pip
   - pip:
     - gdown

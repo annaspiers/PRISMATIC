@@ -47,16 +47,18 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, end_r
         with open(output_data_path/f'{laz_file.stem}_lad.json', 'w') as f:
             f.write(json.dumps(infl_points))
 
-        # calculate SND
+        # calculate SND (stem number density)
         inventory_df = pd.read_csv(inventory_path)
-        calculate_snd(inventory_df, lad_df, infl_points)
+        if len(infl_points) > 0: #if dict is not empty, ...
+            if len(infl_points['layer_height']) > 0: #if elements in the dict are not empty, ...
+                calculate_snd(inventory_df, lad_df, infl_points)
     return str(output_data_path)
 
 def calculate_snd(inventory_df, lad_df, infl_points):
     layer_height = infl_points['layer_height']
     snd = 0
     # from the 0 -> last layer
-    for h1, i in enumerate(layer_height):
+    for i, h1 in enumerate(layer_height):
         if i == 0:
             h0 = 0
         layer_lad = lad_df.query(f'{h0} <= z and z <= {h1}')
