@@ -292,10 +292,10 @@ def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
         sp_template['scientific'] = f"{sp_template['genus']} sp."
         common_s = set(avail_veg_df.scientific) & set(group.scientific)
         avail_sps = group[group.scientific.isin(common_s)]
-        if not avail_sps.empty and avail_sps['n.wood.dens'].sum() != 0:
-            sp_template['wood.dens'] = \
-                ((avail_sps['wood.dens']*avail_sps['n.wood.dens']).sum()
-                 / avail_sps['n.wood.dens'].sum())
+        if not avail_sps.empty and avail_sps['n_wood_dens'].sum() != 0:
+            sp_template['wood_dens'] = \
+                ((avail_sps['wood_dens']*avail_sps['n_wood_dens']).sum()
+                 / avail_sps['n_wood_dens'].sum())
         sps.append(sp_template)
 
     sps_df = pd.concat(sps, axis=1).T
