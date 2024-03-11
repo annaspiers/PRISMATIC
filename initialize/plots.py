@@ -5,7 +5,7 @@ import geopandas as gpd
 import pandas as pd
 import requests
 from pathlib import Path
-from shapely import Point
+from shapely.geometry import Point
 from zipfile import ZipFile
 from utils.plot_partition import partition
 import matplotlib.pyplot as plt
@@ -136,7 +136,7 @@ def preprocess_polygons(input_data_path,
             sum(veg_gdf.stemDiameter < 10)
 
         # Logic:
-        # - If the sample suplot is '31|31|40|41',
+        # - If the sample suplot is '31|32|40|41',
         #   then they measure individuals
         #   in the middle of the plot (400m2).
         # - Else, they sample each suplot. For example if it is 30|31,
@@ -166,7 +166,9 @@ def preprocess_polygons(input_data_path,
             veg_gdf_position_list = veg_gdf.geometry[~veg_gdf
                                                      .geometry
                                                      .is_empty]
-            tree_in_plot = sum(plot_polygon.contains(veg_gdf_position_list))
+            tree_in_plot = sum(veg_gdf_position_list.within(plot_polygon))
+            # tree_in_plot = sum(plot_polygon.contains(veg_gdf_position_list))
+            # ^ AttributeError: 'GeoSeries' object has no attribute '_geom'
             if plot_id not in processed_plots or \
                tree_in_plot > processed_plots[plot_id]:
                 processed_plots[plot_id] = tree_in_plot
@@ -185,6 +187,7 @@ def preprocess_polygons(input_data_path,
                         ps.append(p)
                         subplot_ids.append(subplot)
                 veg_plot_metadata['clipped_subplot_position'] = subplots
+                # ais do this: if no trees in plot, then don't append the subplot
                 if tree_in_plot == 0:
                     log.warning(f'{plot_id} does not have any tree location. '
                                 'Selecting the first plot encountered as '

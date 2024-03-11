@@ -40,9 +40,10 @@ def download_lidar(site, year, lidar_path):
     lidar_path = Path(lidar_path)
     product_code = 'DP1.30003.001'
     path = lidar_path/site/year
-    file_types = ['prj', 'kml', 'shx', 'shp', 'dbf', 'laz']
+    file_types = ['prj', 'shx', 'shp', 'dbf', 'laz']
     for file_type in file_types:
         if file_type == 'laz':
+            file_type = '_classified_point_cloud_colorized.laz'
             p = path/'laz'
         else:
             p = path/'shape'
@@ -84,7 +85,8 @@ def clip_lidar_by_plots(laz_path,
         Path to the raster folder
         Format '*/tif'
     site_plots_path : str
-        _description_
+        Path to the shp folder
+        Format '*/shape'
     site : str
         Site name
     year : str
@@ -105,16 +107,18 @@ def clip_lidar_by_plots(laz_path,
     tif_path = Path(tif_path)
     site_plots_path = Path(site_plots_path)
     year = str(year)
-    output_folder = 'clipped_lidar' if not end_result else 'output'
-    pp_laz_path = Path(output_laz_path)/site/year/'clipped_lidar'
+    output_folder = 'clipped_lidar_tiles' if not end_result else 'clipped_to_plots'
+    pp_laz_path = Path(output_laz_path)/site/year/'clipped_lidar_tiles'
     pp_laz_path.mkdir(parents=True, exist_ok=True)
     output_laz_path = Path(output_laz_path)/site/year/output_folder
     output_laz_path.mkdir(parents=True, exist_ok=True)
 
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
-    shp_file = [i for i in
-                site_plots_path.glob('*.shp')
-                if 'plots' in str(i)][0]
+    shp_file = [i for i in site_plots_path.glob('plots.shp')][0] 
+    #otherwise only the first plot was being saved
+                #[i for i in
+                #site_plots_path.glob('*.shp')
+                #if 'plots' in str(i)][0]
     polygons_utm = gpd.read_file(shp_file)
 
     log.info('Cropping lidar files given all plots...')
@@ -235,7 +239,7 @@ def normalize_laz(laz_path,
     log.info(f'Normalizing LiDAR data for site: {site} / year: {year}')
     laz_path = Path(laz_path)
     year = str(year)
-    output_folder = 'normalized_lidar' if not end_result else 'output'
+    output_folder = 'normalized_lidar_tiles' if not end_result else 'output'
     output_path = Path(output_path)/site/year/output_folder
     output_path.mkdir(parents=True, exist_ok=True)
     laz_file_paths = [i for i in laz_path.glob('*.laz')]

@@ -1,12 +1,13 @@
 import logging
 import pandas as pd
 import gdown
-import rpy2.robjects as robjects
+import rpy2.robjects as ro
+import os
 
 from pathlib import Path
 
 COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
-        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName',
+        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName','taxonID',
         'taxonRank', 'adjNorthing', 'adjEasting', 'adjCoordinateUncertainty',
         'adjDecimalLatitude', 'adjDecimalLongitude',
         'adjElevation', 'adjElevationUncertainty',
@@ -28,6 +29,8 @@ def download_trait_table(download_link, data_path):
     """
     Download neon_trait_table (Marcos is the maintainer)
     """
+    if not os.path.exists(data_path):
+        os.makedirs(data_path)
     output_path = str(Path(data_path)/'NEON_trait_table.csv')
     gdown.download(download_link, output_path, quiet=False, fuzzy=True)
     return output_path
@@ -38,9 +41,9 @@ def download_veg_structure_data(site, data_path):
     Download vegetation structure and plot sampling effort of the site
     """
     log.info(f'Downloading inventory data for site: {site}')
-    r_source = robjects.r['source']
+    r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'inventory_helper.R'))
-    download_veg_structure_data = robjects.r('download_veg_structure_data')
+    download_veg_structure_data = ro.r('download_veg_structure_data')
     wd = download_veg_structure_data(site, data_path)
     veg_structure = f'{wd}/veg_structure.csv'
     plot_sampling_effort = f'{wd}/plot_sampling_effort.csv'

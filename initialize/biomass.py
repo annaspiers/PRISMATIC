@@ -30,7 +30,7 @@ def preprocess_biomass(data_path,
         Format '*/pp_veg_structure.csv'
     site_plots_path : str
         Path to the clipped plots result folder.
-        This is the resulted folder from preprocessing/plots.py,
+        This is the resulted folder from inititalize/plots.py,
         function preprocess_polygons().
         Format '*/inventory_plots'
     sampling_effort_path : str
@@ -171,7 +171,7 @@ def preprocess_biomass(data_path,
     fig.savefig(output_folder_path/f'{site}.png')
     plt.close()
 
-    shp_file = [i for i in site_plots_path.glob('*.shp')][0]
+    shp_file = [i for i in site_plots_path.glob('plots.shp')][0] #from glob('*.shp')
     polygons = gpd.read_file(shp_file)
     polygons['area'] = polygons.area
 
@@ -285,6 +285,7 @@ def _cal_plot_level_biomass(df, polygons):
 
 
 def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
+    """ais insert header"""
     genus_sp_group = neon_trait_table_df.groupby('genus')
     sps = []
     for _, group in genus_sp_group:
@@ -292,10 +293,10 @@ def augment_neon_trait_table(neon_trait_table_df, avail_veg_df):
         sp_template['scientific'] = f"{sp_template['genus']} sp."
         common_s = set(avail_veg_df.scientific) & set(group.scientific)
         avail_sps = group[group.scientific.isin(common_s)]
-        if not avail_sps.empty and avail_sps['n_wood_dens'].sum() != 0:
+        if not avail_sps.empty and avail_sps['n.wood.dens'].sum() != 0:
             sp_template['wood_dens'] = \
-                ((avail_sps['wood_dens']*avail_sps['n_wood_dens']).sum()
-                 / avail_sps['n_wood_dens'].sum())
+                ((avail_sps['wood.dens']*avail_sps['n.wood.dens']).sum()
+                 / avail_sps['n.wood.dens'].sum())
         sps.append(sp_template)
 
     sps_df = pd.concat(sps, axis=1).T

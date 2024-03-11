@@ -14,16 +14,22 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 LAD_FOLDER = 'lad'
 
-def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, end_result=True):
+def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, use_case, end_result):
     log.info(f'Preprocessing leaf area density for site: {site}')
     year = str(year)
-    output_folder = 'output' if end_result else 'lad'
-    output_folder_diagnostics_path = (Path(output_data_path)/'diagnostics'/site
-                                      / year/LAD_FOLDER)
-    output_folder_diagnostics_path.mkdir(parents=True, exist_ok=True)
-    output_data_path = Path(output_data_path)/site/year/output_folder
-    output_data_path.mkdir(parents=True, exist_ok=True)
 
+    if use_case=="train":
+        output_folder = 'output' if end_result else 'clipped_to_plots' #'lad'
+        output_folder_diagnostics_path = (Path(output_data_path)/'diagnostics'/site
+                                        / year/LAD_FOLDER)
+        output_folder_diagnostics_path.mkdir(parents=True, exist_ok=True)
+        output_data_path = Path(output_data_path)/site/year/output_folder
+        output_data_path.mkdir(parents=True, exist_ok=True)
+    if use_case=="predict":
+        output_data_path = Path(output_data_path)/'clipped_to_plots'
+        output_data_path.mkdir(parents=True, exist_ok=True)
+        output_folder_diagnostics_path = output_data_path
+        
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'leaf_area_density_helper.R'))
     preprocess_lad_func = ro.r('calc_leaf_area_density')
@@ -36,27 +42,29 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, end_r
             with (ro.default_converter + pandas2ri.converter).context():
                 lad_df = ro.conversion.get_conversion().rpy2py(r_df)
             infl_points = calculate_infl_points(lad_df)
-            fig = plot_diagnotics(lad_df, infl_points)
+            fig = plot_diagnostics(lad_df, infl_points)
             fig.savefig(output_folder_diagnostics_path/f'{laz_file.stem}_lad.png')
             plt.close()
         except Exception:
             lad_df = empty_df
             infl_points = {}
             log.error(f'Cannot preprocess leaf area density for site: {site}, {laz_file.stem}')
-        lad_df.to_csv(output_data_path/f'{laz_file.stem}_lad.csv')
-        with open(output_data_path/f'{laz_file.stem}_lad.json', 'w') as f:
+        lad_df.to_csv(str(output_data_path)+'/'+f'{laz_file.stem}_lad.csv')
+        with open(str(output_data_path)+'/'+f'{laz_file.stem}_lad.json', 'w') as f:
             f.write(json.dumps(infl_points))
 
-        # calculate SND
-        inventory_df = pd.read_csv(inventory_path)
-        calculate_snd(inventory_df, lad_df, infl_points)
+        if use_case=="train":
+            # calculate SND
+            inventory_df = pd.read_csv(inventory_path)
+            calculate_snd(inventory_df, lad_df, infl_points)
+
     return str(output_data_path)
 
 def calculate_snd(inventory_df, lad_df, infl_points):
     layer_height = infl_points['layer_height']
     snd = 0
     # from the 0 -> last layer
-    for h1, i in enumerate(layer_height):
+    for i, h1 in enumerate(layer_height):
         if i == 0:
             h0 = 0
         layer_lad = lad_df.query(f'{h0} <= z and z <= {h1}')
@@ -126,7 +134,7 @@ def calculate_infl_points(df):
             'layer_idx': np.array(layer_idx).astype('int32').tolist(),
             'layer_height': df.z[layer_idx].astype('float32').tolist()}
 
-def plot_diagnotics(df, infl_points):
+def plot_diagnostics(df, infl_points):
     lad = df.lad/np.max(df.lad)
     z = df.z.values
     smooth = gaussian_filter1d(lad, 1)

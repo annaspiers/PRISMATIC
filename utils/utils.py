@@ -17,47 +17,95 @@ def _add_to_cache(func_name, ps, l, cache):
         cache[func_name] = ps
 
 
-def build_cache(site, year_inventory, year_lidar, data_path, root_lidar_path):
+def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, 
+                data_int_path, data_final_path, use_case, ic_type):
     l = []
-    data_path = Path(data_path)
-    root_lidar_path = Path(root_lidar_path)
-    l.extend([str(p) for p in data_path.glob('**/') if p.is_dir()])
-    l.extend([str(p) for p in data_path.glob('**/*.csv')])
-    l.extend([str(p) for p in root_lidar_path.glob('**/') if p.is_dir()])
+    data_raw_aop_path = Path(data_raw_aop_path)
+    data_raw_inv_path = Path(data_raw_inv_path)
+    data_int_path = Path(data_int_path)
+    data_final_path = Path(data_final_path)
+
+    l.extend([str(p) for p in data_raw_aop_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_raw_inv_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_raw_inv_path.glob('**/*.csv')])
+    l.extend([str(p) for p in data_int_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_int_path.glob('**/*.csv')])
+    l.extend([str(p) for p in data_int_path.glob('**/*.shp')])
+    l.extend([str(p) for p in data_int_path.glob('**/*.RData')])
+    l.extend([str(p) for p in data_final_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_final_path.glob('**/*.css')])
+    l.extend([str(p) for p in data_final_path.glob('**/*.pss')])
+    
     cache = {}
+
+    # Download raw data
     _add_to_cache('download_trait_table',
-                  str(data_path/'NEON_trait_table.csv'),
+                  str(data_raw_inv_path/'NEON_trait_table.csv'),
                   l, cache)
     _add_to_cache('download_lidar',
-                  [str(root_lidar_path/site/year_lidar/'laz'),
-                   str(root_lidar_path/site/year_lidar/'tif')],
+                  [str(data_raw_aop_path/site/year_aop/'laz'),
+                   str(data_raw_aop_path/site/year_aop/'tif')],
                   l, cache)
     _add_to_cache('download_veg_structure_data',
-                  [str(data_path/site/'veg_structure.csv'),
-                   str(data_path/site/'plot_sampling_effort.csv')],
-                  l, cache)
-    _add_to_cache('preprocess_veg_structure_data',
-                  [str(data_path/site/year_inventory/'pp_veg_structure.csv'),
-                   str(data_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
+                  [str(data_raw_inv_path/site/'veg_structure.csv'),
+                   str(data_raw_inv_path/site/'plot_sampling_effort.csv')],
                   l, cache)
     _add_to_cache('download_polygons',
-                  str(data_path/'All_NEON_TOS_Plots_V9'),
+                  str(data_raw_inv_path/'All_NEON_TOS_Plots_V9'),
+                  l, cache)    
+    _add_to_cache('preprocess_veg_structure_data',
+                  [str(data_raw_inv_path/site/year_inventory/'pp_veg_structure.csv'),
+                   str(data_raw_inv_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
                   l, cache)
+    _add_to_cache('download_hs_L3_tiles',
+                  [str(data_raw_aop_path/site/year_aop/'hs_L3_h5'),
+                   str(data_raw_aop_path/site/year_aop/'tif')],
+                  l, cache)
+    
+    # Process raw data
     _add_to_cache('preprocess_polygons',
-                  str(data_path/site/year_inventory/'inventory_plots'),
+                  str(data_int_path/site/year_inventory/'inventory_plots'),
                   l, cache)
     _add_to_cache('normalize_laz',
-                  str(data_path/site/year_inventory/'normalized_lidar'),
+                  str(data_int_path/site/year_inventory/'normalized_lidar_tiles'),
                   l, cache)
     _add_to_cache('clip_lidar_by_plots',
-                  str(data_path/site/year_inventory/'output'),
+                  str(data_int_path/site/year_inventory/'clipped_to_plots'),
                   l, cache)
     _add_to_cache('preprocess_biomass',
-                  str(data_path/site/year_inventory/'output'),
+                  str(data_int_path/site/year_inventory/'biomass'),
                   l, cache)
     _add_to_cache('preprocess_lad',
-                  str(data_path/site/year_inventory/'output'),
+                  str(data_int_path/site/year_inventory/'clipped_to_plots'),
                   l, cache)
+    _add_to_cache('prep_aop_imagery',
+                  str(data_int_path/site/year_inventory/'stacked_aop'),
+                  l, cache)
+    _add_to_cache('create_training_data',
+                    [str(data_int_path/site/year_inventory/'training'/'tree_crowns_training.shp'),
+                    str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_inv.csv')],
+                    l, cache)
+    _add_to_cache('train_pft_classifier',
+                    str(data_int_path/site/year_inventory/'training'/'rf_tree_crowns_training'/'rf_model_tree_crowns_training.RData'),
+                    l, cache)
+    
+    if use_case=="predict":        
+        if (ic_type == "field_inv_plots"):
+            _add_to_cache('generate_initial_conditions',
+                      [str(data_final_path/site/year_inventory/ic_type/"cohort_ic_field_inv.css"),
+                       str(data_final_path/site/year_inventory/ic_type/"patch_ic_field_inv.pss")],
+                      l, cache)   
+        if (ic_type=="rs_inv_plots"):
+            _add_to_cache('generate_initial_conditions',
+                      [str(data_final_path/site/year_inventory/ic_type/"cohort_ic_rs_inv_plots.css"),
+                       str(data_final_path/site/year_inventory/ic_type/"patch_ic_rs_inv_plots.pss")],
+                      l, cache)   
+        if (ic_type == "rs_random_plots"):
+            _add_to_cache('generate_initial_conditions',
+                      [str(data_final_path/site/year_inventory/ic_type/"cohort_ic_rs_random_plots.css"),
+                       str(data_final_path/site/year_inventory/ic_type/"patch_ic_rs_random_plots.pss")],
+                      l, cache)   
+                
     return cache
 
 
@@ -75,7 +123,7 @@ def force_rerun(cache, force={}):
                     result = func(*args, **kwargs)
                     return result
                 else:
-                    log.info(f'Found in cache, use cache and not rerun the function: {func.__name__}')
+                    log.info(f'Found in cache, use cache and do not rerun the function: {func.__name__}')
                     return cache.get(func.__name__, None)
         return wrapper
     return cached
