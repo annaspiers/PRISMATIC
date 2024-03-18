@@ -41,6 +41,6 @@ dependencies:
     - tqdm
     - laspy[lazrs, laszip]
     - open3d
-    - sklearn
+    - scikit-learn
     - hydra-core
     - hydra_colorlog
