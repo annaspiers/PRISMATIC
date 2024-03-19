@@ -29,9 +29,9 @@ dependencies:
   - r-terra
   - r-neonUtilities
   - r-glue
-  - r-neonOS
-  - r-geoNEON
-  - r-ggbiplot
+  # - r-neonOS
+  # - r-geoNEON
+  # - r-ggbiplot
   - pip
   - pip:
     - gdown
