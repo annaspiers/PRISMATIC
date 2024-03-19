@@ -4,7 +4,7 @@ if (!require("ggbiplot")){
 }
 
 if (!require("neonOS")){
-    install.packages("neonOS")
+    install.packages("neonOS", repos = c("https://cloud.r-project.org"))
     library(neonOS)
 }
 
