@@ -8,17 +8,17 @@ os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R')
 # find-the-name-of-the-conda-environment-in-which-my-code-is-running
 
 from utils.utils import build_cache, force_rerun
-from inititalize.inventory import download_veg_structure_data, \
+from initialize.inventory import download_veg_structure_data, \
                                     preprocess_veg_structure_data, \
                                     download_trait_table
-from inititalize.plots import download_polygons, \
+from initialize.plots import download_polygons, \
                                 preprocess_polygons
-from inititalize.lidar import clip_lidar_by_plots, \
+from initialize.lidar import clip_lidar_by_plots, \
                                 download_lidar, \
                                 normalize_laz
-from inititalize.biomass import preprocess_biomass
-from inititalize.lad import preprocess_lad
-from inititalize.hyperspectral import download_hs_L3_tiles, \
+from initialize.biomass import preprocess_biomass
+from initialize.lad import preprocess_lad
+from initialize.hyperspectral import download_hs_L3_tiles, \
                                         prep_aop_imagery, \
                                         create_training_data, \
                                         train_pft_classifier
@@ -35,8 +35,8 @@ def main(cfg):
     data_final_path = cfg.paths.data_final_path
 
     # Parameters to change manually
-    use_case = "predict" # train, predict
-    ic_type = "rs_random_plots" # field_inv_plots, rs_inv_plots, rs_random_plots
+    use_case = "train" # train, predict
+    ic_type = "rs_inv_plots" # field_inv_plots, rs_inv_plots, rs_random_plots
     aggregate_from_1m_to_2m_res = False
     px_thresh = 2
     ntree = 5000
