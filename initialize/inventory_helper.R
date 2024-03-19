@@ -1,10 +1,12 @@
 install.packages("neonUtilities")
 install.packages("neonOS")
-devtools::install_github("NEONScience/NEON-geolocation/geoNEON")
-library(sp)
+install.packages("devtools")
+devtools::install_github("NEONScience/NEON-geolocation/geoNEON", dependencies=TRUE)
 library(neonUtilities)
 library(neonOS)
 library(geoNEON)
+
+library(sp)
 library(glue)
 options(stringsAsFactors = FALSE)
 

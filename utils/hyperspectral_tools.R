@@ -1,3 +1,6 @@
+install.packages("ggbiplot", repos = c("https://cloud.r-project.org"))
+library(ggbiplot)
+
 st_erase <- function(x, y) sf::st_difference(x, st_union(st_combine(y))) 
 # ^ from https://r-spatial.github.io/sf/reference/geos_binary_ops.html
 # keeps only columns from original sf object
