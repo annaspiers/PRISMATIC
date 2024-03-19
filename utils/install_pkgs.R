@@ -1,5 +1,5 @@
 if (!require("ggbiplot")){
-    install.packages("ggbiplot")
+    install.packages("ggbiplot", repos = c("https://cloud.r-project.org"))
     library(ggbiplot)
 }
 
