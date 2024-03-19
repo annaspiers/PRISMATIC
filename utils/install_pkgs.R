@@ -10,6 +10,6 @@ if (!require("neonOS")){
 
 if (!require("geoNEON")){
     install.packages("devtools")
-    devtools::install_github("NEONScience/NEON-geolocation/geoNEON")
+    devtools::install_github("NEONScience/NEON-geolocation/geoNEON", repos = c("https://cloud.r-project.org"))
     library(geoNEON)
 }
