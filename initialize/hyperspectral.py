@@ -110,7 +110,7 @@ def prep_aop_imagery(site, year, hs_L3_path, tif_path, data_int_path):
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
     prep_aop_imagery = ro.r('prep_aop_imagery')
     stacked_aop_path = prep_aop_imagery(site, year, hs_L3_path, tif_path, data_int_path)
-    log.info('Downloaded inventory data saved at: '
+    log.info('Stacked AOP data and saved at: '
              f'{stacked_aop_path}')
     return stacked_aop_path
 

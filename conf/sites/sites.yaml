@@ -1,7 +1,44 @@
 run:
-  SOAP:
+  # SOAP:
+  #   # '2019':
+  #   #   year_aop: 2019-06
+  #   #   force_rerun:
+  #   #     download_lidar: False
+  #   #     download_veg_structure_data: False
+  #   #     preprocess_veg_structure_data: False
+  #   #     download_polygons: False
+  #   #     preprocess_polygons: False
+  #   #     normalize_laz: False
+  #   #     clip_lidar_by_plots: False
+  #   #     preprocess_lad: False
+  #   #     preprocess_biomass: False
+  #   #     download_hs_L3_tiles: False
+  #   #     prep_aop_imagery: False
+  #   #     create_training_data: False
+  #   #     train_pft_classifier: False
+  #   #     generate_initial_conditions: False
+
+    # '2020':
+    #   year_aop: 2021-07
+    #   force_rerun:
+    #     download_lidar: False
+    #     download_veg_structure_data: False
+    #     preprocess_veg_structure_data: False
+    #     download_polygons: False
+    #     preprocess_polygons: False
+    #     normalize_laz: False
+    #     clip_lidar_by_plots: False
+    #     preprocess_lad: False
+    #     preprocess_biomass: False
+    #     download_hs_L3_tiles: False
+    #     prep_aop_imagery: False
+    #     create_training_data: False
+    #     train_pft_classifier: False
+    #     generate_initial_conditions: False
+
+  SJER:
     '2019':
-      year_aop: 2019-06
+      year_aop: 2019-03
       force_rerun:
         download_lidar: False
         download_veg_structure_data: False
@@ -14,32 +51,46 @@ run:
         preprocess_biomass: False
         download_hs_L3_tiles: False
         prep_aop_imagery: False
-        create_training_data: False
+        create_training_data: True
         train_pft_classifier: False
         generate_initial_conditions: False
-        # ais add to each site/year below too
 
-  #   '2020':
-  #     year_aop: 2021-07
-  #     force_rerun:
-  #       dow...
-
-  # SJER:
-  #   '2019':
-  #     year_aop: 2019-03
-  #     force_rerun:
-  #       downl...
-
-  #   '2022':
-  #     year_aop: 2021-03
-  #     force_rerun:
-  #       dow...
+    # '2022':
+    #   year_aop: 2021-03
+    #   force_rerun:
+    #     download_lidar: False
+    #     download_veg_structure_data: False
+    #     preprocess_veg_structure_data: False
+    #     download_polygons: False
+    #     preprocess_polygons: False
+    #     normalize_laz: False
+    #     clip_lidar_by_plots: False
+    #     preprocess_lad: False
+    #     preprocess_biomass: False
+    #     download_hs_L3_tiles: False
+    #     prep_aop_imagery: False
+    #     create_training_data: False
+    #     train_pft_classifier: False
+    #     generate_initial_conditions: False
 
   # TEAK:
   #   '2021':
   #     year_aop: 2021-07
   #     force_rerun:
-  #       down...
+  #       download_lidar: False
+  #       download_veg_structure_data: False
+  #       preprocess_veg_structure_data: False
+  #       download_polygons: False
+  #       preprocess_polygons: False
+  #       normalize_laz: False
+  #       clip_lidar_by_plots: False
+  #       preprocess_lad: False
+  #       preprocess_biomass: False
+  #       download_hs_L3_tiles: False
+  #       prep_aop_imagery: False
+  #       create_training_data: False
+  #       train_pft_classifier: False
+  #       generate_initial_conditions: False
 
 global_run_params:
   run:
@@ -55,6 +106,6 @@ global_run_params:
     preprocess_biomass: False
     download_hs_L3_tiles: False
     prep_aop_imagery: False
-    create_training_data: False
-    train_pft_classifier: False
-    generate_initial_conditions: False
+    create_training_data: True
+    train_pft_classifier: True
+    generate_initial_conditions: True
