@@ -17,7 +17,6 @@ dependencies:
   - r-ggplot2
   - r-dplyr
   - r-caret
-  - r-ggbiplot
   - r-cowplot
   - r-rfUtilities
   - r-gridextra
@@ -29,9 +28,10 @@ dependencies:
   - r-tidyr #pivot_longer()
   - r-terra
   - r-neonUtilities
-  - r-neonOS
-  - r-geoNEON
   - r-glue
+  # - r-neonOS
+  # - r-geoNEON
+  # - r-ggbiplot
   - pip
   - pip:
     - gdown
@@ -41,6 +41,6 @@ dependencies:
     - tqdm
     - laspy[lazrs, laszip]
     - open3d
-    - sklearn
+    - scikit-learn
     - hydra-core
     - hydra_colorlog

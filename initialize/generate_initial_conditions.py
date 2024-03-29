@@ -6,7 +6,7 @@ import glob
 import rpy2.robjects as ro
 
 from pathlib import Path
-from inititalize.lad import preprocess_lad
+from initialize.lad import preprocess_lad
 
 # add environ
 conda_env_path = Path(sys.executable).parent.parent
