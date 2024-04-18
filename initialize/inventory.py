@@ -7,8 +7,7 @@ import os
 from pathlib import Path
 
 COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
-        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName', 
-        'genus', 'species', 'taxonID',
+        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName','taxonID',
         'taxonRank', 'adjNorthing', 'adjEasting', 'adjCoordinateUncertainty',
         'adjDecimalLatitude', 'adjDecimalLongitude',
         'adjElevation', 'adjElevationUncertainty',
@@ -20,8 +19,7 @@ COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
         'maxBaseCrownDiameter', 'ninetyBaseCrownDiameter',
         'initialBandStemDiameter', 'initialDendrometerGap',
         'dendrometerHeight', 'dendrometerGap',
-        'dendrometerCondition', 'bandStemDiameter'
-        ]
+        'dendrometerCondition', 'bandStemDiameter']
 
 log = logging.getLogger(__name__)
 
@@ -53,28 +51,35 @@ def download_veg_structure_data(site, data_path):
     return veg_structure, plot_sampling_effort
 
 
-def preprocess_veg_structure_data(site, year, data_path):
+def preprocess_veg_structure_data(site, year_inv, year_aop, data_path, month_window=16): #ais put month window argument into higher workflow
     """
     Filter vegetation structure and plot sampling to the year
     """
-    year = str(year)
+    year_inv = str(year_inv)
     site_path = Path(data_path)/site
-    df = pd.read_csv(site_path/'veg_structure.csv')
-    pp_df_by_year = df[df['date.x'].str.contains(year, na=False)]
-    pp_veg_df = pp_df_by_year[COLS]
-
-    site_year_path = site_path/year
+    site_year_path = site_path/year_inv
     site_year_path.mkdir(parents=True, exist_ok=True)
+
+    earliest_date = datetime.strptime(year_aop,"%Y-%m")  - timedelta(days=month_window*31)
+    latest_date = datetime.strptime(year_aop,"%Y-%m")  + timedelta(days=month_window*31)
+    
+    df = pd.read_csv(site_path/'veg_structure.csv')
+    df['date.x'] = pd.to_datetime(df['date.x']) # Convert the date column to datetime format
+    pp_df_by_year = df[(df['date.x'] >= earliest_date) & (df['date.x'] <= latest_date)]
+            # df[df['date.x'].str.contains(year_inv, na=False)]
+    pp_veg_df = pp_df_by_year[COLS]
     file_name = 'pp_veg_structure.csv'
     file_path = site_year_path/file_name
     pp_veg_df.to_csv(file_path, index=False)
 
     e_df = pd.read_csv(site_path/'plot_sampling_effort.csv')
-    e_pp_df_by_year = e_df[e_df['date'].str.contains(year, na=False)]
+    e_df['date'] = pd.to_datetime(e_df['date']) # Convert the date column to datetime format
+    e_pp_df_by_year = e_df[(e_df['date'] >= earliest_date) & (e_df['date'] <= latest_date)]
+            # e_df[e_df['date'].str.contains(year_inv, na=False)]
     e_file_name = 'pp_plot_sampling_effort.csv'
     e_file_path = site_year_path/e_file_name
     e_pp_df_by_year.to_csv(e_file_path, index=False)
 
-    log.info(f'Processed inventory data for site: {site} / year: {year} '
+    log.info(f'Processed inventory data for site: {site} / year: {year_inv} '
              f'saved at: {file_name}')
     return str(file_path), str(e_file_path)
