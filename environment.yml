@@ -29,6 +29,7 @@ dependencies:
   - r-terra
   - r-neonUtilities
   - r-glue
+  - bioconductor-rhdf5
   # - r-neonOS
   # - r-geoNEON
   # - r-ggbiplot
