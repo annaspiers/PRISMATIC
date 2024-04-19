@@ -35,7 +35,6 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'initial_conditions_helper.R'))
     r_source(str(Path(os.getcwd()+'/inititalize/hyperspectral_helper.R')))
-    r_source(str(Path(os.getcwd()+'/utils/hyperspectral_tools.R')))
 
     ic_type_path = str(data_final_path+'/'+site+'/'+year_inv+'/'+ic_type) #needs to be str to be input
     Path(ic_type_path).mkdir(parents=True, exist_ok=True)
