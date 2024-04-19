@@ -52,6 +52,7 @@ def main(cfg):
     if isinstance(global_run, str):
         global_run = [global_run]
 
+    # First download/process raw data for all site-years to get stacked AOP product
     for site, v in cfg.sites.run.items():
         if not global_run or site in global_run:
             for year_inventory, p in v.items():
@@ -59,7 +60,7 @@ def main(cfg):
                 for k, v in p.force_rerun.items():
                     rerun_status[k] = v or global_force_rerun.get(k, False)
                 year_aop = p.year_aop
-                log.info(f'Run process for site: {site}, '
+                log.info(f'Download raw data for site: {site}, '
                          f'year: {year_inventory}, year_aop: {year_aop}, '
                          f'with rerun status: {rerun_status}')
                 cache = build_cache(site=site, 
@@ -84,24 +85,8 @@ def main(cfg):
                                                      (download_link=url, 
                                                       data_path=data_raw_inv_path))
 
-                # process inventory
-                _, _ = (force_rerun(cache, force=rerun_status)
-                        (download_veg_structure_data) #ais how to automate this to seloect US(OR)?
-                        (site=site, 
-                         data_path=data_raw_inv_path))
                 
-                inventory_file_path, \
-                    sampling_effort_path = (force_rerun(cache, force=rerun_status)
-                                            (preprocess_veg_structure_data)
-                                            (site=site,
-                                             year=year_inventory,
-                                             data_path=data_raw_inv_path))
                 
-                neon_plots_path = (force_rerun(cache, force=rerun_status)
-                                   (download_polygons)
-                                   (data_path=data_raw_inv_path))
-                
-        # LIDAR
                 # download lidar
                 laz_path, tif_path = (force_rerun(cache, force=rerun_status)
                                       (download_lidar)
@@ -109,7 +94,52 @@ def main(cfg):
                                        year=year_aop,
                                        lidar_path=data_raw_aop_path))
                 
-                # process plots                
+                # download hs data
+                hs_L3_path, tif_path = (force_rerun(cache, force=rerun_status)
+                                        (download_hs_L3_tiles)
+                                        (site=site,
+                                         year=year_aop,
+                                         data_raw_aop_path=data_raw_aop_path))
+                
+                _, _ = (force_rerun(cache, force=rerun_status)
+                        (download_veg_structure_data) #ais how to automate this to seloect US(OR)?
+                        (site=site, 
+                         data_path=data_raw_inv_path))
+                
+                neon_plots_path = (force_rerun(cache, force=rerun_status)
+                                   (download_polygons)
+                                   (data_path=data_raw_inv_path))
+                
+        # Process intermediate and final data
+    for site, v in cfg.sites.run.items():
+        if not global_run or site in global_run:
+            for year_inventory, p in v.items():
+                rerun_status = {}
+                for k, v in p.force_rerun.items():
+                    rerun_status[k] = v or global_force_rerun.get(k, False)
+                    year_aop = p.year_aop
+                    log.info(f'Run process for site: {site}, '
+                         f'year: {year_inventory}, year_aop: {year_aop}, '
+                         f'with rerun status: {rerun_status}')
+                    cache = build_cache(site=site, 
+                                    year_inventory=year_inventory, 
+                                    year_aop=year_aop, 
+                                    data_raw_aop_path=data_raw_aop_path, 
+                                    data_raw_inv_path=data_raw_inv_path, 
+                                    data_int_path=data_int_path, 
+                                    data_final_path=data_final_path, 
+                                    use_case=use_case, 
+                                    ic_type=ic_type)
+                    
+                    # process plots   
+                inventory_file_path, \
+                    sampling_effort_path = (force_rerun(cache, force=rerun_status)
+                                            (preprocess_veg_structure_data)
+                                            (site=site,
+                                             year_inv=year_inventory,
+                                             year_aop=year_aop,
+                                             data_path=data_raw_inv_path))
+                
                 partitioned_plots_path = (force_rerun(cache, force=rerun_status)
                                           (preprocess_polygons)
                                           (input_data_path=neon_plots_path,
@@ -135,17 +165,26 @@ def main(cfg):
                                      year=year_inventory,
                                      output_laz_path=data_int_path,
                                      end_result=True))
-
+                
+                # prep NEON AOP data for classifier
+                stacked_aop_path = (force_rerun(cache, force=rerun_status)
+                                    (prep_aop_imagery)
+                                    (site=site,
+                                     year=year_inventory,
+                                     hs_L3_path=hs_L3_path, 
+                                     tif_path=tif_path,
+                                     data_int_path=data_int_path))
+                    
                 # leaf area density
                 (force_rerun(cache, force=rerun_status)
-                 (preprocess_lad)
-                 (laz_path=clipped_laz_path,
-                  inventory_path=inventory_file_path,
-                  site=site,
-                  year=year_inventory,
-                  output_data_path=data_int_path,
-                  use_case=use_case,
-                  end_result=False))
+                         (preprocess_lad)
+                         (laz_path=clipped_laz_path,
+                          inventory_path=inventory_file_path,
+                          site=site,
+                          year=year_inventory,
+                          output_data_path=data_int_path,
+                          use_case=use_case,
+                          end_result=False))
 
                 # biomass
                 biomass_path = (force_rerun(cache, force=rerun_status)
@@ -159,40 +198,23 @@ def main(cfg):
                                  neon_trait_table_path=trait_table_path,
                                  end_result=False)) 
                 #ais check warnings for utils.allometry - lots of species not detected in neon_trait_table
-
-
-        # HYPERSPECTRAL
-                # download hs data
-                hs_L3_path, tif_path = (force_rerun(cache, force=rerun_status)
-                                        (download_hs_L3_tiles)
-                                        (site=site,
-                                         year=year_aop,
-                                         data_raw_aop_path=data_raw_aop_path))
                 
-                # prep NEON AOP data for classifier
-                stacked_aop_path = (force_rerun(cache, force=rerun_status)
-                                    (prep_aop_imagery)
-                                    (site=site,
-                                     year=year_inventory,
-                                     hs_L3_path=hs_L3_path, 
-                                     tif_path=tif_path,
-                                     data_int_path=data_int_path))
-
                 training_crown_shp_path, \
-                    training_spectra_csv_path = (force_rerun(cache, force=rerun_status)
-                                                 (create_training_data)
-                                                 (site=site,
-                                                  year=year_inventory,
-                                                  biomass_path=biomass_path,
-                                                  data_int_path=data_int_path,
-                                                  data_final_path=data_final_path, 
-                                                  stacked_aop_path=stacked_aop_path,
-                                                  px_thresh=px_thresh,
-                                                  use_case="train",
-                                                  ic_type=ic_type,
-                                                  aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res))            
+                training_spectra_csv_path = (force_rerun(cache, 
+                                                         force=rerun_status)
+                                             (create_training_data)
+                                             (site=site,
+                                              year=year_inventory,
+                                              biomass_path=biomass_path,
+                                              data_int_path=data_int_path,
+                                              data_final_path=data_final_path,
+                                              stacked_aop_path=stacked_aop_path,
+                                              px_thresh=px_thresh,
+                                              use_case="train",
+                                              ic_type=ic_type,
+                                              aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res))            
                 
-                    # Train model
+                # Train model
                 rf_model_path = (force_rerun(cache,  force=rerun_status)
                                      (train_pft_classifier)
                                      (site=site,
@@ -207,10 +229,10 @@ def main(cfg):
                                       independentValidationSet=independentValidationSet)) 
                     # ais ^ specify in yaml whether using corrected/uncorrected hs data
 
-        # INITIAL CONDITIONS
+                    # INITIAL CONDITIONS
                 if use_case=="predict":
-                    # Generate initial conditions
-                   cohort_path, patch_path = (force_rerun(cache,  force=rerun_status)
+                # Generate initial conditions
+                    cohort_path, patch_path = (force_rerun(cache,  force=rerun_status)
                                                  (generate_initial_conditions)
                                                  (site=site,
                                                   year_inv=year_inventory,
