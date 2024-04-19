@@ -14,6 +14,8 @@ def partition(geom, delta, subplots=None):
     if len(subplots) != 4:
         grids = list(filter(prepared_geom.intersects,
                            _grid_bounds(geom, delta)))
+        if any(subplot.endswith('_400') for subplot in subplots):
+            subplots = [subplot.replace('_400', '') for subplot in subplots]
         for s in subplots:
             idx = SUBPLOTS.index(s)
             grid.append(grids[idx])
