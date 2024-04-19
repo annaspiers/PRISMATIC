@@ -142,7 +142,8 @@ def download_aop_files(product,
                        year=None,
                        download_folder='./data',
                        match_string=None,
-                       check_size=True):
+                       check_size=True,
+                       tiles_w_veg=None):
     """
     download_aop_files downloads NEON AOP files from the AOP
     for a given data product, site, and optional year, download folder, and
@@ -195,20 +196,34 @@ def download_aop_files(product,
     for url in urls:
         r = requests.get(url)
         files = r.json()['data']['files']
+        if tiles_w_veg is not None:  
+            matching_files = []      
+            with open(tiles_w_veg, 'r') as tiles_list:  # Open the file in read mode
+                for line in tiles_list: # Read each line from the file                
+                    tile = line.strip()        
+                    # Check if the tile string is a substring of any file name
+                    for file in files:
+                        if tile in file['name']:
+                            matching_files.append(file)
+            files = matching_files
         for i in range(len(files)):
-            if match_string is not None:
-                if match_string in files[i]['name']:
-                    print(f"downloading {files[i]['name']} to {download_folder}")
+            if os.path.exists(os.path.join(download_folder,files[i]['name'])):
+                print(files[i]['name']+" already downloaded")
+                continue
+            else:
+                if match_string is not None:
+                    if match_string in files[i]['name']:
+                        print(f"downloading {files[i]['name']} to {download_folder}")
+                        try:
+                            download_file(files[i]['url'],
+                                          os.path.join(download_folder,
+                                                       files[i]['name']))
+                        except requests.exceptions.RequestException as e:
+                            print(e)
+                else:
                     try:
                         download_file(files[i]['url'],
                                       os.path.join(download_folder,
                                                    files[i]['name']))
                     except requests.exceptions.RequestException as e:
                         print(e)
-            else:
-                try:
-                    download_file(files[i]['url'],
-                                  os.path.join(download_folder,
-                                               files[i]['name']))
-                except requests.exceptions.RequestException as e:
-                    print(e)
