@@ -134,7 +134,6 @@ def create_training_data(site, year, biomass_path, data_int_path, data_final_pat
     log.info(f'Creating tree crown training data features for: {site} {year}')
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
-    r_source(str(Path(os.getcwd()+'/utils/hyperspectral_tools.R')))
 
     # Create tree polygons
     create_tree_crown_polygons = ro.r('create_tree_crown_polygons')
@@ -174,7 +173,6 @@ def train_pft_classifier(site, year, stacked_aop_path, training_shp_path, traini
     log.info(f'Creating tree crown training data features for: {site} {year}')
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
-    r_source(str(Path(os.getcwd()+'/utils/hyperspectral_tools.R')))
 
     # Train random forest model 
     train_pft_classifier = ro.r('train_pft_classifier')

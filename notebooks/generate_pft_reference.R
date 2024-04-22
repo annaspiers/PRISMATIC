@@ -176,14 +176,15 @@ pft_assignment_df <- neon_carissa %>%
             taxonID == "ABCO" |
             taxonID == "ABLO" |
             taxonID == "ABMA" ~ "fir", #white or red fir
-        taxonID == "CADE27" ~ "cedar", #incense cedar
+        taxonID == "CADE27" | taxonID == "SEGI2" ~ "cedar", #incense cedar
         taxonID == "PICO" | 
             taxonID == "PIJE" |
             taxonID == "PILA" |
             taxonID == "PINACE" |
             taxonID == "PINACE" |
             taxonID == "PIPO" |
-            taxonID == "PISA2" ~ "pine", #Ponderosa pine
+            taxonID == "PISA2" |
+            taxonID == "PINUS" ~ "pine", #Ponderosa pine
         taxonID == "QUCH2" | 
             taxonID == "QUKE" |
             taxonID == "QUDO" |
@@ -202,8 +203,10 @@ pft_assignment_df <- neon_carissa %>%
             taxonID == "RICE" | taxonID == "RIBES" |
             taxonID == "RIRO" | taxonID == "RIVI3" |
             taxonID == "SALIX" | taxonID == "SANI4" |
-            taxonID == "CEMOG" |
-            taxonID == "SEFL3" | taxonID == "TODI" ~ "montane_shrub", #Ceanothus sp.
+            taxonID == "CEMOG" | taxonID == "ARCTO3SPP" |
+            taxonID == "SEFL3" | taxonID == "TODI" |
+            taxonID == "SASC" | taxonID == "AECA" |
+            taxonID == "CONU4" ~ "montane_shrub", #Ceanothus sp.
         .default = "other"
     ))
 

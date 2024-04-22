@@ -1,4 +1,8 @@
-data_raw_aop_path: ${hydra:runtime.cwd}/data/raw/aop
-data_raw_inv_path: ${hydra:runtime.cwd}/data/raw/inventory
-data_int_path: ${hydra:runtime.cwd}/data/intermediate
-data_final_path: ${hydra:runtime.cwd}/data/final
+# data_raw_aop_path: ${hydra:runtime.cwd}/data/raw/aop
+# data_raw_inv_path: ${hydra:runtime.cwd}/data/raw/inventory
+# data_int_path: ${hydra:runtime.cwd}/data/intermediate
+# data_final_path: ${hydra:runtime.cwd}/data/final
+data_raw_aop_path: /pscratch/sd/a/aspiers/data/raw/aop
+data_raw_inv_path: /pscratch/sd/a/aspiers/data/raw/inventory
+data_int_path: /pscratch/sd/a/aspiers/data/intermediate
+data_final_path: /pscratch/sd/a/aspiers/data/final

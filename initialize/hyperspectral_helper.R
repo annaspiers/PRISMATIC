@@ -1,6 +1,8 @@
 # This script is where packages are installed and parameters are defined for
 # the other scripts within this workflow.
 
+install.packages("ggbiplot", repos = c("https://cloud.r-project.org"))
+library(ggbiplot)
 library(stringr)
 library(terra)
 library(dplyr)
@@ -10,28 +12,469 @@ library(caret)
 library(tidyselect) #all_of
 library(parallel) #mclapply
 
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("rhdf5")
+
+
+
+st_erase <- function(x, y) sf::st_difference(x, st_union(st_combine(y))) 
+# ^ from https://r-spatial.github.io/sf/reference/geos_binary_ops.html
+# keeps only columns from original sf object
+
+
+list_tiles_with_veg <- function(veg_df, out_dir){
+  # written by Scholl et al from https://github.com/earthlab/neon-veg
+    
+    # generate a list of 1km x 1km tiles containing field data
+  # write list to a text file in the output directory provided
+  
+  print("Generating list of tiles containing veg stems...")
+  
+  # get easting, northing coordinates of all plants
+  e <- NA
+  n <- NA
+  for (i in 1:dim(veg_df)[1]){
+    easting <- floor(as.numeric(veg_df$easting[i])/1000)*1000
+    northing <- floor(as.numeric(veg_df$northing[i])/1000)*1000
+    e[i] <- easting
+    n[i] <- northing
+  }
+  
+  # find unique rows repesenting tiles
+  easting_northings <- data.frame(as.character(e),as.character(n))
+  colnames(easting_northings) <- c('e','n')
+  tiles <- unique(easting_northings[,c('e','n')])
+  
+  # order by ascending tile coordinates 
+  tiles <- tiles %>%
+    arrange(e)
+    
+  tiles$e <- gsub("e+05","00000", tiles$e, fixed=T)
+  tiles$n <- gsub("e+05","00000", tiles$n, fixed=T)
+  
+  # write to text file 
+  tile_names <- paste(tiles$e, tiles$n, sep="_")
+  tiles_file <- file(file.path(out_dir,"tiles_with_veg.txt"))
+  writeLines(tile_names, tiles_file)
+  close(tiles_file)
+  
+  return(tiles)
+}
+
+
+
+clip_overlap <- function(df, thresh) {
+  # modified from Scholl et al from https://github.com/earthlab/neon-veg
+
+  # Each polygon will be compared with the rest to determine which ones are
+  # overlapping. For each overlapping pair, the taller polygon clips the
+  # shorter one. If the clipped polygon is smaller than the specified area
+  # threshold then it is deleted from subsequent analysis.
+  #
+  # Args
+  #   df
+  #     (Simple Features object) containing polygons to compare / clip.
+  #
+  #   thresh
+  #     (integer) Area [m^2] threshold to remove small polygons.
+  #
+
+  message("\nChecking for overlap & clipping shorter polygons...")
+
+    # how should be polygons be reordered?
+    # for now, reorder then based on height.
+    polys_ordered <- df[order(df$height,
+                              decreasing = TRUE),] %>%
+      dplyr::select(-area_m2) %>%
+      # create unique ID
+      tibble::rownames_to_column() %>%
+      mutate(individualID_unique = paste(individualID,rowname,sep="_")) %>%
+      relocate(individualID_unique, .before = geometry)
+
+    # create a copy of the polygons to update with clipped/deleted entries
+    polys_filtered <- polys_ordered
+
+    # create an empty vector of polygon pairs that have been compared
+    compared_pairs <- c()
+
+    for (i in 1:nrow(polys_ordered)){
+
+      individualID_unique <- polys_ordered$individualID_unique[i]
+
+      # if this polygon was removed from the polys_filtered
+      # data frame in a previous iteration, skip it
+      if(sum(polys_filtered$individualID_unique==individualID_unique) == 0){
+        next
+      }
+
+      # extract current vs. all other polygon from data frame
+      current_poly <- polys_ordered[i,]
+      other_polys <- polys_filtered[polys_filtered$individualID_unique!=current_poly$individualID_unique,]
+      # other_polys_insubplot <- other_polys[other_polys$plotID.x == current_poly$plotID.x &
+      #                                     other_polys$subplotID == current_poly$subplotID,] #ais added this
+
+
+      # check for overlap between current polygon and all polygons
+      # overlap <- raster::intersect(current_poly, other_polys) #crashes here - why?
+      overlap_sf <- other_polys[sf::st_intersects(current_poly, other_polys)[[1]], ]
+      n_overlap <- nrow(overlap_sf)
+
+      if (n_overlap>0){
+        for (o in 1:n_overlap){
+
+          # if current polygon ID is not in filtered set
+          if(sum(polys_filtered$individualID_unique==individualID_unique) == 0){
+            break
+          }
+
+          # get height of current and test polygons that overlap
+          current_poly.height <- current_poly$height
+
+          test_poly <- overlap_sf[o,]
+          test_poly.height <- test_poly$height
+
+          # combine the ID's of the current and test polygons
+          # to keep track of which pairs have been compared
+          id.pair <- paste(current_poly$individualID_unique,
+                           test_poly$individualID_unique,
+                           sep = " ")
+
+          # if polygon pair was already compared, skip to the next pair
+          if (id.pair %in% compared_pairs) {
+
+            next
+
+          } else {
+
+            # add to the list of polygon pairs that have been compared
+            compared_pairs <- append(compared_pairs,id.pair)
+
+            # add opposite combination of polygons
+            id.pair.opp <- paste(test_poly$individualID_unique,
+                                 current_poly$individualID_unique,
+                                 sep = " ")
+            compared_pairs <- append(compared_pairs,id.pair.opp)
+
+          }
+
+          # if test polygon is not in filtered set, skip to the next overlapping polygon
+          # (because it has already been removed)
+          if (sum(polys_filtered$individualID_unique==test_poly$individualID_unique) == 0){
+            next
+          }
+
+          # if the area of one of the polygons is equivalent to zero, delete it and
+          # skip to the next overlapping polygon.
+          if (as.numeric(st_area(current_poly)) < 0.01){
+
+            # delete the current polygon from the polygons_filtered data frame.
+            polys_filtered <- polys_filtered[polys_filtered$individualID_unique!=current_poly$individualID_unique,]
+            next
+
+          } else if (as.numeric(st_area(test_poly)) < 0.01){
+            # delete the test polygon from the polygons_filtered data frame if its
+            # area is essentially 0 (using the criterion < 0.01 here). This step
+            # was added for instances where after clipping, a small edge fragment remains.
+            polys_filtered <- polys_filtered[polys_filtered$individualID_unique!=test_poly$individualID_unique,]
+            next
+          }
+
+          # compare the heights of the polygons
+          if (current_poly.height >= test_poly.height){
+            
+            #ais add case for when the two are the same height, choose larger stem
+            # is this necessary? individualID_unique=="NEON.PLA.D17.SOAP.05666_87"
+            
+            # if current polygon is taller, clip the test polygon.
+            clipped <- st_erase(test_poly, current_poly)
+
+            # if the clipped region is NULL, (tree is obscured completely), 
+            # delete from filtered df
+            if (nrow(clipped) == 0){
+              # remove test from filtered
+              polys_filtered <- polys_filtered[polys_filtered$individualID_unique!=test_poly$individualID_unique,]
+              
+            } else{
+              # get the index within the filtered polygons data frame
+              # where the test polygon belongs
+              j <- which(polys_filtered$individualID_unique == test_poly$individualID_unique)
+              # check the area of the clipped test polygon. If it is greater than
+              # or equal to the area threshold, replace it as the polygon
+              # geometry for the entry matching the test individualID_unique in the
+              # polygons_filtered data frame.
+              if(as.numeric(st_area(clipped))  >= thresh){
+                # replace the original polygon with the clipped polygon
+                polys_filtered[j,] <- clipped
+              } else {
+                # otherwise, delete the test polygon from the polygons_filtered data frame.
+                polys_filtered <- polys_filtered[polys_filtered$individualID_unique!=test_poly$individualID_unique,]
+              }
+            }
+
+          } else {
+
+            # otherwise, the test polygon is taller: clip the current polygon.
+            clipped <-  st_erase(current_poly,test_poly)
+
+            if (nrow(clipped) == 0){
+              # remove current from filetered from filtered
+              polys_filtered <- polys_filtered[polys_filtered$individualID_unique!=current_poly$individualID_unique,]
+              
+            } else {
+              # get the index within the filtered polygons data frame
+              # where the current polygon belongs.
+              j <- which(polys_filtered$individualID_unique == current_poly$individualID_unique)
+              
+              if(as.numeric(st_area(clipped))  >= thresh){
+                polys_filtered[j,] <- clipped
+              } else {
+                polys_filtered <- polys_filtered[polys_filtered$individualID_unique!=test_poly$individualID_unique,]
+              }
+            }
+          }
+        }
+      }
+    }
+
+    # write final polygons to file after checking for overlap
+    #writeOGR(polys_filtered, getwd(),
+    #         paste(shp_filename),
+    #         driver="ESRI Shapefile", overwrite_layer = TRUE)
+
+    return(polys_filtered)
+
+}
+
+extract_ind_validation_set <- function(df, percentTrain=0.8) {
+  # randomly select <percentTrain> of data from the clipped half diameter 
+  # polygons for training, use the remaining samples for validation.
+  # keep track of which pixelNumber, easting, northing
+  # that these pixels correspond to. 
+  
+  # percentTrain: randomly select this amount of data for training, 
+  # use the rest for validation
+  
+  #ais create alternatives to random split
+  
+  # remove any spectra with a height of 0 and remove any factors
+  df_val <- df %>% 
+    dplyr::filter(chm>0)#ais remove this step once I add in bare ground
+  
+  # randomly sample rows from this data set 
+  set.seed(104)
+  
+  # the number of sampled rows is calculated based on 
+  # percentTrain and the number of rows in the validation set. 
+  # percentTrain may have a value like 0.80 (80% data used to train)
+  train <- sample(nrow(df_val), 
+                  percentTrain*nrow(df_val), 
+                  replace = FALSE)
+  trainSet <- df_val[train,] 
+  valSet <- df_val[-train,]
+    
+  return (list(trainSet, valSet))
+}
+
+get_model_performance_metrics <- function(confusion_matrix) {
+  # confusion_matrix is a (true, pred) square matrix
+  true_positives <- diag(confusion_matrix)
+  false_positives <- colSums(confusion_matrix) - diag(confusion_matrix)
+  false_negatives <- rowSums(confusion_matrix) - diag(confusion_matrix)
+  precision <- true_positives / (true_positives + false_positives)
+  recall <- true_positives / (true_positives + false_negatives)
+  f1 <- 2 * (precision * recall) / (precision + recall)
+  tibble(idx = colnames(accuracy$confusion),
+         precision = precision, 
+         recall = recall, 
+         f1 = f1)
+}
+
+
+plot_variable_importance <- function(rf_model, rf_output_dir) {
+  # create a figure with two plots, MDA and MDG importance
+  
+  varImportance <- data.frame(randomForest::importance(rf_model)) 
+  varImportance$feature <- rownames(varImportance)
+  
+  # rename the features for easier interpretation in the variable importance plot
+  varImportance$feature_orig <- varImportance$feature
+  varImportance$feature[varImportance$feature == "rgb_meanR"] = "RGB red mean"
+  varImportance$feature[varImportance$feature == "rgb_meanG"] = "RGB green mean"
+  varImportance$feature[varImportance$feature == "rgb_meanB"] = "RGB blue mean"
+  varImportance$feature[varImportance$feature == "rgb_sdR"] = "RGB red sd"
+  varImportance$feature[varImportance$feature == "rgb_sdG"] = "RGB green sd"
+  varImportance$feature[varImportance$feature == "rgb_sdB"] = "RGB blue sd"
+  #ais where did scholl et al create a combined variable rgb_mean_sd_R?
+  
+  varImportance <- varImportance %>% 
+    dplyr::select(feature, MeanDecreaseAccuracy, MeanDecreaseGini, everything())
+  varImportanceMDA <- varImportance %>% dplyr::arrange(desc(MeanDecreaseAccuracy))
+  varImportanceMDG <- varImportance %>% dplyr::arrange(desc(MeanDecreaseGini))
+  
+  # MDA importance bar plot 
+  mda_plot <- ggplot(data = varImportanceMDA, aes(x = reorder(feature, MeanDecreaseAccuracy), 
+                                                  y = MeanDecreaseAccuracy
+                                                  #,fill = MeanDecreaseAccuracy
+  )) + 
+    geom_bar(stat = 'identity', color = "black", linewidth = 0.1, width = 0.5, show.legend = FALSE) + 
+    labs(x = "AOP-derived feature\n", 
+         y = "Mean Decrease in Accuracy") +
+    # x-axis label gets cut off otherwise after coord_flip
+    ylim(0, max(varImportanceMDA$MeanDecreaseAccuracy) + 10) + 
+    coord_flip() + 
+    theme_bw() + 
+    theme(axis.text=element_text(size=12),
+          axis.title=element_text(size=16)) +
+  ggtitle("AOP-derived feature importance")
+  
+  # MDG importance bar plot 
+  mdg_plot <- ggplot(data = varImportanceMDG, 
+                     aes(x = reorder(feature, MeanDecreaseGini), 
+                         y = MeanDecreaseGini)) + 
+    geom_bar(stat = 'identity', color = "black", linewidth = 0.1, width = 0.5, show.legend = FALSE) + 
+    labs(x = "",  # no y-axis label since it's the same as the MDA plot on the left
+         y = "Mean Decrease in Gini") + 
+    # x-axis label gets cut off otherwise after coord_flip
+    ylim(0, max(varImportanceMDA$MeanDecreaseGini) + 10) + 
+    coord_flip() + 
+    theme_bw() + 
+    theme(axis.text=element_text(size=12),
+          axis.title=element_text(size=16)) 
+  
+  # generate the plot to view in RStudio
+  gridExtra::grid.arrange(mda_plot, 
+                          mdg_plot, 
+                          nrow = 1
+                          # ,top = "Variable Importance" # don't need main title for figure in manuscript 
+  )
+  
+  # write the plot to an image file
+  var_imp_plot <- gridExtra::arrangeGrob(mda_plot, 
+                              mdg_plot, 
+                              nrow = 1) 
+  ggsave(filename = file.path(rf_output_dir, "variable_importance.png"), 
+         plot = var_imp_plot, width = 10, units = "in", dpi = 500)
+}
+
+
+
+filter_out_wavelengths <- function(wavelengths, layer_names){
+    # define the "bad bands" wavelength ranges in nanometers, where atmospheric 
+    # absorption creates unreliable reflectance values. 
+    bad_band_window_1 <- c(1340, 1445)
+    bad_band_window_2 <- c(1790, 1955)
+    #ais ^hardcoded here probably isn't the best
+    
+    # remove the bad bands from the list of wavelengths 
+    remove_bands <- wavelengths[(wavelengths > bad_band_window_1[1] & 
+                                     wavelengths < bad_band_window_1[2]) | 
+                                    (wavelengths > bad_band_window_2[1] & 
+                                         wavelengths < bad_band_window_2[2])]
+    
+    # Make sure printed wavelengths and stacked AOP wavelengths match
+    if (!all(paste0("X", as.character(base::round(wavelengths))) == 
+             layer_names[1:length(wavelengths)])) {
+        message("wavelengths do not match between wavelength.txt and the stacked imagery")
+    }
+    
+    # create a LUT that matches actual wavelength values with the column names,
+    # X followed by the base::rounded wavelength values. 
+    # Remove the rows that are within the bad band ranges. 
+    wavelength_lut <- data.frame(wavelength = wavelengths,
+                                 xwavelength = paste0("X", as.character(base::round(wavelengths))),
+                                 stringsAsFactors = FALSE) %>% 
+        filter(!wavelength %in% remove_bands)
+    
+    return(wavelength_lut)
+}
+
+
+
+prep_features_for_RF <- function(extracted_features_filename, featureNames) {
+    # read the spectra values extracted from the data cube 
+    df <- read.csv(extracted_features_filename) %>%
+        #dplyr::select(-rowname) %>%
+        mutate(dfID = paste(eastingIDs, northingIDs, 
+                             pixelNumber, sep = "_") ) %>%
+        # remove gbase::round pixels ais
+        filter(chm>0) %>% 
+        # also reset the factor levels (in case there are dropped pft levels)
+        droplevels()
+    
+    features_df <- df %>% 
+        # filter the data to contain only the features of interest 
+        dplyr::select(shapeID, all_of(featureNames))
+    
+    return(features_df)
+}
+
+
+
+apply_PCA <- function(df, wavelengths, output_dir, nPCs=3) {
+
+  #ais find a way to automate determining nPCs
+    # elbow plot
+    # factoextra::fviz_eig(hs_pca)
+    # features_final <- cbind(features, hs_pca$x[,1:nPCs]) %>% # add first n PCs to features df
+    #     # create unique ID for each pixel in the input imagery,
+    #     mutate(dfIDs = paste(plotID, pixelNumber, eastingIDs, northingIDs, 
+    #                          sep = "_")) %>%
+    #     dplyr::select(c(plotID, subplotID, chm, slope, aspect_cat, ARVI, EVI, NDVI,
+    #                     PRI, SAVI, rgb_meanR, rgb_meanG, rgb_meanB, rgb_sdR, rgb_sdG,
+    #                     rgb_sdB, rgb_mean_sd_R, rgb_mean_sd_G, rgb_mean_sd_B,
+    #                     PC1, PC2, PC3, dfIDs, pixelNumber)) 
+    # ais ^ find a way to automate identifying nPCs rather than hardcoding it
+
+    # remove the individual spectral reflectance bands from the training data
+    features_noWavelengths <- df %>% dplyr::select(-c(wavelengths$xwavelength))
+    
+    # PCA: calculate Principal Components 
+    hs <- df %>% dplyr::select(c(wavelengths$xwavelength)) %>% as.matrix()
+    hs_pca <- stats::prcomp(hs, center = TRUE, scale. = TRUE)
+    # summary(hs_pca) ais print pc summary info somewhere?
+    # add first n PCs to features data frame
+    features <- cbind(features_noWavelengths, hs_pca$x[,1:nPCs]) 
+    
+    # visualize where each sample falls on a plot with PC2 vs PC1 
+    ggbiplot::ggbiplot(hs_pca,
+                       choices = 1:2, # which PCs to plot
+                       obs.scale = 1, var.scale = 1, # scale observations & variables
+                       var.axes=FALSE, # remove arrows
+                       groups = df$pft, # color the points by PFT
+                       ellipse = TRUE, # draw ellipse abase::round each group
+                       circle = TRUE ) + # draw circle abase::round center of data set
+        ggtitle("PCA biplot, PC1 and PC2") +
+        scale_color_brewer(palette="Spectral") +
+        theme_bw()
+    # save to file
+    ggplot2::ggsave(file.path(output_dir,"pcaPlot.pdf"))
+    
+    return(features)
+}
+
 stack_hyperspectral <- function(h5, out_dir) {
     # written by Scholl et al from https://github.com/earthlab/neon-veg
 
     # this function is called in prep_aop_imagery
 
-  # This function creates a stacked raster object for the specified HDF5 
-  # filename. 
-  #
-  # Args: 
-  # h5
-  #   character string filename of HDF5 file 
-  # out_dir
-  #   directory for output files where the wavelengths will be written to
-  #   a text file for further analysis
-  #
-  # Returns:
-  # s
-  #   Stacked raster (collection of raster layers with the same spatial extent
-  #   and resolution) containing nrows x ncols x nbands, based on the 
-  #   resolution and number of bands in the HDF5 file. This stacked raster
-  #   can then be clipped using Spatial vector layers. 
-  #
+    # This function creates a stacked raster object for the specified HDF5 
+    # filename. 
+    #
+    # Args: 
+    # h5
+    #   character string filename of HDF5 file 
+    # out_dir
+    #   directory for output files where the wavelengths will be written to
+    #   a text file for further analysis
+    #
+    # Returns:
+    # s
+    #   Stacked raster (collection of raster layers with the same spatial extent
+    #   and resolution) containing nrows x ncols x nbands, based on the 
+    #   resolution and number of bands in the HDF5 file. This stacked raster
+    #   can then be clipped using Spatial vector layers. 
+    #
 
     # list the contents of HDF5 file
     h5_struct <- rhdf5::h5ls(h5, all=T)
@@ -103,7 +546,8 @@ stack_hyperspectral <- function(h5, out_dir) {
     # the other layers. create a raster for this band and assign
     # the CRS.
     # print("Transposing reflectance data for proper orientation")
-    r1 <- terra::t(terra::rast(refl_scaled[1,,], crs = crs_info$Proj4$input))
+    r1 <- terra::t(terra::rast(refl_scaled[1,,])) #, crs = crs_info$Proj4
+    terra::crs(r1) <- "epsg:32611"
     terra::ext(r1) <- tile_extent
     
     # start the raster stack with first band 
@@ -114,7 +558,8 @@ stack_hyperspectral <- function(h5, out_dir) {
         
         # create raster with current band
         
-        r <- terra::t(terra::rast(refl_scaled[b,,], crs = crs_info$Proj4$input)) 
+        r <- terra::t(terra::rast(refl_scaled[1,,])) #, crs = crs_info$Proj4
+        terra::crs(r) <- "epsg:32611"
         terra::ext(r) <- tile_extent
         
         # add additional band to the stack with the addLayer function
@@ -190,7 +635,7 @@ prep_aop_imagery <- function(site, year, hs_L3_path, tif_path, data_int_path) {
         # of various remote sensing data
         east_north_string <- paste0(easting,"_",northing)
         
-        message(paste0("Stacking ",east_north_string,", AOP tile ",match(h5_path,h5_ls)," out of ",length(h5_ls)))
+        message(paste0("Stacking ",site," ",year," ",east_north_string,", AOP tile ",match(h5_path,h5_ls)," out of ",length(h5_ls)))
 
         # generate a filename for the stacked AOP data
         stacked_aop_data_filename = file.path(stacked_aop_data_dir,
@@ -404,15 +849,17 @@ create_tree_crown_polygons <- function(site, year, biomass_path, data_out_path, 
   # ais need to make this an exhaustive match for all sites, not just SOAP
   # ais use neon trait table from Marcos?
   veg_training <- veg_has_coords_size %>%
-    dplyr::mutate(pft =  ifelse(growthForm == "small shrub" | growthForm == "single shrub" ,"shrub_PFT",
-                         ifelse(taxonID=="PIPO" | taxonID=="PILA" | taxonID=="PINUS", "pine_PFT", 
-                                ifelse(taxonID=="CADE27", "cedar_PFT", 
-                                       ifelse(taxonID=="ABCO" | taxonID=="ABMA" , "fir_PFT", 
-                                              ifelse(taxonID=="QUCH2" | taxonID=="QUKE"| taxonID=="QUERC", "oak_PFT", 
-                                                     ifelse(taxonID=="ARVIM" | taxonID=="CECU" | taxonID=="CEMOG" | 
-                                                              taxonID=="CEIN3" | taxonID=="RIRO" | taxonID=="FRCA6" | 
-                                                              taxonID=="RHIL" | taxonID=="AECA" | taxonID=="SANI4" | 
-                                                              taxonID=="CEANO", "shrub_PFT", "other"))))))) 
+    left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
+    dplyr::mutate(pft =  ifelse(!is.na(pft),pft,ifelse(growthForm == "small shrub" | growthForm == "single shrub" ,"montane_shrub",
+                                  ifelse(taxonID=="PIPO" | taxonID=="PILA" | taxonID=="PINUS", "pine", 
+                                          ifelse(taxonID=="CADE27", "cedar", 
+                                                ifelse(taxonID=="ABCO" | taxonID=="ABMA" , "fir", 
+                                                        ifelse(taxonID=="QUCH2" | taxonID=="QUKE"| taxonID=="QUERC"|
+                                                               taxonID=="QUWI2", "oak", 
+                                                              ifelse(taxonID=="ARVIM" | taxonID=="CECU" | taxonID=="CEMOG" | 
+                                                                          taxonID=="CEIN3" | taxonID=="RIRO" | taxonID=="FRCA6" | 
+                                                                          taxonID=="RHIL" | taxonID=="AECA" | taxonID=="SANI4" | 
+                                                                          taxonID=="CEANO", "montane_shrub", "other")))))))) 
   
   write.csv(veg_training, file = file.path(training_data_dir, "vst_training.csv"))
   
@@ -700,260 +1147,336 @@ extract_spectra_from_polygon <- function(site, year, data_int_path, data_final_p
 
 
 
-train_pft_classifier <- function(site, year, stacked_aop_path, training_shp_path, training_spectra_path, 
-                              data_out_path, pcaInsteadOfWavelengths, ntree, randomMinSamples, 
-                              independentValidationSet) {
-  # Train random forest model and assess PFT classification accuracy.
-  #   Model outputs will be written to a folder within the training directory 
-  #   starting with "rf_" followed by a description of each shapefile 
-  #   containing points or polygons per tree. 
+# train_pft_classifier <- function(site, year, stacked_aop_path, training_shp_path, training_spectra_path, 
+#                               data_out_path, pcaInsteadOfWavelengths, ntree, randomMinSamples, 
+#                               independentValidationSet) {
+#   # Train random forest model and assess PFT classification accuracy.
+#   #   Model outputs will be written to a folder within the training directory 
+#   #   starting with "rf_" followed by a description of each shapefile 
+#   #   containing points or polygons per tree. 
 
-  #   ntree 
-  #       RF tuning parameter, number of trees to grow. default value 500
+#   #   ntree 
+#   #       RF tuning parameter, number of trees to grow. default value 500
 
-  #   randomMinSamples 
-  #       To reduce bias, this boolean variable indicates whether the same number 
-  #       of samples are randomly selected per PFT class. Otherwise,
-  #       all samples per class are used for training the classifier. 
+#   #   randomMinSamples 
+#   #       To reduce bias, this boolean variable indicates whether the same number 
+#   #       of samples are randomly selected per PFT class. Otherwise,
+#   #       all samples per class are used for training the classifier. 
 
-  #   independentValidationSet=T
-  #       if TRUE, keep separate set for validation
-  #       ais this doesnt work if for F - troubleshoot this later
-   
-  
-  # Load data
-  # Hyperspectral wavelengths
-  wavelengths <- read.csv(file.path({stacked_aop_path},"wavelengths.txt")) %>%
-    pull(wavelengths)
-  # Stacked AOP layer names
-  stacked_aop_layer_names <- read.csv(file.path({stacked_aop_path},"stacked_aop_layer_names.txt")) %>%
-    pull(stacked_aop_layer_names)
-  # Labelled, half-diam crown polygons to be used for training/validation
-  shapefile_description <- tools::file_path_sans_ext(basename(training_shp_path))
-  # Csv file containing extracted features
-  extracted_features_filename <- file.path(training_spectra_path)
-  # Directory to save the classification outputs 
-  rf_output_dir <- file.path({data_out_path}, {site}, {year}, "training", paste0("rf_",shapefile_description) )
-  if (!dir.exists(file.path(rf_output_dir))) {
-    dir.create(file.path(rf_output_dir))
-  }
-  
-  # number of PCAs to keep
-  nPCs <- 3  # ais automate this using the elbow method
-  
-  # Filter out unwanted wavelengths
-  wavelength_lut <- filter_out_wavelengths(wavelengths=wavelengths, layer_names=stacked_aop_layer_names)
-  
-  # features to use in the RF models
-  featureNames <- c(wavelength_lut$xwavelength,
-                    stacked_aop_layer_names[!grepl("^X", stacked_aop_layer_names)],
-                    "pft", "dfID")
-  
-  # Prep extracted features csv for RF model
-  features_df <- prep_features_for_RF(extracted_features_filename, featureNames) 
-  
-  # ais see Scholl et al script 08 where they compare sampling bias of using half-diam
-  # crowns instead of max diam crowns (search neonvegIDsForBothShapefiles variable)
+#   #   independentValidationSet=T
+#   #       if TRUE, keep separate set for validation
+#   #       ais this doesnt work if for F - troubleshoot this later
+    
+#     sites <- c("SJER","SOAP","TEAK")
 
-  # perform PCA
-  # remove the individual band reflectances.
-  # this only needs to be done once, so check if the validationSet
-  # already has a column named "PC1". 
-  # testing whether PCA yields better accuracy than individual wavelength reflectance data
-  if(pcaInsteadOfWavelengths == T){
-    features <- apply_PCA(df=features_df, wavelengths=wavelength_lut, output_dir=rf_output_dir)
-  } else {
-    features <- features_df
-  }
+#     for (site_ais in sites) {
+#         year_folders <- list.dirs(
+#         for (temp_folder in year_folders) {
+            
+#             # Load data
+#             # Hyperspectral wavelengths
+#             wavelengths <- read.csv(file.path({stacked_aop_path},"wavelengths.txt")) %>%
+#             pull(wavelengths)
+#             # Stacked AOP layer names
+#             stacked_aop_layer_names <- read.csv(file.path({stacked_aop_path},"stacked_aop_layer_names.txt")) %>%
+#             pull(stacked_aop_layer_names)
+#             # Labelled, half-diam crown polygons to be used for training/validation
+#             shapefile_description <- tools::file_path_sans_ext(basename(training_shp_path))
+#             # Csv file containing extracted features
+#             extracted_features_filename <- file.path(training_spectra_path)
+#             # Directory to save the classification outputs 
+#             rf_output_dir <- file.path({data_out_path}, {site}, {year}, "training", paste0("rf_",shapefile_description) )
+#             if (!dir.exists(file.path(rf_output_dir))) {
+#             dir.create(file.path(rf_output_dir))
+#             }
 
-  # Split labelled data into training and validation sets
-  if(independentValidationSet){
+#             # number of PCAs to keep
+#             nPCs <- 5  # ais automate this using the elbow method
+
+#             # Filter out unwanted wavelengths
+#             wavelength_lut <- filter_out_wavelengths(wavelengths=wavelengths, layer_names=stacked_aop_layer_names)
+
+#             # features to use in the RF models
+#             featureNames <- c(wavelength_lut$xwavelength,
+#                             stacked_aop_layer_names[!grepl("^X", stacked_aop_layer_names)],
+#                             "pft", "dfID")
+
+#             # Prep extracted features csv for RF model
+#             features_df <- prep_features_for_RF(extracted_features_filename, featureNames) 
+  
+            
+#         }
+#     }
+  
+  
+#     # alternative code to above for integrating all AOP/inventory data into one training csv
+# #     # features to use in the RF models
+# #     featureNames <- c(wavelength_lut$xwavelength,
+# #                       stacked_aop_layer_names[427:443],
+# #                       #stacked_aop_layer_names[!grepl("^X", stacked_aop_layer_names)],
+# #                       "pft", "dfID")
+    
+# #     # Prep extracted features csv for RF model
+# #     features_df_carissa<- prep_features_for_RF(extracted_features_filename, featureNames) 
+# #     features_df_soap_2020<- prep_features_for_RF(extracted_features_filename, featureNames) 
+# #     features_df_soap_2019<- prep_features_for_RF(extracted_features_filename, featureNames) 
+# #     features_df_sjer_2019 <- prep_features_for_RF(extracted_features_filename, featureNames) 
+    
+# #     colnames(features_df_sjer_2019) <- c("shpname",paste0("X",1:372),colnames(features_df_soap_2020)[374:392])
+# #     colnames(features_df_carissa)   <- c("shpname",paste0("X",1:372),colnames(features_df_soap_2020)[374:392])
+# #     colnames(features_df_soap_2020) <- c("shpname",paste0("X",1:372),colnames(features_df_soap_2020)[374:392])
+# #     colnames(features_df_soap_2019) <- c("shpname",paste0("X",1:372),colnames(features_df_soap_2020)[374:392])
+    
+# #     features_df <- rbind(features_df_sjer_2019, features_df_carissa,
+# #                          features_df_soap_2020, features_df_soap_2019)
+    
+# #     features_df_balanced <- features_df %>%
+# #         group_by(pft) %>%
+# #         dplyr::sample_n(size=min(table(features_df$pft))) %>% ungroup()
+# #     features_df<-features_df_balanced
+    
+#   # ais see Scholl et al script 08 where they compare sampling bias of using half-diam
+#   # crowns instead of max diam crowns (search neonvegIDsForBothShapefiles variable)
+
+#   # perform PCA
+#   # remove the individual band reflectances.
+#   # this only needs to be done once, so check if the validationSet
+#   # already has a column named "PC1". 
+#   # testing whether PCA yields better accuracy than individual wavelength reflectance data
+#   if(pcaInsteadOfWavelengths == T){
+#         # remove the individual spectral reflectance bands from the training data
+#         features_noWavelengths <- features_df %>% dplyr::select(-starts_with("X"))
         
-    training_val_set <- extract_ind_validation_set(features)
-    features_train <- training_val_set[[1]]
-    features_val <- training_val_set[[2]]
-    
-    # Visualize the training and validation data
-    train_val_breakdown <- features_val %>% dplyr::count(pft) %>% dplyr::rename(valSet=n) %>%
-      left_join(features_train %>% dplyr::count(pft) %>% dplyr::rename(trainSet=n)) %>%
-      left_join(features %>% dplyr::count(pft) %>% dplyr::rename(total=n)) 
-    
-    # Histograms
-    train_val_byCount <- rbind(features_train,features_val) %>%
-      mutate(train_val = ifelse(dfID %in% features_train$dfID,"train","val")) %>%
-      ggplot(aes(x=pft, fill=train_val)) +
-      ggtitle("Plot by count") +
-      geom_bar() # by count
-    train_val_byPerc <- rbind(features_train,features_val) %>%
-      mutate(train_val = ifelse(dfID %in% features_train$dfID,"train","val")) %>%
-      ggplot(aes(x=pft, fill=train_val)) +
-      ggtitle("Plot by %") +
-      geom_bar(position="fill") # by percent
-    together <- cowplot::plot_grid(train_val_byCount,train_val_byPerc)
-    ggsave(together, 
-           file=file.path(rf_output_dir,"train_val_split.pdf"),
-           width=9, height=6, units="in")
-    
-    # remove the pixelNumber, easting, and northing columns since they
-    # are not input features to the train the classifier 
-    features_train <- features_train %>% 
-      dplyr::select(-c(pixelNumber, eastingIDs, northingIDs, dfID))
-    
-  } else { #if we are not using a validation set and training the model on the whole dataset
-    features_train <- features
-  }
-  
-  # if(randomMinSamples){
-  #   # reduce number of samples per PFT to avoid classifier bias
-  #   
-  #   # count the minimum number of samples for a single class
-  #   minSamples <- min(featureSummary$total)  
-  #   print(paste0("Randomly selecting ",
-  #                as.character(minSamples),
-  #                " samples per PFT class to avoid classifier bias"))
-  #   
-  #   # isolate the samples per PFT
-  #   taxon1 <- features[features$pft==pft_list[1],]
-  #   taxon2 <- features[features$pft==pft_list[2],]
-  #   taxon3 <- features[features$pft==pft_list[3],]
-  #   #taxon4 <- features[features$pft==pft_list[4],]
-  #   
-  #   # keep random minSamples of each PFT; merge
-  #   taxon1 <- taxon1[sample(nrow(taxon1), minSamples), ]
-  #   taxon2 <- taxon2[sample(nrow(taxon2), minSamples), ]
-  #   taxon3 <- taxon3[sample(nrow(taxon3), minSamples), ]
-  #   #taxon4 <- taxon4[sample(nrow(taxon4), minSamples), ]
-  #   
-  #   features <- rbind(taxon1, taxon2, taxon3)#, taxon4)
-  #   
-  # } else{
-  #   #print("Using all samples per class")
-  # }
-  
-  # TRAIN RF CLASSIFIER using training set  ---------------------------------
-  set.seed(104)
-  # drop any rows with NA ais investigate this
-  features_train_noNA <- na.omit(features_train) 
-  rf_model <- randomForest::randomForest(as.factor(features_train_noNA$pft) ~ .,
-                                         data=features_train_noNA, 
-                                         importance=TRUE, 
-                                         ntree=ntree) 
-  
-  # save RF model to file 
-  rf_model_path = file.path(rf_output_dir, paste0("rf_model_",shapefile_description,".RData"))
-  save(rf_model, file = rf_model_path)
-  
-  # y = predicted data; (horizontal axis)
-  # x = observed data (true class labels) (vertical axis)
-  
-  accuracies <- rfUtilities::accuracy(x = rf_model$y,
-                                    y = rf_model$predicted)
-  
-  # record each accuracy metric in the table for a final comparison.
-  # base::round each value to the nearest decimal place 
-  OA_OOB <- base::round(accuracies$PCC, 1) # Overall Accuracy
-  K <- base::round(accuracies$kappa, 3) #Cohen's Kappa 
-  
-  # INDEPENDENT VALIDATION  -------------------------------------------------
-  
-  # predict PFT ID for validation set 
-  if(independentValidationSet){
-    features_val_noNA <- na.omit(features_val) 
-    # ^ re-writing here after assigning in script 1. Doing to get PC columns for validaiton
-    predValidation <- predict(rf_model, features_val_noNA, type = "class")
-    confusionTable <- table(predValidation, features_val_noNA$pft)
-    val_OA <- sum(predValidation == features_val_noNA$pft) / 
-      length(features_val_noNA$pft)
-  }
-  
-  # Other performance metrics
-  # adapted from https://github.com/annaspiers/NEON-NIWO-misclass/blob/master/validation.R
-  #validation data only
-  # metrics_per_class <- get_model_performance_metrics(confusionTable) 
-  # val_perf_metr <- rbind(metrics_per_class,
-  #       metrics_per_class %>%
-  #         summarize(idx = "macro_values",
-  #                   precision=mean(precision, na.rm=T),
-  #                   recall=mean(recall, na.rm=T), 
-  #                   f1=mean(f1, na.rm=T))) %>%
-  #   mutate(across(c(precision, recall, f1), \(x) base::round(x, 2) ))
-  
-  model_stats <- caret::confusionMatrix(data = rf_model$predicted, 
-                                        reference = rf_model$y, 
-                                        mode = "prec_recall")
-  model_stats_byclass <- data.frame(t(model_stats$byClass)) %>% 
-    tibble::rownames_to_column() %>% 
-    dplyr::rename(metric=rowname, cedar_PFT=Class..cedar_PFT, 
-           oak_PFT=Class..oak_PFT, pine_PFT=Class..pine_PFT) %>%
-    mutate(across(c(cedar_PFT, oak_PFT, pine_PFT), \(x) base::round(x, 2) ))
-  
-  # write all relevant information to the textfile: -------------------------
-  
-  # open a text file to record the output results
-    rf_output_file <- file(description = file.path(rf_output_dir,"rf_model_summaries.txt"), 
-              open="w")
+#         # PCA: calculate Principal Components 
+#         hs <- data.matrix(features_df %>% dplyr::select(starts_with("X")))
+#         hs_pca <- stats::prcomp(hs, center = TRUE, scale. = TRUE)
+#         summ <- summary(hs_pca)
+#         summ$importance[2,]
+#         # summary(hs_pca) ais print pc summary info somewhere?
+#         # add first n PCs to features data frame
+#         features <- cbind(features_noWavelengths, hs_pca$x[,1:nPCs]) 
+        
+#         # visualize where each sample falls on a plot with PC2 vs PC1 
+#         ggbiplot::ggbiplot(hs_pca,
+#                            choices = 1:2, # which PCs to plot
+#                            obs.scale = 1, var.scale = 1, # scale observations & variables
+#                            var.axes=FALSE, # remove arrows
+#                            groups = features_df$pft, # color the points by PFT
+#                            ellipse = TRUE, # draw ellipse abase::round each group
+#                            circle = TRUE ) + # draw circle abase::round center of data set
+#             ggtitle("PCA biplot, PC1 and PC2") +
+#             scale_color_brewer(palette="Spectral") +
+#             theme_bw()
+#         ggplot2::ggsave(file.path(data_int_path,"pcaPlot1vs2.pdf"))
+        
+#         ggbiplot::ggbiplot(hs_pca,
+#                            choices = 2:3, # which PCs to plot
+#                            obs.scale = 1, var.scale = 1, # scale observations & variables
+#                            var.axes=FALSE, # remove arrows
+#                            groups = features_df$pft, # color the points by PFT
+#                            ellipse = TRUE, # draw ellipse abase::round each group
+#                            circle = TRUE ) + # draw circle abase::round center of data set
+#             ggtitle("PCA biplot, PC3 and PC3") +
+#             scale_color_brewer(palette="Spectral") +
+#             theme_bw()
+#         ggplot2::ggsave(file.path(data_int_path,"pcaPlot2vs3.pdf"))
+        
+#         return(features)
+#         # features <- apply_PCA(df=features_df, wavelengths=wavelength_lut, output_dir=rf_output_dir)
+#     } else {
+#     features <- features_df
+#   }
 
-  # shapefile name
-  write(shapefile_description, rf_output_file, append=TRUE)
-  
-  # RF model summary, OOB error rate 
-  write("\nRaw RF model output with confusion matrix for training set: ", 
-        rf_output_file, append=TRUE) 
-  capture.output(rf_model, file = rf_output_file, append=TRUE)
-  #alt to confusion matrix for training set is accuracies$confusion
-  
-  write("\n\nOverall Accuracy (OOB):", rf_output_file, append=TRUE) 
-  write(base::round(accuracies$PCC/100,3), rf_output_file, append=TRUE)
-  
-  write("\nCohen's Kappa:", rf_output_file, append=TRUE) 
-  capture.output(base::round(accuracies$kappa, 3), file = rf_output_file, append=TRUE)
-  
-  write("\nUser's Accuracy:", rf_output_file, append=TRUE) 
-  capture.output(accuracies$users.accuracy, file = rf_output_file, append=TRUE)
-  
-  write("\nProducer's Accuracy:", rf_output_file, append=TRUE) 
-  capture.output(accuracies$producers.accuracy, file = rf_output_file, append=TRUE)
-  
-  val_OA <- sum(predValidation == features_val_noNA$pft) / 
-    length(features_val_noNA$pft)
-  write("\n\nOverall Accuracy (IndVal):", rf_output_file, append=TRUE)
-  write(base::round(val_OA,3), rf_output_file, append=TRUE)
-  
-  # write the accuracy summary data frame to file 
-  write("\nConfusion matrix for validation set:", rf_output_file, append=TRUE) 
-  capture.output(confusionTable, file = rf_output_file, append=TRUE)
-  
-  # recall, precision, F1
-  
-  write("\nOther performance metrics for validation data: ", rf_output_file, append=TRUE) #newline
-  write(colnames(model_stats_byclass), rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[1,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[2,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[3,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[4,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[5,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[6,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[7,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[8,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[9,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[10,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  write(as.matrix(model_stats_byclass)[11,], rf_output_file, ncolumns=4, append=TRUE, sep="\t")
-  
-  # training/val data breakdown
-  featureSummary <- data.frame(train_val_breakdown)
-  colnames(featureSummary) <- c("pft","validation","training", "total")
-  write("\n\nLabelled data split:", rf_output_file, append=TRUE) #newline
-  capture.output(featureSummary, file = rf_output_file, append=TRUE)
-  
-  # features used to describe each sample (pixel)
-  write("\ndescriptive features used to train this model: ", rf_output_file, append=TRUE) #newline
-  write(colnames(features_train), rf_output_file, ncolumns=5, append=TRUE)
+#   # Split labelled data into training and validation sets
+#   if(independentValidationSet){
+        
+#     training_val_set <- extract_ind_validation_set(features)
+#     features_train <- training_val_set[[1]]
+#     features_val <- training_val_set[[2]]
     
-  # close the text file
-  close(rf_output_file)
-
-  # Save variable importance plots
-  plot_variable_importance(rf_model, rf_output_dir)
+#     # Visualize the training and validation data
+#     train_val_breakdown <- features_val %>% dplyr::count(pft) %>% dplyr::rename(valSet=n) %>%
+#       left_join(features_train %>% dplyr::count(pft) %>% dplyr::rename(trainSet=n)) %>%
+#       left_join(features %>% dplyr::count(pft) %>% dplyr::rename(total=n)) 
+    
+#     # Histograms
+#     train_val_byCount <- rbind(features_train,features_val) %>%
+#       mutate(train_val = ifelse(dfID %in% features_train$dfID,"train","val")) %>%
+#       ggplot(aes(x=pft, fill=train_val)) +
+#       ggtitle("Plot by count") +
+#       geom_bar() # by count
+#     train_val_byPerc <- rbind(features_train,features_val) %>%
+#       mutate(train_val = ifelse(dfID %in% features_train$dfID,"train","val")) %>%
+#       ggplot(aes(x=pft, fill=train_val)) +
+#       ggtitle("Plot by %") +
+#       geom_bar(position="fill") # by percent
+#     together <- cowplot::plot_grid(train_val_byCount,train_val_byPerc)
+#     ggsave(together, 
+#            file=file.path(rf_output_dir,"train_val_split.pdf"),
+#            width=9, height=6, units="in")
+    
+#     # remove the pixelNumber, easting, and northing columns since they
+#     # are not input features to the train the classifier 
+#     features_train <- features_train %>% 
+#       dplyr::select(-c(pixelNumber, eastingIDs, northingIDs, dfID))
+    
+#   } else { #if we are not using a validation set and training the model on the whole dataset
+#     features_train <- features
+#   }
   
-  return(rf_model_path)
-}
+#   # if(randomMinSamples){
+#   #   # reduce number of samples per PFT to avoid classifier bias
+#   #   
+#   #   # count the minimum number of samples for a single class
+#   #   minSamples <- min(featureSummary$total)  
+#   #   print(paste0("Randomly selecting ",
+#   #                as.character(minSamples),
+#   #                " samples per PFT class to avoid classifier bias"))
+#   #   
+#   #   # isolate the samples per PFT
+#   #   taxon1 <- features[features$pft==pft_list[1],]
+#   #   taxon2 <- features[features$pft==pft_list[2],]
+#   #   taxon3 <- features[features$pft==pft_list[3],]
+#   #   #taxon4 <- features[features$pft==pft_list[4],]
+#   #   
+#   #   # keep random minSamples of each PFT; merge
+#   #   taxon1 <- taxon1[sample(nrow(taxon1), minSamples), ]
+#   #   taxon2 <- taxon2[sample(nrow(taxon2), minSamples), ]
+#   #   taxon3 <- taxon3[sample(nrow(taxon3), minSamples), ]
+#   #   #taxon4 <- taxon4[sample(nrow(taxon4), minSamples), ]
+#   #   
+#   #   features <- rbind(taxon1, taxon2, taxon3)#, taxon4)
+#   #   
+#   # } else{
+#   #   #print("Using all samples per class")
+#   # }
+  
+#   # TRAIN RF CLASSIFIER using training set  ---------------------------------
+#   set.seed(104)
+#   # drop any rows with NA ais investigate this
+#   features_train_noNA <- na.omit(features_train) 
+#   rf_model <- randomForest::randomForest(as.factor(features_train_noNA$pft) ~ .,
+#                                          data=features_train_noNA, 
+#                                          importance=TRUE, 
+#                                          ntree=ntree) 
+  
+#   # save RF model to file 
+#   rf_model_path = file.path(rf_output_dir, paste0("rf_model_",shapefile_description,".RData"))
+#   save(rf_model, file = rf_model_path)
+  
+#   # y = predicted data; (horizontal axis)
+#   # x = observed data (true class labels) (vertical axis)
+  
+#   accuracies <- rfUtilities::accuracy(x = rf_model$y,
+#                                     y = rf_model$predicted)
+  
+#   # record each accuracy metric in the table for a final comparison.
+#   # base::round each value to the nearest decimal place 
+#   OA_OOB <- base::round(accuracies$PCC, 1) # Overall Accuracy
+#   K <- base::round(accuracies$kappa, 3) #Cohen's Kappa 
+  
+#   # INDEPENDENT VALIDATION  -------------------------------------------------
+  
+#   # predict PFT ID for validation set 
+#   if(independentValidationSet){
+#     features_val_noNA <- na.omit(features_val) 
+#     # ^ re-writing here after assigning in script 1. Doing to get PC columns for validaiton
+#     predValidation <- predict(rf_model, features_val_noNA, type = "class")
+#     confusionTable <- table(predValidation, features_val_noNA$pft)
+#     val_OA <- sum(predValidation == features_val_noNA$pft) / 
+#       length(features_val_noNA$pft)
+#   }
+  
+#   # Other performance metrics
+#   # adapted from https://github.com/annaspiers/NEON-NIWO-misclass/blob/master/validation.R
+#   #validation data only
+#   # metrics_per_class <- get_model_performance_metrics(confusionTable) 
+#   # val_perf_metr <- rbind(metrics_per_class,
+#   #       metrics_per_class %>%
+#   #         summarize(idx = "macro_values",
+#   #                   precision=mean(precision, na.rm=T),
+#   #                   recall=mean(recall, na.rm=T), 
+#   #                   f1=mean(f1, na.rm=T))) %>%
+#   #   mutate(across(c(precision, recall, f1), \(x) base::round(x, 2) ))
+  
+#   model_stats <- caret::confusionMatrix(data = rf_model$predicted, 
+#                                         reference = rf_model$y, 
+#                                         mode = "prec_recall")
+#   model_stats_byclass <- data.frame(t(model_stats$byClass)) %>% 
+#     tibble::rownames_to_column() %>% 
+#     dplyr::rename(metric=rowname, cedar=Class..cedar, 
+#                       other=Class..other, 
+#                       montane_shrub=Class..montane_shrub, 
+#                       oak=Class..oak, pine=Class..pine) %>%
+#     mutate(across(c(cedar, oak, pine, montane_shrub, other), \(x) base::round(x, 2) ))
+    
+#   # write all relevant information to the textfile: -------------------------
+  
+#   # open a text file to record the output results
+#     rf_output_file <- file(description = file.path(rf_output_dir,"rf_model_summaries.txt"), 
+#               open="w")
+
+#   # shapefile name
+#   write(shapefile_description, rf_output_file, append=TRUE)
+  
+#   # RF model summary, OOB error rate 
+#   write("\nRaw RF model output with confusion matrix for training set: ", 
+#         rf_output_file, append=TRUE) 
+#   capture.output(rf_model, file = rf_output_file, append=TRUE)
+#   #alt to confusion matrix for training set is accuracies$confusion
+  
+#   write("\n\nOverall Accuracy (OOB):", rf_output_file, append=TRUE) 
+#   write(base::round(accuracies$PCC/100,3), rf_output_file, append=TRUE)
+  
+#   write("\nCohen's Kappa:", rf_output_file, append=TRUE) 
+#   capture.output(base::round(accuracies$kappa, 3), file = rf_output_file, append=TRUE)
+  
+#   write("\nUser's Accuracy:", rf_output_file, append=TRUE) 
+#   capture.output(accuracies$users.accuracy, file = rf_output_file, append=TRUE)
+  
+#   write("\nProducer's Accuracy:", rf_output_file, append=TRUE) 
+#   capture.output(accuracies$producers.accuracy, file = rf_output_file, append=TRUE)
+  
+#   val_OA <- sum(predValidation == features_val_noNA$pft) / 
+#     length(features_val_noNA$pft)
+#   write("\n\nOverall Accuracy (IndVal):", rf_output_file, append=TRUE)
+#   write(base::round(val_OA,3), rf_output_file, append=TRUE)
+  
+#   # write the accuracy summary data frame to file 
+#   write("\nConfusion matrix for validation set:", rf_output_file, append=TRUE) 
+#   capture.output(confusionTable, file = rf_output_file, append=TRUE)
+  
+#   # recall, precision, F1
+  
+#     write("\nOther performance metrics for validation data: ", rf_output_file, append=TRUE) #newline
+#     write(colnames(model_stats_byclass), rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[1,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[2,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[3,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[4,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[5,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[6,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[7,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[8,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[9,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[10,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+#     write(as.matrix(model_stats_byclass)[11,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
+    
+#   # training/val data breakdown
+#   featureSummary <- data.frame(train_val_breakdown)
+#   colnames(featureSummary) <- c("pft","validation","training", "total")
+#   write("\n\nLabelled data split:", rf_output_file, append=TRUE) #newline
+#   capture.output(featureSummary, file = rf_output_file, append=TRUE)
+  
+#   # features used to describe each sample (pixel)
+#   write("\ndescriptive features used to train this model: ", rf_output_file, append=TRUE) #newline
+#   write(colnames(features_train), rf_output_file, ncolumns=5, append=TRUE)
+    
+#   # close the text file
+#   close(rf_output_file)
+
+#   # Save variable importance plots
+#   plot_variable_importance(rf_model, rf_output_dir)
+  
+#   return(rf_model_path)
+# }
