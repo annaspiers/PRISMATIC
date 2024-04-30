@@ -58,7 +58,7 @@ List of processes for each site:
 - `clip_lidar_by_plots`: clip the laz/tif files given plots in processed vegetation structure and save to output
 - `preprocess_biomass`: process biomass and save to output
 - `preprocess_lad`: process Leaf Area Density and save to output
-- `download_hs_L3_tiles`: download imaging spectroscopy data from NEON
+- `download_hyperspectral`: download imaging spectroscopy data from NEON
 - `prep_aop_imagery`: prepare NEON AOP imagery for plant functional type (PFT) classifier
 - `create_training_data`: generate training data for PFT classifier
 - `train_pft_classifier`: train PFT classifier

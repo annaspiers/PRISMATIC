@@ -1,3 +1,18 @@
 neon_trait_table:
   neon_trait_link: https://drive.google.com/file/d/1aaq69JEKLCMPzZMUAa_DZt4b0850Q1PS/view?usp=sharing
   force_rerun: False
+
+# Function arguments to change manually
+use_case: "train" # train, predict
+ic_type: "rs_inv_plots" # field_inv_plots, rs_inv_plots, rs_random_plots
+hs_type: "tile" #tile, flightline
+n_plots: 1000
+plot_length: 20
+px_thresh: 2
+ntree: 5000
+min_distance: 20
+use_tiles_w_veg: True 
+randomMinSamples: False
+aggregate_from_1m_to_2m_res: False
+independentValidationSet: True
+pcaInsteadOfWavelengths: True

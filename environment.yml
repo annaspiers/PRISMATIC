@@ -45,3 +45,6 @@ dependencies:
     - scikit-learn
     - hydra-core
     - hydra_colorlog
+    - ray[default]
+    - hy-tools
+    - rasterio
