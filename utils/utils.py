@@ -18,7 +18,7 @@ def _add_to_cache(func_name, ps, l, cache):
 
 
 def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, 
-                data_int_path, data_final_path, use_case, ic_type):
+                data_int_path, data_final_path, use_case, ic_type, hs_type):
     l = []
     data_raw_aop_path = Path(data_raw_aop_path)
     data_raw_inv_path = Path(data_raw_inv_path)
@@ -39,12 +39,20 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
     cache = {}
 
     # Download raw data
-    _add_to_cache('download_trait_table',
-                  str(data_raw_inv_path/'NEON_trait_table.csv'),
-                  l, cache)
     _add_to_cache('download_lidar',
                   [str(data_raw_aop_path/site/year_aop/'laz'),
                    str(data_raw_aop_path/site/year_aop/'tif')],
+                  l, cache)
+    if hs_type=="tile":
+        _add_to_cache('download_hyperspectral',
+                    str(data_raw_aop_path/site/year_aop/'hs_tile_h5'),
+                    l, cache)
+    if hs_type=="flightline":
+        _add_to_cache('download_hyperspectral',
+                    str(data_raw_aop_path/site/year_aop/'hs_flightline_h5'),
+                    l, cache)
+    _add_to_cache('download_trait_table',
+                  str(data_raw_inv_path/'NEON_trait_table.csv'),
                   l, cache)
     _add_to_cache('download_veg_structure_data',
                   [str(data_raw_inv_path/site/'veg_structure.csv'),
@@ -53,16 +61,12 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
     _add_to_cache('download_polygons',
                   str(data_raw_inv_path/'All_NEON_TOS_Plots_V9'),
                   l, cache)    
+    
+    # Process raw data
     _add_to_cache('preprocess_veg_structure_data',
                   [str(data_raw_inv_path/site/year_inventory/'pp_veg_structure.csv'),
                    str(data_raw_inv_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
                   l, cache)
-    _add_to_cache('download_hs_L3_tiles',
-                  [str(data_raw_aop_path/site/year_aop/'hs_L3_h5'),
-                   str(data_raw_aop_path/site/year_aop/'tif')],
-                  l, cache)
-    
-    # Process raw data
     _add_to_cache('preprocess_polygons',
                   str(data_int_path/site/year_inventory/'inventory_plots'),
                   l, cache)
@@ -78,15 +82,21 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
     _add_to_cache('preprocess_lad',
                   str(data_int_path/site/year_inventory/'clipped_to_plots'),
                   l, cache)
+    if hs_type=="flightline":
+        _add_to_cache('correct_flightlines',
+                    str(data_int_path/site/year_inventory/'hs_envi_flightline'),
+                    l, cache)
+    _add_to_cache('create_tree_crown_polygons',
+                  str(data_int_path/site/year_inventory/'training'/'tree_crowns_training.shp'),
+                  l, cache)
     _add_to_cache('prep_aop_imagery',
                   str(data_int_path/site/year_inventory/'stacked_aop'),
                   l, cache)
-    _add_to_cache('create_training_data',
-                    [str(data_int_path/site/year_inventory/'training'/'tree_crowns_training.shp'),
-                    str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_inv.csv')],
-                    l, cache)
+    _add_to_cache('extract_spectra_from_polygon',
+                  str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_inv.csv'),
+                  l, cache)
     _add_to_cache('train_pft_classifier',
-                    str(data_int_path/site/year_inventory/'training'/'rf_tree_crowns_training'/'rf_model_tree_crowns_training.RData'),
+                  str(data_int_path/site/year_inventory/'training'/'rf_tree_crowns_training'/'rf_model_tree_crowns_training.RData'),
                     l, cache)
     
     if use_case=="predict":        

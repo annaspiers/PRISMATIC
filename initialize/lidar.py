@@ -19,7 +19,7 @@ wht = whitebox.WhiteboxTools()
 wht.set_verbose_mode(False)
 
 
-def download_lidar(site, year, lidar_path, tiles_w_veg):
+def download_lidar(site, year, lidar_path, use_tiles_w_veg):
     """Download lidar data (raw and raster) for site-year
 
     Parameters
@@ -40,7 +40,7 @@ def download_lidar(site, year, lidar_path, tiles_w_veg):
     lidar_path = Path(lidar_path)
     product_code = 'DP1.30003.001'
     path = lidar_path/site/year
-    file_types = ['prj', 'shx', 'shp', 'dbf', 'laz']
+    file_types = ['prj', 'shx', 'shp', 'dbf', 'merged_tiles', 'laz']
     for file_type in file_types:
         if file_type == 'laz':
             file_type = '_classified_point_cloud_colorized.laz'
@@ -64,7 +64,7 @@ def download_lidar(site, year, lidar_path, tiles_w_veg):
                            str(p),
                            match_string=file_type,
                            check_size=False,
-                          tiles_w_veg=None)
+                          use_tiles_w_veg=use_tiles_w_veg)
     return str(path/'laz'), str(path/'tif')
 
 

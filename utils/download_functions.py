@@ -143,7 +143,7 @@ def download_aop_files(product,
                        download_folder='./data',
                        match_string=None,
                        check_size=True,
-                       tiles_w_veg=None):
+                       use_tiles_w_veg=False):
     """
     download_aop_files downloads NEON AOP files from the AOP
     for a given data product, site, and optional year, download folder, and
@@ -196,19 +196,21 @@ def download_aop_files(product,
     for url in urls:
         r = requests.get(url)
         files = r.json()['data']['files']
-        if tiles_w_veg is not None:  
-            matching_files = []      
-            with open(tiles_w_veg, 'r') as tiles_list:  # Open the file in read mode
-                for line in tiles_list: # Read each line from the file                
-                    tile = line.strip()        
-                    # Check if the tile string is a substring of any file name
-                    for file in files:
-                        if tile in file['name']:
-                            matching_files.append(file)
-            files = matching_files
+        # if use_tiles_w_veg==True:  
+        #     tiles_w_veg_path = ???? AIS NEED TO COME BACK TO THIS - tiles_w_veg_path hasn't been generated yet in my workflow. How does Victoria do this in hers? 
+        #     matching_files = [] 
+        #     with open(tiles_w_veg, 'r') as tiles_list:  # Open the file in read mode
+        #         for line in tiles_list: # Read each line from the file                
+        #             tile = line.strip()        
+        #             # Check if the tile string is a substring of any file name
+        #             for file in files:
+        #                 if tile in file['name']:
+        #                     matching_files.append(file)
+        #     files = matching_files
         for i in range(len(files)):
-            if os.path.exists(os.path.join(download_folder,files[i]['name'])):
-                print(files[i]['name']+" already downloaded")
+            pathname = os.path.join(download_folder,files[i]['name'])
+            if ("VegIndices.zip" in pathname) | os.path.exists(pathname): #ais how to only download VegIndices.zip
+                print(files[i]['name']+" already downloaded")               # files if unzipped tifs are not present
                 continue
             else:
                 if match_string is not None:
