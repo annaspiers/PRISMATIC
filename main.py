@@ -22,8 +22,8 @@ from initialize.hyperspectral import download_hyperspectral, \
                                         create_tree_crown_polygons, \
                                         prep_aop_imagery, \
                                         extract_spectra_from_polygon, \
-                                        train_pft_classifier, \
-                                        correct_flightlines
+                                        correct_flightlines, \
+                                        train_pft_classifier
 from initialize.generate_initial_conditions import generate_initial_conditions
 
 log = logging.getLogger(__name__)
@@ -58,6 +58,7 @@ def main(cfg):
 
     # First download/process raw data for all site-years to get stacked AOP product
     for site, v in cfg.sites.run.items():
+        print(cfg.sites.run.items())
         if not global_run or site in global_run:
             for year_inventory, p in v.items():
                 rerun_status = {}
@@ -138,10 +139,13 @@ def main(cfg):
                                     hs_type = hs_type )
                     
                     # Reset variable names to proper site/year
-                    laz_path=data_raw_aop_path+"/"+site+"/"+year_aop+"/laz"
-                    hs_path=data_raw_aop_path+"/"+site+"/"+year_aop+"/hs_tile_h5"
-                    tif_path=data_raw_aop_path+"/"+site+"/"+year_aop+"/tif"
-                    neon_plots_path=data_raw_inv_path+"/All_NEON_TOS_Plots_V9"
+                    laz_path=os.path.join(data_raw_aop_path,site,year_aop,"laz")
+                    if hs_type=="tile":
+                        hs_path=os.path.join(data_raw_aop_path,site,year_aop,"hs_tile_h5")
+                    else:
+                        hs_path=os.path.join(data_raw_aop_path,site,year_aop,"hs_flightline_h5")
+                    tif_path=os.path.join(data_raw_aop_path,site,year_aop,"tif")
+                    neon_plots_path=os.path.join(data_raw_inv_path,"All_NEON_TOS_Plots_V9")
                     
                     # process plots   
                 inventory_file_path, \
@@ -243,34 +247,33 @@ def main(cfg):
                                         ic_type=ic_type,
                                         aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res))  
 
-    for v in cfg.sites.run.items():
-        if not global_run:
-            rerun_status = {}
-            for k, v in p.force_rerun.items():
-                rerun_status[k] = v or global_force_rerun.get(k, False)
-                log.info(f'Run process for all sites, '
-                    f'with rerun status: {rerun_status}')
-                cache = build_cache(data_raw_aop_path=data_raw_aop_path,
-                                    data_raw_inv_path=data_raw_inv_path, 
-                                    data_int_path=data_int_path, 
-                                    data_final_path=data_final_path, 
-                                    use_case=use_case, 
-                                    ic_type=ic_type,
-                                    hs_type = hs_type )
-                # Train model
-                rf_model_path = (force_rerun(cache,  force=rerun_status)
-                                (train_pft_classifier)
-                                (site=site,
-                                year=year_inventory,
-                                stacked_aop_path=stacked_aop_path,
-                                training_shp_path=training_crown_shp_path,  
-                                training_spectra_path=training_spectra_csv_path, 
-                                data_int_path=data_int_path,
-                                pcaInsteadOfWavelengths=pcaInsteadOfWavelengths, 
-                                ntree=ntree, 
-                                randomMinSamples=randomMinSamples, 
-                                independentValidationSet=independentValidationSet)) 
-                            # ais ^ specify in yaml whether using corrected/uncorrected hs data
+    sites = []
+    for site, v in cfg.sites.run.items():
+        sites.append(site)
+    for k, v in p.force_rerun.items():
+        rerun_status[k] = v or global_force_rerun.get(k, False)
+        log.info(f'Run process for all sites, '
+            f'with rerun status: {rerun_status}')
+        cache = build_cache(data_raw_aop_path=data_raw_aop_path,
+                            data_raw_inv_path=data_raw_inv_path, 
+                            data_int_path=data_int_path, 
+                            data_final_path=data_final_path, 
+                            use_case=use_case, 
+                            ic_type=ic_type,
+                            hs_type = hs_type )
+        
+        # Train model
+        rf_model_path = (force_rerun(cache,  force=rerun_status)
+                        (train_pft_classifier)
+                        (sites=sites,
+                        stacked_aop_path=stacked_aop_path,
+                        training_shp_path=training_crown_shp_path,  
+                        training_spectra_path=training_spectra_csv_path, 
+                        data_int_path=data_int_path,
+                        pcaInsteadOfWavelengths=pcaInsteadOfWavelengths, 
+                        ntree=ntree, 
+                        randomMinSamples=randomMinSamples, 
+                        independentValidationSet=independentValidationSet)) 
 
     #             # INITIAL CONDITIONS
     #             if use_case=="predict":

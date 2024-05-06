@@ -10,7 +10,7 @@ library(sf)
 library(ggplot2)
 library(caret)
 library(tidyselect) #all_of
-library(parallel) #mclapply
+library(parallel) #mclapply https://dept.stat.lsa.umich.edu/~jerrick/courses/stat701/notes/parallel.html
 
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
@@ -258,8 +258,7 @@ extract_ind_validation_set <- function(df, percentTrain=0.8) {
   #ais create alternatives to random split
   
   # remove any spectra with a height of 0 and remove any factors
-  df_val <- df %>% 
-    dplyr::filter(chm>0)#ais remove this step once I add in bare ground
+  df_val <- df 
   
   # randomly sample rows from this data set 
   set.seed(104)
@@ -581,6 +580,105 @@ stack_hyperspectral <- function(h5, out_dir) {
 }
 
 
+generate_shadow_mask <- function() {
+  # Automatic and Accurate Shadow Detection Using Near-Infrared Information
+  # source: http://ivmp.unsw.edu.au/~dominicr/Publications/ruefenacht_pami_2014.pdf
+  
+  # ais I may need to use raw radiance rather than reflectance?
+  ais_normalize <- function(x): #function to scale numbers to between 0 and 1
+      x_norm = (x-np.min(x))/(np.max(x)-np.min(x))
+      return(x_norm)          
+  def nonlinear_map(x, alpha=14, beta=0.5, gamma=2.2):
+      # Dark maps
+      f = 1/(1 + np.exp(-alpha*(1 - pow(x, 1/gamma) - beta)))
+      return(f)
+  def gen_ratio_image(x, tau = 100):
+    # VIS:NIR ratios
+    f = np.zeros((t_k.shape[0],t_k.shape[1]))
+    for r in range(t_k.shape[0]):
+        for c in range(t_k.shape[1]):
+            f[r,c] = (1/tau)*min(x[r,c,:].max(), tau)
+    return(f)
+
+
+  # Normalize 
+  p_rnorm = ais_normalize(refl_clip_rxr[11,:,:])      #wavelength 438, band index 11
+  p_gnorm = ais_normalize(refl_clip_rxr[33,:,:])      #wavelength 548, band index 33
+  p_bnorm = ais_normalize(refl_clip_rxr[55,:,:])      #wavelength 659, band index 55
+  p_nirnorm = ais_normalize(refl_clip_rxr[103,:,:])   #wavelength 899., band index 103          
+  l_vis = (p_rnorm + p_gnorm + p_bnorm)/3 # brightness image for VIS bands
+
+  # Dark maps
+  d_vis = nonlinear_map(l_vis.as_numpy())
+  d_nir = nonlinear_map(p_nirnorm.as_numpy())
+  d = d_vis*d_nir
+
+  # plot fig 4
+
+  # (a) Visible image
+  ep.plot_rgb(refl_clip_arr,rgb=(55, 33, 11), title="Clipped RGB Image", figsize=(2,1)) 
+
+  # (b) Visible shadow candidate map DVIS 
+  d_vis.plot.imshow(figsize=(1,1)) #ais how to add title?
+
+  # (c) NIR shadow candidate map DNIR 
+  d_nir.plot.imshow(figsize=(1,1)) #ais how to add title?
+
+  # (d) Shadow candidate map D 
+  d.plot.imshow(figsize=(1,1)) #ais how to add title?
+  plt.show()
+  # Even though the presence of a black object in the scene confounds DVIS , D is quite accurate 
+  # thanks to DNIR . Images are tone mapped for better visibility.
+
+  # VIS:NIR ratios
+  t_k = np.array([p_rnorm/p_nirnorm, p_gnorm/p_nirnorm, p_bnorm/p_nirnorm]).transpose((1,2,0))
+  t_arr = gen_ratio_image(t_k)
+  t_xr = xr.DataArray(t_arr, coords=d.coords)
+
+  # plot fig 5
+  # (a) Visible image. 
+  ep.plot_rgb(refl_clip_arr,rgb=(55, 33, 11), title="Clipped RGB Image", figsize=(4,4))
+  plt.show()
+
+  # (b) Near-infrared image. 
+  refl_clip_rxr[103,:,:].plot.imshow(figsize=(4,3)) #ais how to add title?
+  plt.show()
+
+  # (c) Ratio image T that already outlines the shadows (images tone mapped for better visibility).
+  t_xr.plot.imshow(figsize=(4,3)) #ais how to add title?
+  plt.show()
+
+  # Binary shadow mask
+  u = (1 - d) * (1 - t_xr)
+  # plot histogram of u
+  nu = 1.6
+  nbins = round(nu * (math.log2(u.shape[0]*u.shape[1]) + 1))
+  plt.hist(u.values.flatten(), bins=nbins)
+  plt.show()
+  # The threshold θ is set at the location of the first valley in the histogram. 
+  # the first valley is the smallest valued bin of the histogram where the two neighboring bins to the
+  # left and the two to the right have larger, increasing values. If there
+  # is no valley according to our definition, we gradually increase the
+  # number of bins until such a valley is found.
+  theta = 0.9 #manually specify til I like it
+  u_bin = np.where(u > theta, 1, -9999)
+  u_bin_xr = xr.DataArray(u_bin, coords=d.coords)
+
+  # plot rgb image
+  ep.plot_rgb(refl_clip_arr,rgb=(55, 33, 11), title="Clipped RGB Image", figsize=(4,4)) #refl_arr_mask
+  plt.show()
+
+  # plot binary shadow mask
+  u_bin_xr.plot.imshow(figsize=(4,3)) #ais how to add title?
+  plt.show()
+  
+}
+
+generate_ndvi_mask <- function(tile, threshold=0.3) {
+  vis = refl_clip_rxr[57]
+  nir = refl_clip_rxr[89]
+  ndvi = np.divide((nir-vis),(nir+vis))
+}
 
 prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_path,
                             use_tiles_w_veg=FALSE) {
@@ -601,7 +699,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
                         pattern = "reflectance.h5", recursive=T, full.names=T)
     } else {
       hs_ls <- list.files(path = file.path({hs_path}),
-                        pattern = "corrected.envi", recursive=T, full.names=T)#ais pattern correct?
+                        pattern = "????corrected_tile.tif", recursive=T, full.names=T)
     }    
     chm_ls <- list.files(path = file.path({tif_path}),
                          pattern = "_CHM.tif", recursive = T, full.names = T)
@@ -631,7 +729,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
         hs_ls <- hs_ls[stringr::str_detect(hs_ls, tiles_w_veg %>% paste(collapse = "|"))]
     }
     
-    # create data cubes with AOP-derived features for each tile
+    # Stack imagery - create data cubes with AOP-derived features for each tile
     for (hs_path in hs_ls) {        
         # each current hyperspectral tile must be read and stacked into a
         # georeferenced rasterstack (so it can be clipped with fpoint/polygon
@@ -645,11 +743,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
         # parse the UTM easting and northing values from the current h5 filename
         easting <- stringr::str_split(tail(stringr::str_split(hs_path, "/")[[1]],n=1),"_")[[1]][5]
         northing <- stringr::str_split(tail(stringr::str_split(hs_path, "/")[[1]],n=1),"_")[[1]][6]
-        # combine them with an underscore; use this to find corresponding tiles
-        # of various remote sensing data
         east_north_string <- paste0(easting,"_",northing)
-
-        message(paste0("Stacking ",site," ",year," ",east_north_string,", AOP tile ",match(hs_path,hs_ls)," out of ",length(hs_ls)))
 
         # generate a filename for the stacked AOP data
         stacked_aop_data_filename = file.path(stacked_aop_data_dir,
@@ -663,8 +757,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
             # restore / read the rasterstack from file
             next
 
-        } else {
-
+        } else {        
             # if it doesn't exist, create the features from the aop data to file 
             # hyperspectral and lidar features ------------------------------------
 
@@ -782,6 +875,51 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
                 names(eastingIDs) <- "eastingIDs"
                 names(northingIDs) <- "northingIDs"
 
+                ### Apply masks
+                # Create chm mask to mask out non-veg
+                # Create ndvi mask to mask out non-veg
+                # Create shadow mask
+                shadow_mask <- generate_shadow_mask(tile)
+                
+                # Apply masks
+                refl_arr_mask = copy.copy(refl_clip_arr_t) # copy reflectance array
+                for band in range(426) : # apply mask to copy of reflectance
+                    # chm > 3m
+                    refl_arr_mask[:,:,band] = np.where(chm_clip_rxr>3, refl_arr_mask[:,:,band], -9999) 
+                    # haze_cloud_water masked out
+                    refl_arr_mask[:,:,band] = np.where(haze_clip_rxr==5, refl_arr_mask[:,:,band], -9999) 
+                    # weather quality == green
+                    refl_arr_mask[:,:,band] = np.where(weather_clip_rxr[1,:,:]>0, refl_arr_mask[:,:,band], -9999) #second index of wq
+                    # ndvi > 0.3
+                    refl_arr_mask[:,:,band] = np.where(ndvi>0.3, refl_arr_mask[:,:,band], -9999) 
+                    # Shadow binary mask == 1
+                    refl_arr_mask[:,:,band] = np.where(u_bin_xr==1, refl_arr_mask[:,:,band], -9999) 
+                  
+                refl_arr_mask_nan = np.where(refl_arr_mask==-9999,np.nan,refl_arr_mask)
+
+                fig, ax = plt.subplots(figsize=(5,5))
+                ep.plot_rgb(np.transpose(refl_arr_mask_nan, (2,0,1)), rgb=(58, 34, 19), ax=ax, title="Masked RGB Image") 
+                plt.show() 
+                # visualize tile after each mask application
+
+                # remove water vapor bands
+                valid_band_range = [i for j in (range(0,191), range(212, 281), range(315,415)) for i in j] 
+                refl_arr_mask_noH20vap = refl_arr_mask_nan[:, :, valid_band_range] 
+                refl_arr_mask_noH20vap.shape
+                # Filter out nan's, https://www.w3schools.com/python/numpy/numpy_array_filter.asp
+                refl_l_num = []
+                for band in range(refl_arr_mask_noH20vap.shape[2]):
+                    temp_band = refl_arr_mask_noH20vap[:,:,band]
+                    temp_band_noNaN = temp_band[~np.isnan(temp_band)]
+                    refl_l_num.append(temp_band_noNaN)
+                refl_arr_num = np.array(np.transpose(refl_l_num))
+                refl_arr_num.shape # ? x 360
+
+              # ais stack then PCA
+
+                message(paste0("Stacking ",site," ",year," ",east_north_string,", AOP tile ",match(hs_path,hs_ls)," out of ",length(hs_ls)))
+
+
                 # now, all the remote sensing data have been read in for the current
                 # tile. add each one to the hyperspectral data stack along with the
                 # layer to keep track of pixel number within the tile.
@@ -827,7 +965,7 @@ create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_p
   
   live_trees_path <- file.path({biomass_path},"pp_veg_structure_IND_IBA_IAGB_live.csv")
     
-  pft_reference <- read.csv(file.path(data_raw_inv_path,"pft_reference.csv"))
+  pft_reference <- read.csv(pft_reference_path))
   
   # Load cleaned inventory data for site and year
   # ais this is live trees only. should figure out how to incorporate dead trees
@@ -1167,7 +1305,8 @@ extract_spectra_from_polygon <- function(site, year, shp_path, data_int_path, da
 
 
 
-train_pft_classifier <- function(stacked_aop_path, training_shp_path, training_spectra_path, 
+train_pft_classifier <- function(sites, 
+                                  stacked_aop_path, training_shp_path, training_spectra_path, 
                               data_int_path, pcaInsteadOfWavelengths, ntree, randomMinSamples, 
                               independentValidationSet) {
   # Train random forest model and assess PFT classification accuracy.
@@ -1188,7 +1327,7 @@ train_pft_classifier <- function(stacked_aop_path, training_shp_path, training_s
   #       ais this doesnt work if for F - troubleshoot this later
 
     features_df <- data.frame()
-    for (site in c('SJER','SOAP','TEAK')) {
+    for (site in sites) {
       site_year_paths <- list.dirs(file.path(data_int_path,site), recursive=F)
       for (site_year_path in site_year_paths) {
             
@@ -1476,3 +1615,423 @@ train_pft_classifier <- function(stacked_aop_path, training_shp_path, training_s
   
   return(rf_model_path)
 }
+
+
+
+generate_pft_reference <- function(sites, data_raw_inv_path, trait_table_path) {
+  # Assign a PFT to each species
+
+  # load data
+  all_veg_structure <- data.frame()
+  for (site in sites) {
+    site_veg_structure <- readr::read_csv(file.path(data_raw_inv_path,site,"veg_structure.csv")) %>%
+      mutate(growthForm_neon = ifelse(grepl("tree", growthForm), "tree",
+                                    ifelse(grepl("sapling", growthForm), "tree",
+                                            ifelse(grepl("shrub", growthForm), "shrub", growthForm)))) %>%
+      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID)
+
+    all_veg_structure <- rbind(all_veg_structure, site_veg_structure)
+  }
+  # ais how to group in Carissa's data here?
+
+  trait_table <- readr::read_csv(trait_table_path) %>%
+      dplyr::select(scientific, leafPhen=leaf.phen, growthForm_traittable=growth.form)
+
+  # carissa <- readr::read_csv("/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/raw/inventory/carissa/neon_2023_field_work_final_ais_grouped_species.csv") %>%
+  #     mutate(scientificName=ifelse(Species=="OTHER",`If other species: describe here`,Species)) %>%
+  #     filter(!is.na(scientificName)) %>%
+  #     #rename(taxonID=) %>%
+  #     rename(siteID = `NEON Site`) %>%
+  #     #rename(growthForm=) %>%
+  #     dplyr::select(scientificName,  siteID) %>% #taxonID,growthForm
+  #     distinct() %>%
+  #     # Use NEON taxonID table taht I downloaded to raw/inventory
+  #     # https://data.neonscience.org/taxonomic-lists?taxonTypeCode=PLANT
+  #     mutate(taxonID = case_when(
+  #         scientificName == "Broad-leaved lupine (Lupinus latifolia var. columbianus)" | 
+  #             scientificName == "Lupinus sp." ~ "LUPINSPP",
+  #         scientificName == "Abies concolor (Gord. & Glend.) Lindl. ex Hildebr. var. lowiana (Gord. & Glend.) Lemmon (white fir)" |
+  #             scientificName == "Abies magnifica A. Murray bis (CA red fir)" ~ "ABIES",
+  #         scientificName == "White leaf manzanita (arctostaphulos viscida)" |
+  #             scientificName == "Arctostaphylos patula Greene (greenleaf manzanita)" |
+  #             scientificName == "White leaf manzanita (arctostaphulos viscida)"  |
+  #             scientificName == "Pinemat manzanita (Arctostaphylos nevadensis)"  |
+  #             scientificName == "Arctostaphylos nevadensis\n\n\n" |
+  #             scientificName == "Arctostaphylos patula Greene (greenleaf manzanita)" ~ "ARCTO3SPP",
+  #         scientificName == "Chrysolepis sempervirens (Kellogg) Hjelmqvist (Sierran Chinkapin)" |
+  #             scientificName == "Bush chinquapin (Chrysolepis (Castonopsis) sempervirens)" ~ "CHSE11",
+  #         scientificName == "Arroyo or Lemmon\xd5s willow" |
+  #             scientificName == "Lemmon\xd5s willow (Salix Lemmonii - see notes)" |
+  #             scientificName == "Pacific Willow or Arroyo Willow" ~ "SALIX",
+  #         scientificName == "Vaccinium sp." ~ "VACCI",
+  #         scientificName == "Sambucus nigra L. (elderberry)" ~ "SANI4",
+  #         scientificName == "Artemesia californica" ~ "ARCA11",
+  #         scientificName == "coffee berry" ~ "PSYCH",
+  #         scientificName == "Quercus douglasii Hook. & Arn. (blue oak)" ~ "QUDO",
+  #         scientificName == "Pinus sabiniana Douglas ex Douglas (CA foothill pine)" ~ "PISA2",
+  #         scientificName == "Ceanothus cuneatus (Hook.) Nutt. (buckbrush)" |
+  #             scientificName == "Ceanothus? thyrsiflorus - blue blossom" ~ "CECU",
+  #         scientificName == "Quercus wislizeni A. DC. (interior live oak)" ~ "QUWI2",
+  #         scientificName == "Ceanothus leucodermis Greene (chaparral whitethorn)" ~ "CELE2",
+  #         scientificName == "Aesculus californica (Spach) Nutt. (CA buckeye)" ~ "AECA",
+  #         scientificName == "Rhamnus ilicifolia Kellogg (hollyleaf redberry)" ~ "RHIL",
+  #         scientificName == "90% thimbleberry, 10% some kind of pea" ~ "RUBUS",
+  #         scientificName == "Scouler\xd5s willow \nSalix scouleriana" ~ "SASC",
+  #         scientificName == "Black oak \n\nQuecus kolleggii" |
+  #             scientificName == "Quercus kelloggii Newberry (CA black oak)" ~ "QUKE",
+  #         scientificName == "Incense cedar" |
+  #             scientificName == "Calocedrus decurrens (Torr.) Florin (CA incense cedar)" ~ "CADE27",
+  #         scientificName == "Quaking aspen (populous tremuloides)" ~ "POTR5",
+  #         scientificName == "Broad-leaved lotus (Lotus crassifolius)" ~ "LOCR",
+  #         scientificName == "Western juniper (Juniperous occidentalis)" ~ "JUOC",
+  #         scientificName == "Black Cottonwood (populus balsamifera)" ~ "POBA2",
+  #         scientificName == "Sequoiadendron giganteum" ~ "SEGI2",
+  #         scientificName == "Chamaebatia foliolosa Benth. (mountain misery)" ~ "CHFO",
+  #         scientificName == "Mountain alder (Alnus incana spp. tenuifolia)" ~ "ALIN2",
+  #         scientificName == "Wax currant (Ribes cereum)" ~ "RICE",
+  #         scientificName == "Pinus lambertiana Douglas (sugar pine)" ~ "PILA",
+  #         scientificName == "Prunus emarginata (Douglas ex Hook.) D. Dietr. (bitter cherry)" ~ "PREM",
+  #         scientificName == "Pinus jeffreyi Balf. (Jeffrey pine)" ~ "PIJE",
+  #         scientificName == "Pinus contorta Douglas ex Loudon (lodgepole pine)" ~ "PICO",
+  #         scientificName == "Fern" ~ "ASPLE",
+  #         .default="2PLANT")) %>%
+  #     mutate(TEAK=ifelse(siteID=="TEAK","TEAK",NA),
+  #            SJER=ifelse(siteID=="SJER","SJER",NA)) %>%
+  #     dplyr::select(-siteID)
+  
+  neon_sites <- all_veg_structure %>%
+      arrange(taxonID) %>%
+      distinct() %>%
+      filter(!is.na(scientificName)) %>%
+      mutate(scientific = word(scientificName, 1,2, sep=" ")) %>%
+      dplyr::select(scientific, taxonID, SOAP, SJER, TEAK, growthForm_neon) %>%
+      mutate(growthForm_neon = ifelse(taxonID=="CONU4","tree",
+                                    ifelse(taxonID=="ARNE","shrub",growthForm_neon))) %>%
+      # Otherwise get rid of rows with NA in growthForm_neon (these are duplicates)
+      filter(!is.na(growthForm_neon)) %>%
+      left_join(trait_table) %>%
+      # By default use trait table growth form
+      mutate(growthForm = ifelse(is.na(growthForm_traittable),
+                                growthForm_neon,growthForm_traittable)) %>%
+      # Filter out remaining unlikely growth forms - AIS search on Calscape
+      mutate(growthForm = case_when(
+          taxonID == "ABIES" |
+              taxonID == "ABLO" |
+              taxonID == "CADE27" ~ "tree",
+          taxonID == "CECO" |
+              taxonID == "FRCA6" |
+              taxonID == "LOIN4" |
+              taxonID == "RHIL" |
+              taxonID == "RIBES" |
+              taxonID == "RIRO" |
+              taxonID == "TODI" ~ "shrub",
+          taxonID == "AECA" |
+              taxonID == "SALIX" ~ "shrub/tree",
+          taxonID == "2PLANT" |
+              taxonID == "2PLANT-S" |
+              taxonID == "LUAL4" ~ NA,
+          .default = growthForm  )) %>%
+      dplyr::select(scientific,taxonID, SOAP, SJER, TEAK, growthForm) %>%
+      distinct()
+      
+  # Add in Carissa's dataset
+  neon_carissa <- neon_sites %>%
+      full_join(carissa) %>%
+      # Use NEON species name if it exists, otherwise Carissa's
+      mutate(scientific = ifelse(is.na(scientific),scientificName,scientific)) %>%
+      dplyr::select( scientific,   taxonID, SOAP, SJER, TEAK, growthForm) %>%
+      distinct() %>% 
+      tidyr::unite("siteID", c(SOAP,  SJER,  TEAK), na.rm = TRUE) %>%
+      # Manually remove remaining duplicates
+      mutate(siteID=ifelse(taxonID=="AECA", "SOAP_SJER", siteID),
+            siteID=ifelse(taxonID=="QUWIF", "SJER_TEAK", siteID),
+            
+            siteID=ifelse(taxonID=="ARCTO3SPP", "SJER_TEAK", siteID),
+            scientific=ifelse(taxonID=="ARCTO3SPP","Arctostaphylos sp.",scientific),
+            
+            siteID=ifelse(taxonID=="CECU", "SOAP_SJER_TEAK", siteID),
+            scientific=ifelse(taxonID=="CECU","Ceanothus sp.",scientific),
+            
+            siteID=ifelse(taxonID=="CHFO", "SOAP_TEAK", siteID),
+            scientific=ifelse(taxonID=="CHFO","Chamaebatia foliolosa",scientific),
+            
+            siteID=ifelse(taxonID=="LUPINSPP", "SJER_TEAK", siteID),
+            scientific=ifelse(taxonID=="LUPINSPP","Lupinus sp.",scientific),
+            
+            siteID=ifelse(taxonID=="QUKE", "SJER_TEAK", siteID),
+            scientific=ifelse(taxonID=="QUKE","Quercus kelloggii",scientific),
+            
+            siteID=ifelse(taxonID=="QUWI2", "SOAP_TEAK", siteID),
+            scientific=ifelse(taxonID=="QUWI2", "Quercus wislizeni", scientific),
+            
+            scientific=ifelse(taxonID=="SANI4","Sambucus nigra",scientific),
+            siteID=ifelse(scientific=="Sambucus nigra", "SOAP_SJER", siteID),
+            taxonID=ifelse(scientific=="Sambucus nigra", "SANI4", taxonID),
+            
+            scientific=ifelse(taxonID=="SALE","Salix sp.",scientific)) %>%
+      filter(!(taxonID == "CADE27" & siteID=="SOAP")) %>%
+      filter(!(taxonID == "2PLANT" & siteID=="SJER")) %>%
+      filter(!(taxonID == "RIRO" & siteID=="SOAP")) %>%
+      filter(!(taxonID == "TODI" & siteID=="SJER")) %>%
+      filter(!(taxonID == "CECU" & is.na(growthForm))) %>%
+      filter(!(taxonID == "CHFO" & is.na(growthForm))) %>%
+      filter(!(taxonID == "QUKE" & is.na(growthForm))) %>%
+      filter(!(taxonID == "QUWI2" & is.na(growthForm))) %>%
+      filter(!(taxonID == "SANI4" & is.na(growthForm))) %>%
+      distinct()
+      
+      
+  pft_assignment_df <- neon_carissa %>%
+      mutate(pft = case_when(
+          taxonID == "ABIES" | taxonID == "ABCO" |
+              taxonID == "ABLO" |
+              taxonID == "ABMA" ~ "fir", #white or red fir
+          taxonID == "CADE27" | taxonID == "SEGI2" ~ "cedar", #incense cedar
+          taxonID == "PICO" | taxonID == "PIJE" |
+              taxonID == "PILA" | taxonID == "PINACE" |
+              taxonID == "PINACE" | taxonID == "PIPO" |
+              taxonID == "PISA2" |
+              taxonID == "PINUS" ~ "pine", #Ponderosa pine
+          taxonID == "QUCH2" | taxonID == "QUKE" |
+              taxonID == "QUDO" | taxonID == "QUERC" |
+              taxonID == "QUWI2" ~ "oak", #target:canyon live oak (evergreen), also Black oak(deciduous), 
+          taxonID == "ARNE" | taxonID == "ARPA" |
+              taxonID == "ARPA6" | taxonID == "ARVIM" |
+              taxonID == "CEANO" | taxonID == "CECA" |
+              taxonID == "CECO" | taxonID == "CECU" |
+              taxonID == "CEIN3" | taxonID == "CELE2" |
+              taxonID == "CHFO" | taxonID == "CHSE11" |
+              taxonID == "CRSE11" | taxonID == "DAWR2" |
+              taxonID == "FRCA6" | taxonID == "FRCAC7" |
+              taxonID == "LOIN4" | taxonID == "RHAMNA" |
+              taxonID == "RHIL" | taxonID == "PREM" |
+              taxonID == "RICE" | taxonID == "RIBES" |
+              taxonID == "RIRO" | taxonID == "RIVI3" |
+              taxonID == "SALIX" | taxonID == "SANI4" |
+              taxonID == "CEMOG" | taxonID == "ARCTO3SPP" |
+              taxonID == "SEFL3" | taxonID == "TODI" |
+              taxonID == "SASC" | taxonID == "AECA" |
+              taxonID == "CONU4" | taxonID == "LUPINSPP" ~ "montane_shrub", #Ceanothus sp.
+          .default = "other"
+      ))
+      
+  # Print any scientific names that were not addressed in logic tree and instead assigned as 'other'
+  message("The following rows were classified as PFT 'other'")
+  message(pft_assignment_df %>% filter(pft=="other"))
+      
+  readr::write_csv(pft_assignment_df, "/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/raw/inventory/pft_reference.csv")	
+  return(pft_reference_path)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+crop_flightlines_to_tiles <- function(site,year_aop,data_raw_aop_path,
+                                      hs_flightline_corrected_path) {
+  # The to-sensor zenith angle of each pixel should already have been added as a 
+  # new layer in the corrected flightline tiff in convert_envi_to_tif() (python)
+
+  # just load in a flightline and see what metadata there are
+  # to sensor zenith?
+
+  # Load corrected flightline tiffs
+  tif_list_all <- list.files(path = file.path(hs_flightline_corrected_path), pattern=".tif")
+  tif_list <- tif_list_all[!grepl("*\\.tif.aux.xml", tif_list_all)]
+
+  # Get HS data into tiles
+  aoi_shp <- st_read(file.path(data_raw_aop_path,site,year_aop,"*_merged_tiles.shp")) %>%
+      tibble::rownames_to_column() #used as unique ID for each tile
+  st_crs(aoi_shp) <- st_crs(32611)
+  # plot(aoi_shp$geometry)
+  # plot(aoi_shp[85,],axes=T)
+
+  # Check or create directory to save flightline tifs cropped to tiles
+  flightline_crop_to_tiles_raw_path <- file.path(location,"flightline_crop_to_tiles_raw")
+  if( !dir.exists(flightline_crop_to_tiles_raw_path) ) {
+      dir.create(flightline_crop_to_tiles_raw_path)
+  }
+}
+#need to incorporate following lines into code
+if (!file.exists(file.path("data/processed/SOAP/2019/shp_cut_to_tifs_1km_tiles",
+                           "shp_cut_to_tifs_1km_tiles.shp"))) {
+    # Create sf polygon of flightline extents
+    for (tif_ind in 1:length(tif_list)) {
+        
+        # read in flightline
+        t <- stack(file.path(location,"flightlines",tif_list[tif_ind]))
+        NAvalue(t) <- -9999
+        crs(t) <- 32611
+        print(paste0("read in tif ",tif_ind," out of ", length(tif_list)))
+        # plot(t[[1]],add=T)
+        
+        shp_crop_temp <- st_crop(aoi_shp, t)
+        
+        if (tif_ind==1) {
+            shp_of_flightlines <- shp_crop_temp
+        } else {
+            shp_of_flightlines <- rbind(shp_of_flightlines,
+                                        shp_crop_temp)
+        }
+    }
+    
+    # Save sf polygon locally
+    shp_cut_to_tifs <- st_crop(aoi_shp, shp_of_flightlines) 
+    plot(shp_cut_to_tifs$geometry)
+    shp_cut_to_tifs_1km_tiles <- shp_cut_to_tifs %>%
+        mutate(area = st_area(shp_cut_to_tifs)) %>% #units m^2
+        # Filter to only tiles 1km x 1km
+        filter(as.numeric(area) > 990*990) 
+    plot(shp_cut_to_tifs_1km_tiles$geometry,col="red",add=T)
+    
+    # Save locally
+    dir.create("data/processed/SOAP/2019/shp_cut_to_tifs_1km_tiles")
+    st_write(shp_cut_to_tifs_1km_tiles, file.path("data/processed/SOAP/2019/shp_cut_to_tifs_1km_tiles",
+                                                  "shp_cut_to_tifs_1km_tiles.shp"))
+} else {
+    shp_cut_to_tifs_1km_tiles <- st_read(file.path("data/processed/SOAP/2019/shp_cut_to_tifs_1km_tiles",
+                                                   "shp_cut_to_tifs_1km_tiles.shp"))
+}
+
+
+# Crop tifs to tiles
+crop_tif_into_tiles <- function(t_l) {
+    
+    print(paste0("processing ",t_l))
+    
+    # read in flightline
+    t <- stack(file.path(location,"flightlines",t_l))
+    crs(t) <- 32611
+    NAvalue(t) <- -9999
+    #t[[1]][t[[1]] < -9990] <- NA
+    #system.time(t_m <- mask(t,t[[1]])) 
+    # ais the above steps takes way too long - how to load in the raster stack with 
+        
+    # Crop 1km tile shp to extent of tif
+    shp_crop_temp <- st_crop(shp_cut_to_tifs_1km_tiles, t[[1]])
+    
+    # plot(aoi_shp$geometry)
+    # plot(shp_cut_to_tifs_1km_tiles$geometry,col="red",add=T)
+    # plot(shp_crop_temp$geometry,col="blue",add=T)
+    # plot(t[[1]],add=T)
+
+    # for each tile overlapping with tif
+    # crop tif to NEON tiles
+    for (tile_ind in 1:nrow(shp_crop_temp)) { #ais I need to parallelize this
+        
+        tile_temp <- shp_crop_temp[tile_ind,] 
+        st_crs(tile_temp) <- 32611
+        # plot(tile_temp$geometry,col="lightblue",add=T)
+        
+        # Skip if the clipped tif already exists
+        if (file.exists(file.path(flightline_crop_to_tiles_raw_path,
+                                  paste0("tile_",tile_temp$rowname,
+                                         "_x_flightline_",
+                                         stringr::str_extract(
+                                             t_l,"\\d{8}_\\d{6}"),".tif")))){
+            cat(paste0(t_l, " already clipped to tile ",tile_temp$rowname," (",
+                       tile_ind,"/",nrow(shp_crop_temp),")"),"\n", 
+                file = file.path(flightline_crop_to_tiles_raw_path,"log.txt"), 
+                append = TRUE)
+            next
+        } else {
+        
+            # if tile does not intersect with tif, then skip tile
+            r_mask <- mask(t[[1]], tile_temp)
+            
+            # Skip if there is no overlap between raster and tile
+            if (r_mask@data@min <= 0 && r_mask@data@max <= 0){
+                cat(paste0("no overlap between tile ",
+                           tile_temp$rowname," (",tile_ind,"/",
+                           nrow(shp_crop_temp),") for ", t_l),"\n", 
+                    file = file.path(flightline_crop_to_tiles_raw_path,"log.txt"), 
+                    append = TRUE)
+                next
+            } else {
+    
+                # crop tif to tile
+                t_c <- raster::crop(t, tile_temp)
+                for (band in 1:dim(t_c)[3]) {
+                    t_c[[band]][t_c[[band]] < -9990] <- NA
+                    print(band)
+                }
+                t_c_b <- brick(t_c)
+                
+                # save cropped tif locally to a new folder with the tile coordinates so 
+                # the next script will be able to call the cropped flihgtlines within the 
+                # same tile together
+                writeRaster(t_c_b, filename=file.path(flightline_crop_to_tiles_raw_path,
+                                                    paste0("tile_",tile_temp$rowname,
+                                                           "_x_flightline_",
+                                                           stringr::str_extract(
+                                                               t_l,"\\d{8}_\\d{6}"))),
+                            format="GTiff", overwrite=T, 
+                            options=c("INTERLEAVE=BAND","COMPRESS=LZW"),
+                            NAflag=-9999)
+                
+                cat(paste0("cropped + saved tile ",tile_temp$rowname," (",
+                           tile_ind,"/",nrow(shp_crop_temp),") for ", t_l),"\n", 
+                    file = file.path(flightline_crop_to_tiles_raw_path,"log.txt"), 
+                    append = TRUE)
+            }
+        }
+    }
+    
+    # delete the full flightline locally after cropping is done
+    unlink(file.path(location,"flightlines",t_l))
+    cat(paste0(t_l, " deleted from disk"),"\n", 
+        file = file.path(flightline_crop_to_tiles_raw_path,"log.txt"), 
+        append = TRUE)
+}
+#crop_tif_into_tiles(tif_list)
+my_cores <- detectCores()-1
+system.time(
+    test <- mclapply(tif_list, FUN=crop_tif_into_tiles, #mclapply doesn't like plot fn
+         mc.preschedule = T, mc.silent = F, mc.cores = my_cores)
+)
+# Sanity check
+# # do these cropped tiles
+# 
+# # full flightline tiff
+# # cropped tif to tile (arbitrary)
+# t_full <- stack(file.path("notebooks/data_neoncyverse/SOAP_2019",
+#                      "flightlines",
+#                      "NEON_D17_SOAP_DP1_20190613_164442_reflectance_BRDF_topo_corrected.tif"))
+# crs(t_full) <- 32611
+# NAvalue(t_full) <- -9998
+# t_full[[1]][t_full[[1]] < -9990] <- NA
+# system.time(t_full_m <- mask(t_full,t_full[[1]])) 
+# 
+# # cropped tif to tile (arbitrary)
+# t_tile <- stack(file.path("notebooks/data_neoncyverse/SOAP_2019",
+#                      "flightline_crop_to_tiles_raw",
+#                      "tile_35_x_flightline_20190613_164442.tif"))
+# crs(t_tile) <- 32611
+# NAvalue(t_tile) <- -9999
+
+
+
+# later, when merging to final tiff, 
+    # Merge flightiness by tile by choosing pixels with lowest angle of collection
+    # ais do this in python using the mosaic_tif_files.py script
+#save final tiled hs data in "dev/neon-veg-SOAPpfts/data/data_raw/"
+
