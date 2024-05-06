@@ -23,21 +23,6 @@ GDAL, OSR:
 Cannot install leafR:
  - sudo aptitude install libgdal-dev
 
-# Todo
- - [x] Data acquisition and data processing of inventory data
- - [x] Data acquisition and data processing of NEON plots
- - [x] Data acquisition and data processing of LiDAR data
- - [x] Encode allometric equations
- - [x] Calculate individual/plot-level biomass given stem diameter/basal stem diameter
- - [x] Seperate plots into 400m2 subplots
- - [x] Setup GitHub actions
- - [ ] Add unit tests and integration tests
- - [x] Add diagnostics
- - [x] Add logging
- - [x] Refactor configuration files
- - [x] Calculate Leaf Area Density
- - [x] Segment LAD into levels
-
 # Usage
 
 `conf/paths/paths.yaml`: you may need to update the path.
@@ -49,6 +34,7 @@ Cannot install leafR:
 `conf/sites/sites.yaml`: you may need to add other sites if you want to process those.
 
 List of processes for each site:
+[Workflow diagram of functions](https://drive.google.com/file/d/1Ttap0vm3rWWv8yI-nDyoWKjv-z10Mz5l/view?usp=sharing)
 - `download_lidar`: download lidar data from NEON
 - `download_veg_structure_data`: download vegetation data from NEON
 - `preprocess_veg_structure_data`: process vegetation data and sampling effort
