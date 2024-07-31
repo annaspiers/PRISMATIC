@@ -24,7 +24,8 @@ import time
 
 ########################## Part 1: Convert NEON HDFs to ENVI files (NO CHANGE NEEDED) #########################
 
-def move_red_yellow_subset(site, path): #ais adapted function from https://stackoverflow.com/questions/61963546/how-to-conditionally-move-files-from-one-directory-to-another
+def move_red_yellow_subset(site, path):
+    #ais adapted function from https://stackoverflow.com/questions/61963546/how-to-conditionally-move-files-from-one-directory-to-another
     dest = os.path.join(path, 'cloud_condition_red_yellow')
     if not os.path.exists(dest):
         os.makedirs(dest)
@@ -50,6 +51,7 @@ def convert_hdf_to_envi(flightline_h5_path, flightline_envi_path):
     ancillary data following formatting used by NASA JPL for AVIRIS
     observables. The script utilizes ray to export images in parralel.
     '''
+
     print('begin convert_hdf_to_envi')
     images = glob.glob(os.path.join(flightline_h5_path, "*.h5"))
     output_dir = flightline_envi_path
@@ -59,84 +61,116 @@ def convert_hdf_to_envi(flightline_h5_path, flightline_envi_path):
     if ray.is_initialized():
         ray.shutdown()
     ray.init(num_cpus = len(images)) #ais what if len>max_cpu? how does ray handle this?
-
-    def dummy_fn(IDs):
-        sum = 0 
-        for x in IDs: 
-            sum += x 
-        return sum
     
     hytool = ray.remote(ht.HyTools)
     actors = [hytool.remote() for image in images]
-    objectIDs1 = ray.get([a.read_file.remote(image,'neon') for a,image in zip(actors,images)]) #_
-    while len(objectIDs1): 
-        _, object_ids = ray.wait(objectIDs1) 
+
+    _ = ray.get([a.read_file.remote(image,'neon') for a,image in zip(actors,images)])
+
+    def neon_to_envi(hy_obj):
+        basemame = os.path.basename(os.path.splitext(hy_obj.file_name)[0])
+        print("Converting h5 to envi for %s " % basemame)
+        output_name = os.path.join(output_dir, basemame)
+        writer = WriteENVI(output_name,hy_obj.get_header())
+        iterator = hy_obj.iterate(by = 'chunk')
+        pixels_processed = 0
+        while not iterator.complete:
+            chunk = iterator.read_next()
+            pixels_processed += chunk.shape[0]*chunk.shape[1]
+            writer.write_chunk(chunk,iterator.current_line,iterator.current_column)
+            if iterator.complete:
+                writer.close()
+
+    def export_anc(hy_obj):
+        anc_header = hy_obj.get_header()
+        anc_header['bands'] = 10
+        anc_header['band_names'] = ['path length', 'to-sensor azimuth',
+                                    'to-sensor zenith','to-sun azimuth',
+                                      'to-sun zenith','phase', 'slope',
+                                      'aspect', 'cosine i','UTC time']
+        anc_header['wavelength units'] = np.nan
+        anc_header['wavelength'] = np.nan
+        anc_header['data type'] = 4
+
+        output_name = os.path.join(output_dir, os.path.basename(os.path.splitext(hy_obj.file_name)[0]))
+        writer = WriteENVI(output_name + "_ancillary", anc_header)
+        writer.write_band(hy_obj.get_anc("path_length"),0)
+        writer.write_band(hy_obj.get_anc("sensor_az",radians = False),1)
+        writer.write_band(hy_obj.get_anc("sensor_zn",radians = False),2)
+        writer.write_band(hy_obj.get_anc("solar_az",radians = False),3)
+        writer.write_band(hy_obj.get_anc("solar_zn",radians = False),4)
+        #writer.write_band(hy_obj.get_anc("phase placeholder"),5)
+        writer.write_band(hy_obj.get_anc("slope",radians = False),6)
+        writer.write_band(hy_obj.get_anc("aspect",radians = False),7)
+        writer.write_band(hy_obj.cosine_i(),8)
+        #writer.write_band('UTC time placeholder',9)
+        writer.close()
     
-        def neon_to_envi(hy_obj):
-            basemame = os.path.basename(os.path.splitext(hy_obj.file_name)[0])
-            print("Converting h5 to envi for %s " % basemame)
-            output_name = os.path.join(output_dir, basemame)
-            writer = WriteENVI(output_name,hy_obj.get_header())
-            iterator = hy_obj.iterate(by = 'chunk')
-            pixels_processed = 0
-            while not iterator.complete:
-                chunk = iterator.read_next()
-                pixels_processed += chunk.shape[0]*chunk.shape[1]
-                writer.write_chunk(chunk,iterator.current_line,iterator.current_column)
-                if iterator.complete:
-                    writer.close()
-
-        # sum=0
-
-        def export_anc(hy_obj):
-            print("\nExporting ancillary data")
-            anc_header = hy_obj.get_header() #hy_obj.get_header.remote() #
-            anc_header['bands'] = 10
-            anc_header['band_names'] = ['path length', 'to-sensor azimuth',
-                                        'to-sensor zenith','to-sun azimuth',
-                                        'to-sun zenith','phase', 'slope',
-                                        'aspect', 'cosine i','UTC time']
-            anc_header['wavelength units'] = np.nan
-            anc_header['wavelength'] = np.nan
-            anc_header['data type'] = 4
-
-            output_name = output_dir + os.path.basename(os.path.splitext(hy_obj.file_name)[0])
-            writer = WriteENVI(output_name + "_ancillary", anc_header)
-            writer.write_band(hy_obj.get_anc("path_length"),0)
-            writer.write_band(hy_obj.get_anc("sensor_az",radians = False),1)
-            writer.write_band(hy_obj.get_anc("sensor_zn",radians = False),2)
-            writer.write_band(hy_obj.get_anc("solar_az",radians = False),3)
-            writer.write_band(hy_obj.get_anc("solar_zn",radians = False),4)
-            #writer.write_band(hy_obj.get_anc("phase placeholder"),5)
-            writer.write_band(hy_obj.get_anc("slope",radians = False),6)
-            writer.write_band(hy_obj.get_anc("aspect",radians = False),7)
-            writer.write_band(hy_obj.cosine_i(),8)
-            #writer.write_band('UTC time placeholder',9)
-            writer.close()
-
-            # sum_out=sum_in+1
-            # return(sum_out)
-        
-        objectIDs2 = ray.get([a.do.remote(neon_to_envi) for a in actors]) #_
-        while len(objectIDs2): 
-            _, object_ids = ray.wait(objectIDs2) 
-    # sum = dummy_fn(objectIDs) 
-
-            _ = ray.get([a.do.remote(export_anc) for a in actors]) 
-    #   _ = ray.get([a.read_file.remote(image,'neon') for a,image in zip(actors,images)]) #_
-
-    # sum = ray.get([export_anc.remote(a,sum) for a in actors]) 
-    # object_ids = ray.get([export_anc.remote(a) for a in actors]) doesn't work
+    _ = ray.get([a.do.remote(neon_to_envi) for a in actors])
     
-    # sum = dummy_fn(object_ids3) 
-    # while len(object_ids): 
-    #     _, object_ids = ray.wait(object_ids) 
-
-    # while sum < len(images):
-    #     print(sum)
+    print("\nExporting ancillary data")
+    _ = ray.get([a.do.remote(export_anc) for a in actors])
 
     print("Export convert_hdf_to_envi complete.") #ais takes 20-25min for SOAP
     return output_dir
+
+    # objectIDs1 = ray.get([a.read_file.remote(image,'neon') for a,image in zip(actors,images)]) #_
+    # while len(objectIDs1): 
+    #     _, object_ids = ray.wait(objectIDs1) 
+    
+    
+
+    #     # sum=0
+
+    #     def export_anc(hy_obj):
+    #         print("\nExporting ancillary data")
+    #         anc_header = hy_obj.get_header() #hy_obj.get_header.remote() #
+    #         anc_header['bands'] = 10
+    #         anc_header['band_names'] = ['path length', 'to-sensor azimuth',
+    #                                     'to-sensor zenith','to-sun azimuth',
+    #                                     'to-sun zenith','phase', 'slope',
+    #                                     'aspect', 'cosine i','UTC time']
+    #         anc_header['wavelength units'] = np.nan
+    #         anc_header['wavelength'] = np.nan
+    #         anc_header['data type'] = 4
+
+    #         output_name = output_dir + os.path.basename(os.path.splitext(hy_obj.file_name)[0])
+    #         writer = WriteENVI(output_name + "_ancillary", anc_header)
+    #         writer.write_band(hy_obj.get_anc("path_length"),0)
+    #         writer.write_band(hy_obj.get_anc("sensor_az",radians = False),1)
+    #         writer.write_band(hy_obj.get_anc("sensor_zn",radians = False),2)
+    #         writer.write_band(hy_obj.get_anc("solar_az",radians = False),3)
+    #         writer.write_band(hy_obj.get_anc("solar_zn",radians = False),4)
+    #         #writer.write_band(hy_obj.get_anc("phase placeholder"),5)
+    #         writer.write_band(hy_obj.get_anc("slope",radians = False),6)
+    #         writer.write_band(hy_obj.get_anc("aspect",radians = False),7)
+    #         writer.write_band(hy_obj.cosine_i(),8)
+    #         #writer.write_band('UTC time placeholder',9)
+    #         writer.close()
+
+    #         # sum_out=sum_in+1
+    #         # return(sum_out)
+        
+    #     objectIDs2 = ray.get([a.do.remote(neon_to_envi) for a in actors]) #_
+    #     while len(objectIDs2): 
+    #         _, object_ids = ray.wait(objectIDs2) 
+    # # sum = dummy_fn(objectIDs) 
+
+    #         _ = ray.get([a.do.remote(export_anc) for a in actors]) 
+    # #   _ = ray.get([a.read_file.remote(image,'neon') for a,image in zip(actors,images)]) #_
+
+    # # sum = ray.get([export_anc.remote(a,sum) for a in actors]) 
+    # # object_ids = ray.get([export_anc.remote(a) for a in actors]) doesn't work
+    
+    # # sum = dummy_fn(object_ids3) 
+    # # while len(object_ids): 
+    # #     _, object_ids = ray.wait(object_ids) 
+
+    # # while sum < len(images):
+    # #     print(sum)
+
+    # print("Export convert_hdf_to_envi complete.") #ais takes 20-25min for SOAP
+    
 
 ########################## Part 2: Create config file with all the parameters for BRDF correction (TWEAK AS NECESSARY) #################################
 
@@ -160,11 +194,11 @@ def create_config(path):
     aviris_anc_names = ['path_length','sensor_az','sensor_zn',
                         'solar_az', 'solar_zn','phase','slope',
                         'aspect', 'cosine_i','utc_time']
-    images= glob.glob("NEON*reflectance")
+    images= glob.glob(os.path.join(path,"NEON*reflectance"))
     images.sort()
     config_dict["input_files"] = images
     config_dict["anc_files"] = {}
-    anc_files = glob.glob(path + "*ancillary")
+    anc_files = glob.glob(os.path.join(path,"*ancillary"))
     anc_files.sort()
     for i,image in enumerate(images):
         config_dict["anc_files"][image] = dict(zip(aviris_anc_names,
@@ -199,9 +233,9 @@ def create_config(path):
        [] <---Export uncorrected images
     '''
    
-    config_dict["corrections"] = ['brdf','topo','glint']
+    config_dict["corrections"] = ['brdf','topo'] #ais add glint back in? ,'glint']
    
-    #Topographic Correction options
+    # Topographic Correction options
     '''
     Types supported:
         - 'cosine'
@@ -225,7 +259,8 @@ def create_config(path):
                                                 'min': 0.1,'max': 1.0}]]
    
     config_dict["topo"]['apply_mask'] = [["ndi", {'band_1': 850,'band_2': 660,
-                                                'min': 0.1,'max': 1.0}]] #could also add something about cloud_mask - check hytools GitHub, 
+                                                'min': 0.1,'max': 1.0}]] 
+        #could also add something about cloud_mask - check hytools GitHub, 
     config_dict["topo"]['c_fit_type'] = 'nnls'
    
     #BRDF Correction options
@@ -282,6 +317,7 @@ def create_config(path):
        json.dump(config_dict,outfile,indent=3)
 
     print('finished create_config')
+    return(config_file)
 
 ################################ Part 3: Perform BRDF image correction (No change needed) ###########################
 
@@ -384,14 +420,14 @@ def apply_corrections(hy_obj,config_dict):
    
            del masks
 
-def implement_brdf_correction(path):
+def implement_brdf_correction(config_path):
    
    print('begin implement_brdf_correction')
    start=time.time()
    warnings.filterwarnings("ignore")
    np.seterr(divide='ignore', invalid='ignore')
     
-   config_file = path + "config.json"
+   config_file = config_path
 
    with open(config_file, 'r') as outfile:
        config_dict = json.load(outfile)
@@ -461,9 +497,12 @@ def convert_envi_to_tif(site, h5_folder, envi_path):
             ## read the envi file using rasterio
             src = rasterio.open(envi_file, driver="ENVI")
             
-            ## This will copy all raster info from the ENVI file like height, width, coordinate reference system etc. into the new tif file 
-            output = rasterio.open(output_name, 'w', driver="GTiff", height=src.height, width=src.width, count=src.count+1, #+1 for zen layer
-                                dtype='float32', crs=src.crs, transform=src.transform, nodata=src.nodata)
+            ## This will copy all raster info from the ENVI file like height, width, 
+            # coordinate reference system etc. into the new tif file 
+            output = rasterio.open(output_name, 'w', driver="GTiff", height=src.height, 
+                                   width=src.width, count=src.count+1, #+1 for zen layer
+                                dtype='float32', crs=src.crs, transform=src.transform, 
+                                nodata=src.nodata)
             
             ## Save each of the 426 bands in the new tif file.
             ## src.read(i) reads the ith band from ENVI file
@@ -471,10 +510,11 @@ def convert_envi_to_tif(site, h5_folder, envi_path):
                 output.write(src.read(i),i)
                 print(i)
 
-            # Add another layer with to-sensor zenith angle, or should I just save it as a separate tiff file?
+            # Add another layer with to-sensor zenith angle, or should I just save it as 
+            # a separate tiff file?
             # could probably do this with envi files, but not sure how... 
             # ais reflectance data stored in corrected envi file, and sensor_zn stored in anc envi file
-            h5_path = h5_folder + envi_file.split(pattern[1:])[0] + '.h5' 
+            h5_path = os.path.join(h5_folder, (envi_file.split("/")[-1]).split(pattern[1:])[0] + '.h5')
             f = h5py.File(h5_path, 'r') # load in h5 from the directory
             zen = f[site]['Reflectance']['Metadata']['to-sensor_Zenith_Angle'][:] # extract zenith angle
             output.write(zen, src.count+1) # save as an extra layer in tiff

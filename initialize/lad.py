@@ -56,7 +56,7 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, use_c
     if use_case=="train":
         # calculate SND
         inventory_df = pd.read_csv(inventory_path)
-        calculate_snd(inventory_df, lad_df, infl_points)
+        #calculate_snd(inventory_df, lad_df, infl_points)
 
     return str(output_data_path)
 

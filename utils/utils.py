@@ -17,7 +17,7 @@ def _add_to_cache(func_name, ps, l, cache):
         cache[func_name] = ps
 
 
-def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, 
+def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, 
                 data_int_path, data_final_path, use_case, ic_type, hs_type):
     l = []
     data_raw_aop_path = Path(data_raw_aop_path)
@@ -32,9 +32,6 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
     l.extend([str(p) for p in data_int_path.glob('**/*.csv')])
     l.extend([str(p) for p in data_int_path.glob('**/*.shp')])
     l.extend([str(p) for p in data_int_path.glob('**/*.RData')])
-    l.extend([str(p) for p in data_final_path.glob('**/') if p.is_dir()])
-    l.extend([str(p) for p in data_final_path.glob('**/*.css')])
-    l.extend([str(p) for p in data_final_path.glob('**/*.pss')])
     
     cache = {}
 
@@ -63,6 +60,9 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
                   l, cache)    
     
     # Process raw data
+    _add_to_cache('generate_pft_reference',
+                  str(data_int_path/'pft_reference.csv'),
+                  l, cache)
     _add_to_cache('preprocess_veg_structure_data',
                   [str(data_raw_inv_path/site/year_inventory/'pp_veg_structure.csv'),
                    str(data_raw_inv_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
@@ -95,28 +95,56 @@ def build_cache(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_
     _add_to_cache('extract_spectra_from_polygon',
                   str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_inv.csv'),
                   l, cache)
+                
+    return cache
+
+
+
+def build_cache_all( #data_raw_aop_path, 
+                trait_table_path, data_raw_inv_path, data_int_path, data_final_path, use_case, ic_type):
+    l = []
+    # data_raw_aop_path = Path(data_raw_aop_path)
+    data_raw_inv_path = Path(data_raw_inv_path)
+    data_int_path = Path(data_int_path)
+    data_final_path = Path(data_final_path)
+    trait_table_path = Path(trait_table_path)
+
+    # l.extend([str(p) for p in data_raw_aop_path.glob('**/') if p.is_dir()])
+    # l.extend([str(p) for p in data_raw_inv_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_raw_inv_path.glob('**/*.csv')])
+    l.extend([str(p) for p in data_int_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_int_path.glob('**/*.csv')])
+    l.extend([str(p) for p in data_int_path.glob('**/*.shp')])
+    l.extend([str(p) for p in data_int_path.glob('**/*.RData')])
+    l.extend([str(p) for p in data_final_path.glob('**/') if p.is_dir()])
+    l.extend([str(p) for p in data_final_path.glob('**/*.css')])
+    l.extend([str(p) for p in data_final_path.glob('**/*.pss')])
+    
+    cache = {}
+
     _add_to_cache('train_pft_classifier',
-                  str(data_int_path/site/year_inventory/'training'/'rf_tree_crowns_training'/'rf_model_tree_crowns_training.RData'),
+                  str(data_int_path/'training'/'rf_tree_crowns_training'/'rf_model_tree_crowns_training.RData'),
                     l, cache)
     
     if use_case=="predict":        
         if (ic_type == "field_inv_plots"):
             _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/site/year_inventory/ic_type/"cohort_ic_field_inv.css"),
-                       str(data_final_path/site/year_inventory/ic_type/"patch_ic_field_inv.pss")],
+                      [str(data_final_path/ic_type/"ic_field_inv.css"),
+                       str(data_final_path/ic_type/"ic_field_inv.pss")],
                       l, cache)   
         if (ic_type=="rs_inv_plots"):
             _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/site/year_inventory/ic_type/"cohort_ic_rs_inv_plots.css"),
-                       str(data_final_path/site/year_inventory/ic_type/"patch_ic_rs_inv_plots.pss")],
+                      [str(data_final_path/ic_type/"ic_rs_inv_plots.css"),
+                       str(data_final_path/ic_type/"ic_rs_inv_plots.pss")],
                       l, cache)   
         if (ic_type == "rs_random_plots"):
             _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/site/year_inventory/ic_type/"cohort_ic_rs_random_plots.css"),
-                       str(data_final_path/site/year_inventory/ic_type/"patch_ic_rs_random_plots.pss")],
+                      [str(data_final_path/ic_type/"ic_rs_random_plots.css"),
+                       str(data_final_path/ic_type/"ic_rs_random_plots.pss")],
                       l, cache)   
                 
     return cache
+
 
 
 def force_rerun(cache, force={}):
