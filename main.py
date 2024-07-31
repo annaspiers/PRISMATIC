@@ -7,7 +7,7 @@ os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R')
 # generalized with help from https://stackoverflow.com/questions/36539623/how-do-i-
 # find-the-name-of-the-conda-environment-in-which-my-code-is-running
 
-from utils.utils import build_cache, force_rerun
+from utils.utils import build_cache_site, build_cache_all, force_rerun
 from initialize.inventory import download_veg_structure_data, \
                                     preprocess_veg_structure_data, \
                                     download_trait_table
@@ -23,7 +23,8 @@ from initialize.hyperspectral import download_hyperspectral, \
                                         prep_aop_imagery, \
                                         extract_spectra_from_polygon, \
                                         correct_flightlines, \
-                                        train_pft_classifier
+                                        train_pft_classifier, \
+                                        generate_pft_reference
 from initialize.generate_initial_conditions import generate_initial_conditions
 
 log = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def main(cfg):
                 log.info(f'Download raw data for site: {site}, '
                          f'year: {year_inventory}, year_aop: {year_aop}, '
                          f'with rerun status: {rerun_status}')
-                cache = build_cache(site=site, 
+                cache = build_cache_site(site=site, 
                                     year_inventory=year_inventory, 
                                     year_aop=year_aop, 
                                     data_raw_aop_path=data_raw_aop_path, 
@@ -95,7 +96,7 @@ def main(cfg):
                                          data_raw_aop_path=data_raw_aop_path,
                                          hs_type=hs_type))
                 
-                # download neon_trait_table
+    #             # download neon_trait_table
                 url = cfg.others.neon_trait_table.neon_trait_link
                 trait_table_path = (force_rerun(cache, force={
                                                     'download_trait_table':
@@ -115,7 +116,18 @@ def main(cfg):
                 neon_plots_path = (force_rerun(cache, force=rerun_status)
                                    (download_polygons)
                                    (data_path=data_raw_inv_path))
-                
+
+
+    sites = []
+    for site, v in cfg.sites.run.items():
+        sites.append(site)
+    pft_reference_path = (force_rerun(cache, force=rerun_status)
+                                        (generate_pft_reference)
+                                        (sites=sites,
+                                         data_raw_inv_path=data_raw_inv_path, 
+                                         data_int_path=data_int_path,
+                                         trait_table_path=trait_table_path))
+
     # Process intermediate data
     for site, v in cfg.sites.run.items():
         if not global_run or site in global_run:
@@ -127,7 +139,7 @@ def main(cfg):
                     log.info(f'Run process for site: {site}, '
                          f'year: {year_inventory}, year_aop: {year_aop}, '
                          f'with rerun status: {rerun_status}')
-                    cache = build_cache(site=site, 
+                    cache = build_cache_site(site=site, 
                                     year_inventory=year_inventory, 
                                     year_aop=year_aop, 
                                     data_raw_aop_path=data_raw_aop_path, 
@@ -213,7 +225,7 @@ def main(cfg):
                          data_raw_aop_path=data_raw_aop_path,
                          data_int_path=data_int_path))
                 
-
+                
                 training_crown_shp_path = (force_rerun(cache, 
                                                          force=rerun_status)
                                              (create_tree_crown_polygons)
@@ -222,6 +234,7 @@ def main(cfg):
                                               data_raw_inv_path=data_raw_inv_path, 
                                               data_int_path=data_int_path, 
                                               biomass_path=biomass_path,
+                                              pft_reference_path=pft_reference_path,
                                               px_thresh=px_thresh))  
                 
                 # prep NEON AOP data for classifier
@@ -243,32 +256,35 @@ def main(cfg):
                                         data_int_path=data_int_path,
                                         data_final_path=data_final_path,
                                         stacked_aop_path=stacked_aop_path,
-                                        use_case="train",
+                                        use_case=use_case,
                                         ic_type=ic_type,
                                         aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res))  
+    # intermediate data finished processing for all site/years. Next, train RF 
 
-    sites = []
-    for site, v in cfg.sites.run.items():
-        sites.append(site)
     for k, v in p.force_rerun.items():
         rerun_status[k] = v or global_force_rerun.get(k, False)
         log.info(f'Run process for all sites, '
             f'with rerun status: {rerun_status}')
-        cache = build_cache(data_raw_aop_path=data_raw_aop_path,
+        cache = build_cache_all(#data_raw_aop_path=data_raw_aop_path,
+                            trait_table_path=trait_table_path,
                             data_raw_inv_path=data_raw_inv_path, 
                             data_int_path=data_int_path, 
                             data_final_path=data_final_path, 
                             use_case=use_case, 
-                            ic_type=ic_type,
-                            hs_type = hs_type )
+                            ic_type=ic_type)
         
         # Train model
+        #training_spectra_csv_path_all=
+        # ^ais need to combine all site/years into one csv automatically
+
         rf_model_path = (force_rerun(cache,  force=rerun_status)
                         (train_pft_classifier)
                         (sites=sites,
                         stacked_aop_path=stacked_aop_path,
                         training_shp_path=training_crown_shp_path,  
                         training_spectra_path=training_spectra_csv_path, 
+                        trait_table_path=trait_table_path,
+                        data_raw_inv_path=data_raw_inv_path,
                         data_int_path=data_int_path,
                         pcaInsteadOfWavelengths=pcaInsteadOfWavelengths, 
                         ntree=ntree, 
@@ -305,7 +321,7 @@ def main(cfg):
     #     # add to function_workflow.drawio and data structure diagram
     #     # push to github
             
-    # log.info('DONE')
+    log.info('DONE')
 
 if __name__ == '__main__':
     main()
