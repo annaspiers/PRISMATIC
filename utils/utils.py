@@ -123,7 +123,7 @@ def build_cache_all( #data_raw_aop_path,
     cache = {}
 
     _add_to_cache('train_pft_classifier',
-                  str(data_int_path/'training'/'rf_tree_crowns_training'/'rf_model_tree_crowns_training.RData'),
+                  str(data_int_path/'rf_dir'/'rf_model_tree_crowns_training.RData'),
                     l, cache)
     
     if use_case=="predict":        

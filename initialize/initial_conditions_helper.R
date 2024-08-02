@@ -173,7 +173,7 @@ generate_random_plots <- function(site, year_aop, year_inv, data_raw_aop_path, i
 
 
 predict_plot_level_PFTs <- function(site, year, data_int_path, data_final_path,
-                         stacked_aop_path, ic_type_path, rf_model_path, extracted_features_filename,
+                         stacked_aop_path, ic_type_path, rf_model_path, extracted_features_csv,
                          ic_type, pcaInsteadOfWavelengths) {
 
     # ais Commented out the following lines since I want to predict the inventory PFTs
@@ -201,72 +201,70 @@ predict_plot_level_PFTs <- function(site, year, data_int_path, data_final_path,
     #     ### Set parameters and load data
 
     classified_PFTs_path <- file.path(ic_type_path,"pfts_per_plot.csv")
-
+    
     if (!file.exists(classified_PFTs_path)){
         message("Predicting plot-level PFTs")
-
-    wavelengths <- read.csv(file.path({stacked_aop_path},"wavelengths.txt")) %>%
-        pull(wavelengths)
-    # Stacked AOP layer names
-    stacked_aop_layer_names <- read.csv(file.path({stacked_aop_path},"stacked_aop_layer_names.txt")) %>%
-        pull(stacked_aop_layer_names)
-       
-    # Filter out unwanted wavelengths
-    wavelength_lut <- filter_out_wavelengths(wavelengths=wavelengths, layer_names=stacked_aop_layer_names)
-    
-    # features to use in the RF models
-    featureNames <- c("shapeID", wavelength_lut$xwavelength,
-                      stacked_aop_layer_names[!grepl("^X", stacked_aop_layer_names)],
-                      "dfID")
-    
-    # extracted_features_raw <- read.csv(extracted_features_filename)
-    
-    # Prep extracted features csv for RF model
-    features_df <- prep_features_for_RF(extracted_features_filename, featureNames) 
-    
-    features_df_noNA <- na.omit(features_df) #ais why are there rows with NAs?
-    
-    # perform PCA
-    if(pcaInsteadOfWavelengths == T){
-        features <- apply_PCA(df=features_df_noNA, wavelengths=wavelength_lut, 
-                              output_dir=ic_type_path)
-    } else {
-        features <- features_df_noNA
-    }
-    
-    
-    ### Predict PFT ID for FATES patches
-    
-    # load the current RF model
-    load(rf_model_path)
         
-    # Classify PFTs
-    features$pred_PFT <- predict(rf_model, features, type = "class")
-    # ^ takes < 3min
-    
-    # confusionTable <- table(predValidation, features_noNA$pft)
-    # val_OA <- sum(predValidation == features_noNA$pft) / 
-    #     length(features_noNA$pft)
-    
-    # Summarize as percentages per plot
-    features_pft_by_pct <- features %>% 
-        #ais here, I should assign pixels with chm<1 to a bare ground PFT
-        # but before I can do that, I need to change the system of equations for 
-        # assigning PFTs across cohorts
-        dplyr::count(shapeID, pred_PFT) %>%
-        dplyr::rename(count=n) %>%
-        dplyr::group_by(shapeID)%>%
-        dplyr::mutate(pct = count / sum(count))
-
-    if (ic_type=="rs_inv_plots" ) {
-        features_pft_by_pct$shapeID <- paste0(features_pft_by_pct$shapeID, "_central")
-    }
-    
-    
-    write.csv(features_pft_by_pct, classified_PFTs_path,
-              row.names = FALSE)
+        wavelengths <- read.csv(file.path({stacked_aop_path},"wavelengths.txt")) %>%
+            pull(wavelengths)
+        # Stacked AOP layer names
+        stacked_aop_layer_names <- read.csv(file.path({stacked_aop_path},"stacked_aop_layer_names.txt")) %>%
+            pull(stacked_aop_layer_names)
+        
+        # Filter out unwanted wavelengths
+        wavelength_lut <- filter_out_wavelengths(wavelengths=wavelengths, layer_names=stacked_aop_layer_names)
+        
+        # features to use in the RF models
+        featureNames <- c("shapeID", wavelength_lut$xwavelength,
+                          stacked_aop_layer_names[!grepl("^\\d+$", stacked_aop_layer_names)], #"^X", stacked_aop_layer_names)],
+                          "dfID")
+        
+        # Prep extracted features csv for RF model
+        features_df <- prep_features_for_RF(extracted_features_csv, featureNames) 
+        
+        features_df_noNA <- na.omit(features_df) #ais why are there rows with NAs?
+        
+        # perform PCA
+        if(pcaInsteadOfWavelengths == T){
+            features <- apply_PCA(df=features_df_noNA, wavelengths=wavelength_lut, 
+                                  output_dir=ic_type_path)
+        } else {
+            features <- features_df_noNA
+        }
+        
+        
+        ### Predict PFT ID for FATES patches
+        
+        # load the current RF model
+        load(rf_model_path)
+        
+        # Classify PFTs
+        features$pred_PFT <- predict(rf_model, features, type = "class")
+        # ^ takes < 3min
+        
+        # confusionTable <- table(predValidation, features_noNA$pft)
+        # val_OA <- sum(predValidation == features_noNA$pft) / 
+        #     length(features_noNA$pft)
+        
+        # Summarize as percentages per plot
+        features_pft_by_pct <- features %>% 
+            #ais here, I should assign pixels with chm<1 to a bare ground PFT
+            # but before I can do that, I need to change the system of equations for 
+            # assigning PFTs across cohorts
+            dplyr::count(shapeID, pred_PFT) %>%
+            dplyr::rename(count=n) %>%
+            dplyr::group_by(shapeID)%>%
+            dplyr::mutate(pct = count / sum(count))
+        
+        if (ic_type=="rs_inv_plots" ) {
+            features_pft_by_pct$shapeID <- paste0(features_pft_by_pct$shapeID, "_central")
+        }
+        
+        
+        write.csv(features_pft_by_pct, classified_PFTs_path,
+                  row.names = FALSE)
     } 
-
+    
     return(classified_PFTs_path)
 }
 
@@ -634,7 +632,7 @@ generate_cohort_patch_files <- function(site, year, data_int_path, biomass_path,
         # Load cleaned individual-level data
         veg <- read.csv(file.path(biomass_path,"pp_veg_structure_IND_IBA_IAGB_live.csv"))%>% 
             rename(SLA_sytoan = SLA) %>% #to differentiate from SLA from allometry file
-           #ais isn't this path name a global variable?, assign with this instead
+            #ais isn't this path name a global variable?, assign with this instead
             # already filtered to live plants
             
             # Filter to single stem if plant is an oak
@@ -666,15 +664,15 @@ generate_cohort_patch_files <- function(site, year, data_int_path, biomass_path,
             #filter(scientificName != "Unknown plant") %>% #20 plants
             left_join(allom_params) %>%
             dplyr::mutate(time = year, 
-                   #subplotID_agg = ifelse(!is.na(subplotID),subplotID, pointID),
-                   patch = paste0(plotID,"_central"), #paste0(plotID,"_",subplotID_agg),
-                   index = row_number(),
-                   dbh = used_diameter,
-                   #ais or dbh should be used_diameter
-                   n = 1/sampling_area,
-                   agb = a1 * dbh^a2,
-                   leaf_biom = x1 * pmin(height,Hmax)^x2,
-                   lai = n * SLA * leaf_biom)
+                          #subplotID_agg = ifelse(!is.na(subplotID),subplotID, pointID),
+                          patch = paste0(plotID,"_central"), #paste0(plotID,"_",subplotID_agg),
+                          index = row_number(),
+                          dbh = used_diameter,
+                          #ais or dbh should be used_diameter
+                          n = 1/sampling_area,
+                          agb = a1 * dbh^a2,
+                          leaf_biom = x1 * pmin(height,Hmax)^x2,
+                          lai = n * SLA * leaf_biom)
         # lai (layer 1) = stem density (layer 1) * ILA(as a funciton of z)
         # ILA = Bleaf * SLA , SLA is specific to height and PFT - for now just pft
         
@@ -752,11 +750,11 @@ generate_cohort_patch_files <- function(site, year, data_int_path, biomass_path,
                 fsn = 0) %>%  
             relocate(area, .after=age) %>%
             relocate(patch, .after=time)
-    
+        
     } else { # then ic_type == rs_inv_plots or rs_random_plots
         
         # load plots shp
-        plots_sf <- st_read(plots_shp_path)
+        plots_sf <- sf::st_read(plots_shp_path)
         
         # load plots classified as PFT by percentage
         plot_by_pft_majority_raw <- read.csv(classified_PFTs_path)
@@ -772,29 +770,30 @@ generate_cohort_patch_files <- function(site, year, data_int_path, biomass_path,
         
         pfts_by_cohort_wide <- plot_by_pft_majority_raw %>%
             dplyr::rename(pft = pred_PFT,
-                   patch = shapeID) %>% 
+                          patch = shapeID) %>% 
             dplyr::mutate(patch = as.character(patch)) %>%
             dplyr::select(-c(count)) %>% 
             tidyr::pivot_wider(names_from = pft, values_from = pct) %>%
-            dplyr::rename(p_c_T=cedar_PFT,
-                   p_p_T=pine_PFT,
-                   p_o_T=oak_PFT)
+            dplyr::rename(p_c_T=cedar,
+                          p_f_T=fir,
+                          p_p_T=pine,
+                          p_o_T=oak)
         pfts_by_cohort_wide[is.na(pfts_by_cohort_wide)] <- 0 
         
         lad_laz_plot_paths <- list.files(file.path(lad_laz_clipped_path), 
-                                     pattern="*.laz", full.names = T) %>%
-                tools::file_path_sans_ext()
+                                         pattern="*.laz", full.names = T) %>%
+            tools::file_path_sans_ext()
         
         by_patch_df <- divide_patch_into_cohorts(lad_laz_plot_paths, ic_type)
         
         # Do patches in pft df match that in patch df?
         assertthat::assert_that(sum(unique(by_patch_df$patch) %in% #ais why do these two vectors have slightly different subsets in the rs_random_plots case?
-                                    unique(plot_by_pft_majority$patch))>1,
+                                        unique(plot_by_pft_majority$patch))>1,
                                 msg="Patch names in pft df and patch df don't match")
         
         patch_all_df <- assign_pft_across_cohorts(by_patch_df, 
-                                                         allom_params,
-                                                         pfts_by_cohort_wide) 
+                                                  allom_params,
+                                                  pfts_by_cohort_wide) 
         
         # Sanity check plots by patch
         patch_all_df %>% dplyr::group_by(patch,pft) %>% 
@@ -823,8 +822,8 @@ generate_cohort_patch_files <- function(site, year, data_int_path, biomass_path,
         cohort_df_final <- patch_all_df %>%
             dplyr::select(-c(lai_cohort,agb,leaf_biom )) %>%
             dplyr::rename(index = cohort_idx,
-                   height= cohort_height,
-                   n = n_stemdens) %>%
+                          height= cohort_height,
+                          n = n_stemdens) %>%
             dplyr::mutate(pft = case_when(
                 pft == "pine_PFT" ~ 1,
                 pft == "cedar_PFT" ~ 2,

@@ -252,9 +252,7 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
 
 
 
-def train_pft_classifier(sites, stacked_aop_path, training_shp_path, training_spectra_path, 
-                         trait_table_path, data_raw_inv_path,                         
-                         data_int_path,
+def train_pft_classifier(sites, data_int_path,
                          pcaInsteadOfWavelengths, ntree, randomMinSamples, independentValidationSet):
     """Train a Random Forest (RF) model to classify tree PFT using in-situ tree
         measurements for PFT labels and remote sensing data as descriptive features
@@ -272,9 +270,8 @@ def train_pft_classifier(sites, stacked_aop_path, training_shp_path, training_sp
     
     # Train random forest model 
     train_pft_classifier = ro.r('train_pft_classifier')
-    rf_model_path = train_pft_classifier(sites, stacked_aop_path, training_shp_path, training_spectra_path, 
-                                         trait_table_path, data_raw_inv_path, data_int_path, 
-                                         pcaInsteadOfWavelengths, ntree, randomMinSamples, independentValidationSet)
+    rf_model_path = train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree, 
+                                         randomMinSamples, independentValidationSet)
     log.info('Trained PFT classifier saved in this folder: '
              f'{rf_model_path}')
 
