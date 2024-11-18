@@ -38,12 +38,20 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, use_c
     empty_df = pd.DataFrame(columns=column_names)
     for laz_file in laz_files:
         try:
+            print("1")
+            print(laz_file)
             r_df = preprocess_lad_func(str(laz_file))
+            print("2)")
             with (ro.default_converter + pandas2ri.converter).context():
+                print("3)")
                 lad_df = ro.conversion.get_conversion().rpy2py(r_df)
+            print("4)")
             infl_points = calculate_infl_points(lad_df)
+            print("5)")
             fig = plot_diagnostics(lad_df, infl_points)
+            print("6)")
             fig.savefig(output_folder_diagnostics_path/f'{laz_file.stem}_lad.png')
+            print("7)")
             plt.close()
         except Exception:
             lad_df = empty_df

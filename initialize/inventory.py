@@ -52,7 +52,7 @@ def download_veg_structure_data(site, data_path):
     return veg_structure, plot_sampling_effort
 
 
-def preprocess_veg_structure_data(site, year_inv, year_aop, data_path, month_window=16): #ais put month window argument into higher workflow
+def preprocess_veg_structure_data(site, year_inv, year_aop, data_path, month_window): 
     """
     Filter vegetation structure and plot sampling to the year
     """
