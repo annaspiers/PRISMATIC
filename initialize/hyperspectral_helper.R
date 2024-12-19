@@ -115,10 +115,7 @@ clip_overlap <- function(df, thresh) {
       # extract current vs. all other polygon from data frame
       current_poly <- polys_ordered[i,]
       other_polys <- polys_filtered[polys_filtered$individualID_unique!=current_poly$individualID_unique,]
-      # other_polys_insubplot <- other_polys[other_polys$plotID.x == current_poly$plotID.x &
-      #                                     other_polys$subplotID == current_poly$subplotID,] #ais added this
-
-
+      
       # check for overlap between current polygon and all polygons
       # overlap <- raster::intersect(current_poly, other_polys) #crashes here - why?
       overlap_sf <- other_polys[sf::st_intersects(current_poly, other_polys)[[1]], ]
@@ -417,47 +414,34 @@ filter_out_wavelengths <- function(wavelengths, layer_names){
 
 
 
-apply_PCA <- function(df, wavelengths, output_dir, nPCs=9) { #ais need to automate number of PCs
+# apply_PCA <- function(df, wavelengths, output_dir) { #ais need to automate number of PCs
 
-  #ais find a way to automate determining nPCs
-    # elbow plot
-    # factoextra::fviz_eig(hs_pca)
-    # features_final <- cbind(features, hs_pca$x[,1:nPCs]) %>% # add first n PCs to features df
-    #     # create unique ID for each pixel in the input imagery,
-    #     mutate(dfIDs = paste(plotID, pixelNumber, eastingIDs, northingIDs, 
-    #                          sep = "_")) %>%
-    #     dplyr::select(c(plotID, subplotID, chm, dtm, slope, aspect_cat, ARVI, EVI, NDVI,
-    #                     PRI, SAVI, rgb_meanR, rgb_meanG, rgb_meanB, rgb_sdR, rgb_sdG,
-    #                     rgb_sdB, rgb_mean_sd_R, rgb_mean_sd_G, rgb_mean_sd_B,
-    #                     PC1, PC2, PC3, dfIDs, pixelNumber)) 
-    # ais ^ find a way to automate identifying nPCs rather than hardcoding it
-
-    # remove the individual spectral reflectance bands from the training data
-    features_noWavelengths <- df %>% dplyr::select(-c(wavelengths$xwavelength))
+#       # remove the individual spectral reflectance bands from the training data
+#     features_noWavelengths <- df %>% dplyr::select(-c(wavelengths$xwavelength))
     
-    # PCA: calculate Principal Components 
-    hs <- df %>% dplyr::select(c(wavelengths$xwavelength)) %>% as.matrix()
-    hs_pca <- stats::prcomp(hs, center = TRUE, scale. = TRUE)
-    # summary(hs_pca) ais print pc summary info somewhere?
-    # add first n PCs to features data frame
-    features <- cbind(features_noWavelengths, hs_pca$x[,1:nPCs]) 
+#     # PCA: calculate Principal Components 
+#     hs <- df %>% dplyr::select(c(wavelengths$xwavelength)) %>% as.matrix()
+#     hs_pca <- stats::prcomp(hs, center = TRUE, scale. = TRUE)
+#     # summary(hs_pca) ais print pc summary info somewhere?
+#     # add first n PCs to features data frame
+#     features <- cbind(features_noWavelengths, hs_pca$x[,1:nPCs]) 
     
-    # visualize where each sample falls on a plot with PC2 vs PC1 
-    ggbiplot::ggbiplot(hs_pca,
-                       choices = 1:2, # which PCs to plot
-                       obs.scale = 1, var.scale = 1, # scale observations & variables
-                       var.axes=FALSE, # remove arrows
-                       groups = df$pft, # color the points by PFT
-                       ellipse = TRUE, # draw ellipse abase::round each group
-                       circle = TRUE ) + # draw circle abase::round center of data set
-        ggplot2::ggtitle("PCA biplot, PC1 and PC2") +
-        ggplot2::scale_color_brewer(palette="Spectral") +
-        ggplot2::theme_bw()
-    # save to file
-    ggplot2::ggsave(file.path(output_dir,"pcaPlot.pdf"))
+#     # visualize where each sample falls on a plot with PC2 vs PC1 
+#     ggbiplot::ggbiplot(hs_pca,
+#                        choices = 1:2, # which PCs to plot
+#                        obs.scale = 1, var.scale = 1, # scale observations & variables
+#                        var.axes=FALSE, # remove arrows
+#                        groups = df$pft, # color the points by PFT
+#                        ellipse = TRUE, # draw ellipse abase::round each group
+#                        circle = TRUE ) + # draw circle abase::round center of data set
+#         ggplot2::ggtitle("PCA biplot, PC1 and PC2") +
+#         ggplot2::scale_color_brewer(palette="Spectral") +
+#         ggplot2::theme_bw()
+#     # save to file
+#     ggplot2::ggsave(file.path(output_dir,"pcaPlot.pdf"))
     
-    return(features)
-}
+#     return(features)
+# }
 
 stack_hyperspectral <- function(h5, out_dir) {
     # written by Scholl et al from https://github.com/earthlab/neon-veg
@@ -546,32 +530,13 @@ stack_hyperspectral <- function(h5, out_dir) {
     refl[refl == data_ignore] <- NA 
     refl_scaled <- refl / scale_factor
     
-    # create georeferenced raster using band 1 
-    # convert first band to matrix
     # transpose the image pixels for proper orientation to match
     # the other layers. create a raster for this band and assign
     # the CRS.
-    # print("Transposing reflectance data for proper orientation")
-    r1 <- terra::t(terra::rast(refl_scaled[1,,])) #, crs = crs_info$Proj4
-    terra::crs(r1) <- "epsg:32611"
-    terra::ext(r1) <- tile_extent
-    
-    # start the raster stack with first band 
-    s <- r1
-    
-    # loop through bands and create a giant rasterstack with 426 (n_bands) bands
-    for(b in 2:n_bands){
-        
-        # create raster with current band
-        
-        r <- terra::t(terra::rast(refl_scaled[1,,])) #, crs = crs_info$Proj4
-        terra::crs(r) <- "epsg:32611"
-        terra::ext(r) <- tile_extent
-        
-        # add additional band to the stack with the addLayer function
-        s <- c(s,r) 
-        
-    }
+    s_transposed <- aperm(refl_scaled, c(3,2,1))
+    s <- terra::rast(s_transposed)
+    terra::crs(s) <- "epsg:32611"
+    terra::ext(s) <- tile_extent
     
     # adjust the names for each layer in raster stack to correspond to wavelength
     names(s) <- base::round(wavelengths)
@@ -1242,9 +1207,9 @@ sort_out_manual_delineations <- function(site, year, data_raw_inv_path, data_int
 }
 
 
-extract_spectra_from_polygon <- function(site, year, shp_path, data_int_path, data_final_path,
-                                        stacked_aop_path, use_case, ic_type=ic_type, 
-                                         ic_type_path=NA, aggregate_from_1m_to_2m_res) {
+extract_spectra_from_polygon <- function(site, year, data_int_path, data_final_path,
+                                        stacked_aop_path, shp_path, use_case, 
+                                         aggregate_from_1m_to_2m_res, ic_type=NA, ic_type_path=NA ) {
         # modified from Scholl et al from https://github.com/earthlab/neon-veg
     
     # Extract features (remote sensing data) for each sample (pixel) within the
@@ -1305,13 +1270,13 @@ extract_spectra_from_polygon <- function(site, year, shp_path, data_int_path, da
         shp_sf$center_X <- shp_coords$X
         shp_sf$center_Y <- shp_coords$Y
         
-        # Create group name for plotting purposes
-        neighbors <- st_is_within_distance(shp_sf, dist = 30) # identify neighboring polygons
-        # assign polygons near each other to the same groupID
-        shp_sf$groupID <- as.data.frame(neighbors) %>% 
-            distinct(col.id, .keep_all=T) %>% 
-            pull(row.id)
-            
+        # # Create group name for plotting purposes
+        # neighbors <- st_is_within_distance(shp_sf, dist = 30) # identify neighboring polygons
+        # # assign polygons near each other to the same groupID
+        # shp_sf$groupID <- as.data.frame(neighbors) %>% 
+        #     distinct(col.id, .keep_all=T) %>% 
+        #     pull(row.id)
+        
         # create column to track shape ID 
         # if training, this is the tree crown boundary
         # if predicting, this is the plot boundary)
@@ -1321,9 +1286,11 @@ extract_spectra_from_polygon <- function(site, year, shp_path, data_int_path, da
             if ("PLOTID" %in% colnames(shp_sf)) {
                 shp_sf <- shp_sf %>%
                     dplyr::rename(shapeID=PLOTID)
-            } else {
+            } else if ("plotID" %in% colnames(shp_sf)) {
                 shp_sf <- shp_sf %>%
                     dplyr::rename(shapeID=plotID)
+            } else {
+              print(past0("tyring to predict without training data. Need to first switch use_case to train from predict"))
             }
         }
         
@@ -1399,25 +1366,25 @@ extract_spectra_from_polygon <- function(site, year, shp_path, data_int_path, da
                                      ID = 1:nrow(shapes_in_spv))) %>%
                 dplyr::select(-ID)
             
-            # Plot polygons of training data and RGB image of extracted pixels
-            for (group in unique(shapes_in_spv$groupID)) {
+            # # Plot polygons of training data and RGB image of extracted pixels
+            # for (group in unique(shapes_in_spv$groupID)) {
                 
-                # determine window size 
-                shapes_temp = shp_sf %>% filter(groupID==group)
-                buff_temp = sf::st_buffer(shapes_temp, dist = 10)
-                bbox_temp = sf::st_bbox(buff_temp)
-                cropped_rast <- terra::crop(stacked_aop_data, terra::ext(bbox_temp))
+            #     # determine window size 
+            #     shapes_temp = shp_sf %>% filter(groupID==group)
+            #     buff_temp = sf::st_buffer(shapes_temp, dist = 10)
+            #     bbox_temp = sf::st_bbox(buff_temp)
+            #     cropped_rast <- terra::crop(stacked_aop_data, terra::ext(bbox_temp))
                 
-                # save as png
-                png(file.path(training_data_dir,paste0("group_",group,".png"))) 
-                # plot RGB - (55, 33, 11)
-                terra::plotRGB(cropped_rast, r=435, g=436, b=437, stretch="lin")
-                # plot training outline on top
-                terra::plot(terra::vect(shapes_temp),col="blue", alpha=0.4, add=T)
-                terra::text(terra::vect(shapes_temp),"pft",col="red")
-                dev.off()
+            #     # save as png
+            #     png(file.path(training_data_dir,paste0("group_",group,".png"))) 
+            #     # plot RGB - (55, 33, 11)
+            #     terra::plotRGB(cropped_rast, r=435, g=436, b=437, stretch="lin")
+            #     # plot training outline on top
+            #     terra::plot(terra::vect(shapes_temp),col="blue", alpha=0.4, add=T)
+            #     terra::text(terra::vect(shapes_temp),"pft",col="red")
+            #     dev.off()
                 
-            }
+            # }
             
             
             # VS-NOTE TO DO: ais

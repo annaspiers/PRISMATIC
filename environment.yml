@@ -7,7 +7,7 @@ dependencies:
   - pdal
   - python-pdal
   - gdal
-  - whitebox
+  # - whitebox
   - folium
   - mapclassify
   - matplotlib

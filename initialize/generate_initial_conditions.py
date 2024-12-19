@@ -11,15 +11,25 @@ from rasterio.plot import show
 import numpy as np
 from shapely.geometry import Point
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+import joblib
+from joblib import dump, load
 
 import rpy2.robjects as ro
 
 from pathlib import Path
-from initialize.lad import preprocess_lad
 
 # add environ
 conda_env_path = Path(sys.executable).parent.parent
 os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
+
+# custom functions in another script
+from initialize.lad import preprocess_lad
+from initialize.hyperspectral import filter_out_wavelengths, \
+                                        extract_spectra_from_polygon
 
 log = logging.getLogger(__name__)
 
@@ -39,19 +49,21 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
     """
 
     if not os.path.exists(Path(data_final_path,site,year_inv)):
-        os.makedirs(Path(data_final_path,site,year_inv))    
-    
-    log.info(f'Generating initial conditions for: {site} {year_inv}')
-    r_source = ro.r['source']
-    r_source(str(Path(__file__).resolve().parent/'initial_conditions_helper.R'))
-    r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+        os.makedirs(Path(data_final_path,site,year_inv))   
 
     ic_type_path = str(data_final_path+'/'+site+'/'+year_inv+'/'+ic_type) #needs to be str to be input
     Path(ic_type_path).mkdir(parents=True, exist_ok=True)
 
-    generate_cohort_patch_files = ro.r('generate_cohort_patch_files') 
+    log.info(f'Generating initial conditions for: {site} {year_inv}')
+    r_source = ro.r['source']
+    r_source(str(Path(__file__).resolve().parent/'initial_conditions_helper.R'))
+    generate_pcss = ro.r('generate_pcss') 
+    # ais remove these once I've run through workflow successfullly
+    # r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    # r_source(str(Path(__file__).resolve().parent/'leaf_area_density_helper.R'))
+    
     if (ic_type=="field_inv_plots"):
-        cohort_path, patch_path = generate_cohort_patch_files(site=site, 
+        cohort_path, patch_path = generate_pcss(site=site, 
                                     year=year_inv, 
                                     data_int_path=data_int_path, 
                                     biomass_path=biomass_path,
@@ -61,7 +73,6 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
     if (ic_type=="rs_inv_plots" or ic_type=="rs_random_plots"):        
         ### 1) Specify spatial extent of initial conditions and prepare spatial data by
         # clipping point clouds to and extracting raster data from plots
-        # prepare_spatial_data_for_ic = ro.r('prepare_spatial_data_for_ic') 
         plots_shp_path, lad_laz_clipped_path, extracted_features_csv = prepare_spatial_data_for_ic(
                                             site, year_inv, year_aop, ic_type, data_raw_aop_path, 
                                             data_int_path, stacked_aop_path, data_final_path, 
@@ -73,17 +84,12 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
         # proxy to neon-veg-SOAPpfts/11-predict-pft.R
         # if ic_type==rs_inv_plots, use known PFTs from NEON inventory data 
         # if ic_type==rs_random_plots, predict PFTs with RF classifier
-        predict_plot_level_PFTs = ro.r('predict_plot_level_PFTs') 
-        classified_PFTs_path = predict_plot_level_PFTs(site, 
-                                                    year_inv, 
-                                                    data_int_path, 
-                                                    data_final_path, 
-                                                    stacked_aop_path, 
-                                                    ic_type_path, 
-                                                    rf_model_path,
-                                                    extracted_features_csv[0],
-                                                    ic_type, 
-                                                    pcaInsteadOfWavelengths)
+        classified_PFTs_path = predict_plot_level_PFTs(stacked_aop_path=stacked_aop_path, 
+                                                    ic_type_path=ic_type_path, 
+                                                    rf_model_path=rf_model_path,
+                                                    extracted_features_filename=extracted_features_csv[0],
+                                                    ic_type=ic_type, 
+                                                    pcaInsteadOfWavelengths=pcaInsteadOfWavelengths)
         log.info('Classified PFTs for FATES initializaiton stored in: '
                 f'{classified_PFTs_path}')
 
@@ -97,14 +103,14 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
                             inventory_path=None, 
                             site=site, 
                             year=year_inv, 
-                            output_data_path=ic_type_path, 
-                            use_case="predict",
-                            end_result=True)
+                            output_path=ic_type_path, 
+                            use_case="predict")
                 #ais why can LAD not be processed for some sites?
-    
+
         ### 4) Generate cohort and patch files
             # second half of step (1)
-        cohort_path, patch_path = generate_cohort_patch_files(site=site, 
+            #ais if I put a debug stop on the function below, it loops back after generating pcss files - why?
+        cohort_path, patch_path = generate_pcss(site=site, 
                                     year=year_inv, 
                                     data_int_path=data_int_path, 
                                     biomass_path=biomass_path,
@@ -127,7 +133,7 @@ def prepare_spatial_data_for_ic(site, year_inv, year_aop, ic_type, data_raw_aop_
     # spatial extent and clips laz and rasters 
     generate_random_plots = ro.r('generate_random_plots') 
     clip_norm_laz_to_shp = ro.r('clip_norm_laz_to_shp') 
-    extract_spectra_from_polygon = ro.r('extract_spectra_from_polygon') 
+    # clip_lidar_to_polygon_lidR = ro.r('clip_lidar_to_polygon_lidR') 
     
     ### Specify spatial extent of initial conditions
     if ic_type == "rs_inv_plots": 
@@ -148,10 +154,11 @@ def prepare_spatial_data_for_ic(site, year_inv, year_aop, ic_type, data_raw_aop_
             
         # Clip normalized point clouds to randomized plots
         if not os.path.exists(laz_clipped_path):
-            print("2")
-            laz_clipped_path = clip_norm_laz_to_shp(site, year_inv, data_int_path,
-                                                    ic_type_path, plots_shp_path)
+            clip_norm_laz_to_shp(site, year_inv, data_int_path,
+                                 ic_type_path, plots_shp_path)
        
+    # ais tried changing this function to python, but it ran incredibly slowly and didn't work 
+    # put too much time into trying to make it work (see scrap below)
     extracted_features_csv = extract_spectra_from_polygon(site=site,
                                                            year=year_inv,
                                                            data_int_path=data_int_path,
@@ -159,52 +166,95 @@ def prepare_spatial_data_for_ic(site, year_inv, year_aop, ic_type, data_raw_aop_
                                                            stacked_aop_path=stacked_aop_path,
                                                            shp_path=plots_shp_path,
                                                            use_case=use_case,
+                                                           aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,                                                           
                                                            ic_type=ic_type,
-                                                           ic_type_path=ic_type_path,
-                                                           aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res)
+                                                           ic_type_path=ic_type_path)
 
     return (plots_shp_path, laz_clipped_path, extracted_features_csv)
 
 
 
-# ais this function below is garbange and doesn't work and takes forever to run and lost me probably a full work day
-# def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final_path,
-#                                 stacked_aop_path, use_case, ic_type, ic_type_path,
-#                                 aggregate_from_1m_to_2m_res):
-#     # Check if the shapefile is empty
-#     shp_gdf = gpd.read_file(shp_path)
-#     if shp_gdf.empty:
-#         print(f"Shapefile is empty for {site} - {year}")
-#         return None
+def predict_plot_level_PFTs(stacked_aop_path, ic_type_path, rf_model_path, 
+                            extracted_features_filename,
+                            ic_type, pcaInsteadOfWavelengths):
 
-#     # Define the output file path
-#     training_data_dir = os.path.join(data_int_path, site, str(year), "training", 
-#                                      f"{os.path.basename(shp_path).split('.')[0]}-extracted_features_inv.csv")
-#     if os.path.exists(training_data_dir):
-#         print(f"Output file already exists for {site} - {year}")
-#         return training_data_dir
-#     shapefile_description = os.path.basename(shp_path).split('.')[0]
+    classified_PFTs_path = os.path.join(ic_type_path,"pfts_per_plot.csv")
 
-#     # Specify destination for extracted features
-#     if use_case == "train":
-#         extracted_features_path = training_data_dir
-#         extracted_features_filename = os.path.join(extracted_features_path,
-#                                                   f"{shapefile_description}-extracted_features_inv.csv")
+    if not os.path.exists(classified_PFTs_path):
+
+        wavelengths = pd.read_csv(os.path.join(stacked_aop_path, 
+                                               "wavelengths.txt"))['wavelengths'].tolist()
+        stacked_aop_layer_names = pd.read_csv(os.path.join(stacked_aop_path, 
+                                                           "stacked_aop_layer_names.txt"))['stacked_aop_layer_names'].tolist()
+        #ais remove the following rows earlier in the workflow so I don't need to do it here
+        stacked_aop_layer_names.drop(columns=['pixelNumber','eastingIDs','northingIDs'], inplace=True)
+            
+        # Filter out unwanted wavelengths
+        wavelength_lut = filter_out_wavelengths(wavelengths=wavelengths, layer_names=stacked_aop_layer_names)
+        
+        # features to use in the RF models
+        featureNames = ["shapeID"] + wavelength_lut['xwavelength'].tolist() + [name for name in stacked_aop_layer_names if not name.isdigit()]
+        
+        # Prep extracted features csv for RF model
+        extracted_features_df = pd.read_csv(extracted_features_filename)
+        # ais I think I can remove this code below now? fixed in  early code
+        # # If rs_inv_plots, then make sure shapes are the subplot, not just the plot 
+        # if ic_type=="rs_inv_plots":
+        #     extracted_features_df['shapeID'] = extracted_features_df['shapeID'] + "_" + extracted_features_df['subplotID']
+        # filter the data to contain only the features of interest 
+        features_df = extracted_features_df[featureNames] 
+
+        # Remove any rows with NA   
+        features_df.dropna(inplace=True)
+        #ais why are there rows with NAs?
+        
+        ### Predict PFT ID for FATES patches 
+        print("Predicting plot-level PFTs")
+
+         # Load RF model
+        rf_model = joblib.load(rf_model_path) 
+                
+        if pcaInsteadOfWavelengths:
+            # remove the individual spectral reflectance bands from the training data
+            features_noWavelengths = features_df.drop([col for col in features_df.columns if col.startswith("X")], axis=1)
+            
+            # Define evaluation procedure for CV
+            # cv = StratifiedKFold(n_splits = 3) #ais make k_fold a global param #, shuffle=True, random_state=10210)
+            
+            # PCA
+            scaler = StandardScaler()
+            features_scaled = scaler.fit_transform(features_df[[col for col in features_df.columns if col.startswith("X")]])
+            nPCs = sum(1 for item in rf_model.feature_names_in_ if item.startswith('PC'))
+            pca = PCA(n_components=nPCs) 
+            #ais ^ I may have 9 PCs used in training the RF model, but to get to 99% variance for only rs_inv plots, 
+            # one PC may be sufficient, so I'm forcing the same number of PCs as model
+            features_pca = pca.fit_transform(features_scaled) 
+            # nPCs = features_pca.shape[1] 
+            features = pd.concat([features_noWavelengths.reset_index(drop=True), pd.DataFrame(features_pca, columns=[f"PC{i+1}" for i in range(nPCs)])],axis=1)
+        else:
+            features = features_df
+            
+        # Predict PFT ID
+        features['pred_PFT'] = rf_model.predict(features.drop('shapeID',axis=1)) 
+        
+        # Summarize as percentages per plot
+        features_pft_by_pct = features.groupby(['shapeID', 'pred_PFT']).size().reset_index(name='count')
+        features_pft_by_pct['pct'] = features_pft_by_pct['count'] / features_pft_by_pct.groupby('shapeID')['count'].transform('sum')
+        
+        #ais why would I do the below? can't remember - probably should cut
+        # # Add "_central" to shapeID if ic_type is "rs_inv_plots"
+        # if ic_type == "rs_inv_plots":
+        #     features_pft_by_pct['shapeID'] = features_pft_by_pct['shapeID'] + "_central"
+        
+        # Write to CSV
+        features_pft_by_pct.to_csv(classified_PFTs_path, index=False)
     
-#     elif use_case == "predict":
-#         extracted_features_path = ic_type_path
-#         extracted_features_filename = os.path.join(extracted_features_path,
-#                                                   f"{shapefile_description}-extracted_features.csv")
-#     else:
-#         print("need to specify use_case")
-  
-#     if not os.path.exists(extracted_features_filename): 
-#         # Get the list of stacked AOP files
-#         stacked_aop_files = [os.path.join(stacked_aop_path, f) for f in os.listdir(stacked_aop_path) if f.endswith('.tif')]
+    return classified_PFTs_path
 
-#         # Filter the stacked AOP files to only include those that intersect with the shapefile
-#         shp_gdf['center_X'] = shp_gdf.centroid.x
-#         shp_gdf['center_Y'] = shp_gdf.centroid.y
+
+
+# reading in shp with gpd, check first if shp is empty then return None
+# ...
 #         for file in stacked_aop_files: 
 #             # read current tile of stacked AOP data
 #             with rasterio.open(file) as src:
@@ -342,113 +392,3 @@ def prepare_spatial_data_for_ic(site, year_inv, year_aop, ic_type, data_raw_aop_
 #         os.remove(f)
     
 #     return extracted_features_filename
-
-
-
-import pandas as pd
-import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-
-# def predict_plot_level_PFTs(site, year, data_int_path, data_final_path,
-#                             stacked_aop_path, ic_type_path, rf_model_path, extracted_features_csv,
-#                             ic_type, pcaInsteadOfWavelengths):
-    
-#     classified_PFTs_path = os.path.join(ic_type_path, "pfts_per_plot.csv")
-    
-#     if not os.path.exists(classified_PFTs_path):
-#         print("Predicting plot-level PFTs")
-        
-#         # Load wavelengths and stacked AOP layer names
-#         wavelengths = pd.read_csv(os.path.join(stacked_aop_path, "wavelengths.txt"))['wavelengths'].round(0).astype(int)
-#         stacked_aop_layer_names = pd.read_csv(os.path.join(stacked_aop_path, "stacked_aop_layer_names.txt"))['stacked_aop_layer_names']
-        
-#         # Filter out unwanted wavelengths
-#         filter_out_wavelengths = ro.r('filter_out_wavelengths') 
-#         wavelength_lut = filter_out_wavelengths(wavelengths, stacked_aop_layer_names)
-        
-#         # Define feature names
-#         featureNames = ["shapeID"] + wavelength_lut['xwavelength'].tolist() + [name for name in stacked_aop_layer_names if not name.isdigit()]
-        
-#         # Load extracted features CSV
-#         extracted_features_df = pd.read_csv(extracted_features_csv)
-        
-#         # Select features of interest
-#         features_df = extracted_features_df[featureNames]
-        
-#         # Remove rows with NAs
-#         features_df_noNA = features_df.dropna()
-        
-#         # Perform PCA if specified
-#         if pcaInsteadOfWavelengths:
-#             features = apply_PCA(features_df_noNA, wavelength_lut, ic_type_path)
-#         else:
-#             features = features_df_noNA
-        
-#         # Load RF model
-#         rf_model = pd.read_pickle(rf_model_path)
-        
-#         # Predict PFT ID
-#         features['pred_PFT'] = rf_model.predict(features)
-        
-#         # Summarize as percentages per plot
-#         features_pft_by_pct = features.groupby(['shapeID', 'pred_PFT']).size().reset_index(name='count')
-#         features_pft_by_pct['pct'] = features_pft_by_pct['count'] / features_pft_by_pct.groupby('shapeID')['count'].transform('sum')
-        
-#         # Add "_central" to shapeID if ic_type is "rs_inv_plots"
-#         if ic_type == "rs_inv_plots":
-#             features_pft_by_pct['shapeID'] = features_pft_by_pct['shapeID'] + "_central"
-        
-#         # Write to CSV
-#         features_pft_by_pct.to_csv(classified_PFTs_path, index=False)
-    
-#     return classified_PFTs_path
-
-
-# # TEST CASE
-# site='SJER',
-# year_inv='2021',
-# year_aop = '2021-06',
-# use_case = "predict"
-# ic_type = "rs_inv_plots" # field_inv_plots, rs_inv_plots, rs_random_plots
-# aggregate_from_1m_to_2m_res = False
-# px_thresh = 2
-# ntree = 5000
-# pcaInsteadOfWavelengths = True
-# n_plots = 1000
-# min_distance = 20
-# plot_length = 20
-# data_raw_aop_path = "/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/raw/aop",
-# data_int_path="/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate", 
-# data_final_path='/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/final',
-# rf_model_path = "/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/training/rf_tree_crowns_training/rf_model_tree_crowns-training.RData",
-# stacked_aop_path = "/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/stacked_aop",
-# biomass_path='/Users/AISpiers/dev/RS-PRISMATIC/inititalize/data/intermediate/SOAP/2019/biomass',
-                       
-# test = generate_initial_conditions(site=site[0],
-#                             year_inv=year_inv[0],
-#                             year_aop = year_aop[0],
-#                             data_raw_aop_path = data_raw_aop_path[0],
-#                             data_int_path=data_int_path[0], 
-#                             data_final_path=data_final_path[0],
-#                             rf_model_path = rf_model_path[0],
-#                             stacked_aop_path = stacked_aop_path[0],
-#                             biomass_path=biomass_path[0],
-#                                         use_case=use_case,
-#                                         ic_type=ic_type,
-#                                         n_plots = n_plots,
-#                                         min_distance = min_distance, 
-#                                         plot_length = plot_length, 
-#                                         aggregate_from_1m_to_2m_res = aggregate_from_1m_to_2m_res, 
-#                                         pcaInsteadOfWavelengths = pcaInsteadOfWavelengths)
-
-# 2+2
-# # to do later ais (inititalize/hyperspectral.py)
-# add argument name before input in every function call in main.py 
-# save tifs into their own data product subfolders e.g. raw/aop/tif/chm
-# combine lidar and hs aop downloads into one step? think on this
-# add 06-plot_aop_imagery function for example tile - is this helpful -maybe combine with script 10 function?
-    # even since we have the full tile saved in stacked aop?
-# create function for script 10 - save plots in diagnostics folder?
-# check through functions in 00 script

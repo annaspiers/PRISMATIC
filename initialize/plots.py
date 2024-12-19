@@ -219,6 +219,9 @@ def preprocess_polygons(input_data_path,
     df = gpd.GeoDataFrame(data=zip(names, subplot_ids, ps),
                           columns=['plotID', 'subplotID', 'geometry'],
                           crs=polygons_site_utm.crs)
+    df['plotID'] = df['plotID'] + '_' + df['subplotID'] 
+    #ais ^ now plots will actually be subplots, which is what we want as patches
+    # could we avoid referencing 'subplotID again across the code?
     output_folder_path = \
         output_data_path/site/year/INVENTORY_PLOTS_FOLDER
     output_folder_path.mkdir(parents=True, exist_ok=True)

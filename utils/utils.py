@@ -18,12 +18,11 @@ def _add_to_cache(func_name, ps, l, cache):
 
 
 def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, 
-                data_int_path, data_final_path, use_case, ic_type, hs_type):
+                data_int_path, hs_type):
     l = []
     data_raw_aop_path = Path(data_raw_aop_path)
     data_raw_inv_path = Path(data_raw_inv_path)
     data_int_path = Path(data_int_path)
-    data_final_path = Path(data_final_path)
 
     l.extend([str(p) for p in data_raw_aop_path.glob('**/') if p.is_dir()])
     l.extend([str(p) for p in data_raw_inv_path.glob('**/') if p.is_dir()])
@@ -31,7 +30,6 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
     l.extend([str(p) for p in data_int_path.glob('**/') if p.is_dir()])
     l.extend([str(p) for p in data_int_path.glob('**/*.csv')])
     l.extend([str(p) for p in data_int_path.glob('**/*.shp')])
-    l.extend([str(p) for p in data_int_path.glob('**/*.RData')])
     
     cache = {}
 
@@ -100,22 +98,13 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
 
 
 
-def build_cache_all( #data_raw_aop_path, 
-                trait_table_path, data_raw_inv_path, data_int_path, data_final_path, use_case, ic_type):
+def build_cache_all( data_int_path, data_final_path, use_case, site, year_inventory, ic_type):
     l = []
-    # data_raw_aop_path = Path(data_raw_aop_path)
-    data_raw_inv_path = Path(data_raw_inv_path)
     data_int_path = Path(data_int_path)
     data_final_path = Path(data_final_path)
-    trait_table_path = Path(trait_table_path)
 
-    # l.extend([str(p) for p in data_raw_aop_path.glob('**/') if p.is_dir()])
-    # l.extend([str(p) for p in data_raw_inv_path.glob('**/') if p.is_dir()])
-    l.extend([str(p) for p in data_raw_inv_path.glob('**/*.csv')])
     l.extend([str(p) for p in data_int_path.glob('**/') if p.is_dir()])
-    l.extend([str(p) for p in data_int_path.glob('**/*.csv')])
-    l.extend([str(p) for p in data_int_path.glob('**/*.shp')])
-    l.extend([str(p) for p in data_int_path.glob('**/*.RData')])
+    l.extend([str(p) for p in data_int_path.glob('**/*.joblib')])
     l.extend([str(p) for p in data_final_path.glob('**/') if p.is_dir()])
     l.extend([str(p) for p in data_final_path.glob('**/*.css')])
     l.extend([str(p) for p in data_final_path.glob('**/*.pss')])
@@ -123,26 +112,25 @@ def build_cache_all( #data_raw_aop_path,
     cache = {}
 
     _add_to_cache('train_pft_classifier',
-                  str(data_int_path/'rf_dir'/'rf_model_tree_crowns_training.RData'),
+                  str(data_int_path/'rf_dir'/'rf_model_tree_crowns_training.joblib'),
                     l, cache)
     
     if use_case=="predict":        
         if (ic_type == "field_inv_plots"):
             _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/ic_type/"ic_field_inv.css"),
-                       str(data_final_path/ic_type/"ic_field_inv.pss")],
+                      [str(data_final_path/site/year_inventory/ic_type/"ic_field_inv.css"),
+                       str(data_final_path/site/year_inventory/ic_type/"ic_field_inv.pss")],
                       l, cache)   
         if (ic_type=="rs_inv_plots"):
             _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/ic_type/"ic_rs_inv_plots.css"),
-                       str(data_final_path/ic_type/"ic_rs_inv_plots.pss")],
+                      [str(data_final_path/site/year_inventory/ic_type/"ic_rs_inv_plots.css"),
+                       str(data_final_path/site/year_inventory/ic_type/"ic_rs_inv_plots.pss")],
                       l, cache)   
         if (ic_type == "rs_random_plots"):
             _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/ic_type/"ic_rs_random_plots.css"),
-                       str(data_final_path/ic_type/"ic_rs_random_plots.pss")],
+                      [str(data_final_path/site/year_inventory/ic_type/"ic_rs_random_plots.css"),
+                       str(data_final_path/site/year_inventory/ic_type/"ic_rs_random_plots.pss")],
                       l, cache)   
-                
     return cache
 
 

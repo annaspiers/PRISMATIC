@@ -1,15 +1,16 @@
 import logging
 import os
 import sys
-import whitebox
+# import whitebox
 import zipfile
 import ray
 
 import pandas as pd
 import numpy as np
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib.patches import Patch
 import rasterio
 from rasterio.plot import show
 import fiona
@@ -19,28 +20,34 @@ from sklearn.preprocessing import OneHotEncoder
 import geopandas as gpd
 from shapely.geometry import Point
 import rpy2.robjects as ro
-    from collections import Counter
+from collections import Counter
+import seaborn as sns
 
 # data preparation
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import StandardScaler
-from imblearn.over_sampling import SMOTE
-from imblearn.over_sampling import ADASYN
-from imblearn.over_sampling import SVMSMOTE
-from imblearn.pipeline import Pipeline as imbpipeline
 from sklearn.pipeline import Pipeline
 
-# model selecation
-from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import StratifiedKFold
-from sklearn.model_selection import train_test_split    
+# model selection
+from sklearn.model_selection import (
+    GridSearchCV,
+    GroupKFold,
+    GroupShuffleSplit,
+    KFold,
+    ShuffleSplit,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+    StratifiedShuffleSplit,
+    TimeSeriesSplit,
+    train_test_split,
+)
 
 # model evaluation
 from sklearn.metrics import f1_score
 
 # machine learning
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier as RF
 
 # Save files
 import joblib
@@ -256,7 +263,7 @@ def prep_aop_imagery(site, year, hs_type, hs_path, tif_path, data_int_path, use_
 
 
 def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final_path, stacked_aop_path, 
-                         use_case, ic_type, aggregate_from_1m_to_2m_res):
+                         use_case, aggregate_from_1m_to_2m_res, ic_type=None, ic_type_path=None):
     """Create geospatial features (points, polygons with half the maximum crown diameter) 
         for every tree in the NEON woody vegetation data set. 
         Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
@@ -275,149 +282,15 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
     
     # Extract training data from AOP data with tree polygons
-    extract_spectra_from_polygon = ro.r('extract_spectra_from_polygon')
     training_spectra_path = extract_spectra_from_polygon(site=site, 
                                                          year=year, 
-                                                         shp_path=shp_path,
                                                          data_int_path=data_int_path, 
                                                          data_final_path=data_final_path, 
                                                          stacked_aop_path=stacked_aop_path, 
+                                                         shp_path=shp_path,
                                                          use_case=use_case, 
-                                                         ic_type=ic_type,
                                                          aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res)
  
-    # # Extract features (remote sensing data) for each sample (pixel) within the
-    # # specified shapefile (containing polygons that correspond to trees at the NEON site)
-    
-    # # Check if the stacked AOP path is empty
-    # if not os.listdir(stacked_aop_path):
-    #     print(f"Cannot extract data because stacked_aop_path is empty for {site} - {year}")
-    #     return None
-    
-    # # Define the training data directory
-    # training_data_dir = os.path.join(data_int_path, site, year, "training")
-    
-    # # Get a description of the shapefile to use for naming outputs
-    # shapefile_description = os.path.basename(shp_path).split('.')[0]
-    
-    # # Specify destination for extracted features
-    # if use_case == "train":
-    #     extracted_features_path = training_data_dir
-    #     extracted_features_filename = os.path.join(extracted_features_path,
-    #                                                f"{shapefile_description}-extracted_features_inv.csv")
-    # elif use_case == "predict":
-    #     extracted_features_path = ic_type_path
-    #     extracted_features_filename = os.path.join(extracted_features_path,
-    #                                                f"{shapefile_description}-extracted_features.csv")
-    # else:
-    #     print("Need to specify use_case")
-    #     return None
-    
-    # # Check if the extracted features file already exists
-    # if os.path.exists(extracted_features_filename):
-    #     print(f"Extracted features file already exists for {site} - {year}")
-    #     return extracted_features_filename
-    
-    # # Load the shapefile
-    # shp_gdf = gpd.read_file(shp_path)
-    # stacked_aop_list = os.listdir(stacked_aop_path)
-
-    # # Create a list to store the pixel values and corresponding shape IDs
-    # pixel_values_list = []
-    # shape_ids_list = []
-
-    # # Loop through each shape in the shapefile
-    # for i, row in shp_gdf.iterrows():
-    #     # Get the geometry of the current shape
-    #     geometry = row.geometry
-        
-    #     # Loop through each raster in the folder
-    #     for file in stacked_aop_list:
-    #         if file.endswith('.tif'):
-    #             # Load the current raster
-    #             raster_path = os.path.join(stacked_aop_path, file)
-    #             with rasterio.open(raster_path) as src:
-    #                 # Check if the current shape overlaps with the current raster
-    #                 if src.bounds.intersects(geometry.bounds):
-    #                     # Extract the pixel values for the current shape from the current raster
-    #                     pixel_values, _ = rasterio.mask.mask(src, [geometry], crop=True, all_touched=True)
-                        
-    #                     # Get the shape ID
-    #                     shape_id = row['shape_id']  # Replace 'shape_id' with the actual column name in your shapefile
-                        
-    #                     # Append the pixel values and shape ID to the lists
-    #                     pixel_values_list.append(pixel_values)
-    #                     shape_ids_list.append(np.full(pixel_values.shape[1:], shape_id, dtype=np.int64))
-
-    # # Convert the lists to numpy arrays
-    # pixel_values_array = np.concatenate(pixel_values_list, axis=1)
-    # shape_ids_array = np.concatenate(shape_ids_list, axis=0)
-
-    # # Save the pixel values and shape IDs to a numpy file
-    # output_path = os.path.join(training_data_dir,'training_data.npy')
-    # np.savez(output_path, pixel_values=pixel_values_array, shape_ids=shape_ids_array)
-    
-    # # Filter to tiles containing veg to speed up the next for-loop
-    # if use_case == "train" or ic_type == "rs_inv_plots":
-    #     tiles_w_veg = pd.read_csv(os.path.join(training_data_dir, "tiles_w_veg.txt"), header=None)
-    #     tiles_w_veg = tiles_w_veg[0].tolist()
-    #     stacked_aop_list = [file for file in stacked_aop_list if any(tile in file for tile in tiles_w_veg)]
-    
-        
-    # # Aggregate to 2m resolution from 1m
-    # if aggregate_from_1m_to_2m_res:
-    #     # This step is not implemented in the original R code
-    #     pass
-    
-    # # Clip the hyperspectral raster stack with the polygons within current tile.
-    # # The returned objects are data frames, each row corresponds to a pixel in the
-    # # hyperspectral imagery. The ID number refers to which tree that the 
-    # # the pixel belongs to. A large polygon will lead to many extracted pixels
-    # # (many rows in the output data frame), whereas tree stem points will
-    # # lead to a single extracted pixel per tree. 
-    
-
-    # # Plot polygons of training data and RGB image of extracted pixels
-    # for group in shapes_in_gdf['groupID'].unique():
-    #     shapes_temp = shapes_in_gdf[shapes_in_gdf['groupID'] == group]
-    #     buff_temp = shapes_temp.buffer(10)
-    #     bbox_temp = buff_temp.bounds
-    #     with rasterio.open(stacked_aop_filename) as src:
-    #         window = rasterio.windows.from_bounds(bbox_temp.left, bbox_temp.bottom, bbox_temp.right, bbox_temp.top, src.transform)
-    #         data = src.read(1, window=window)
-    #         plt.imshow(data, cmap='gray')
-    #         plt.show()
-    
-    # # Merge the extracted spectra and other data values with the tree info 
-    # shapes_metadata = shapes_in_gdf.drop(columns=['geometry'])
-    
-    # # Combine the additional data with each spectrum for writing to file.
-    # # Remove the geometry column to avoid issues when writing to csv later 
-    # spectra_write = pd.concat([shapes_metadata, pd.DataFrame(extracted_spectra)], axis=1)
-    
-    # # Write extracted spectra and other remote sensing data values to file 
-    # spectra_write.to_csv(os.path.join(extracted_features_path, f"extracted_features_{east_north_string}_{shapefile_description}.csv"), index=False)
-    
-    # # Combine all extracted features into a single .csv
-    # paths_ls = [os.path.join(extracted_features_path, file) for file in os.listdir(extracted_features_path) if file.endswith('.csv')]
-    
-    # # Refine the output csv selection 
-    # csvs = [file for file in paths_ls if shapefile_description in file]
-    
-    # # Combine all .csv data into a single data frame 
-    # spectra_all = pd.concat([pd.read_csv(file) for file in csvs], ignore_index=True)
-    
-    # # Add site and year columns
-    # spectra_all['site'] = site
-    # spectra_all['year'] = year
-    
-    # # Write ALL the spectra to a single .csv file 
-    # spectra_all.to_csv(extracted_features_filename, index=False)
-    
-    # # Delete the individual csv files for each tile 
-    # for file in csvs:
-    #     os.remove(file)
-
 
     log.info('Spectral features for training data saved at: '
              f'{training_spectra_path}')
@@ -426,39 +299,8 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
 
 
 
-
-
-# def custom_train_test_split(grouped,  train_size=0.8, random_state=42): #X, y, 
-#     # Get the class counts
-#     # class_counts = y.value_counts()
-#     class_counts = pd.concat(grouped)['pft'].value_counts() #grouped.size()
-
-#     # Get the number of cedar training samples
-#     cedar_train_count = int(class_counts['cedar'] * train_size)
-    
-#     # Split the data for each class
-#     train_data = pd.DataFrame()
-#     test_data = pd.DataFrame()
-    
-#     for class_label, group in grouped:
-#         #shape_ids = group['shapeID'].unique()
-
-#         if class_label == 'cedar':
-#             class_train_data, class_test_data = train_test_split(group, train_size=train_size, random_state=random_state)
-#         elif class_counts[class_label] > class_counts['cedar']:
-#             class_train_data, class_test_data = train_test_split(group, train_size=cedar_train_count, random_state=random_state)
-#         else:
-#             class_train_data, class_test_data = train_test_split(group, train_size=train_size, random_state=random_state)
-        
-#         train_data = pd.concat([train_data, class_train_data])
-#         test_data = pd.concat([test_data, class_test_data])
-    
-#     return train_data, test_data
-
-
-
 def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree, 
-                         randomMinSamples, independentValidationSet, balance_training_to_min_PFT):    
+                         randomMinSamples, independentValidationSet):    
     """Train a Random Forest (RF) model to classify tree PFT using in-situ tree
         measurements for PFT labels and remote sensing data as descriptive features
         Analog to 08-classify_species.R from https://github.com/earthlab/neon-veg 
@@ -486,6 +328,7 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
           ais this doesnt work if for F - troubleshoot this later
 
     """
+    
     log.info(f'Training model on sites: {sites}')
 
     features_df = pd.DataFrame()
@@ -513,12 +356,16 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
                 os.makedirs(rf_output_dir)
                 os.makedirs(os.path.join(rf_output_dir,"validation"))
             
-            # # Filter out unwanted wavelengths
-            # wavelength_lut <- filter_out_wavelengths(wavelengths=wavelengths, 
-            #                                          layer_names=stacked_aop_layer_names)
+            # Filter out unwanted wavelengths
+            wavelength_lut = filter_out_wavelengths(wavelengths=wavelengths['wavelengths'].tolist(), 
+                                                    layer_names=stacked_aop_layer_names['stacked_aop_layer_names'].tolist())
             
+            # features and label to use in the RF models
+            featureNames = ["shapeID", "pft"] + wavelength_lut['xwavelength'].tolist() + [name for name in stacked_aop_layer_names['stacked_aop_layer_names'].tolist() if not name.isdigit()]
+        
             # Prep extracted features csv for RF model
             extracted_features_X_df = pd.read_csv(extracted_features_filename)
+            extracted_features_X_df = extracted_features_X_df[featureNames] 
             # Remove X from wavelength column names
             features_temp = extracted_features_X_df.rename(columns=lambda x: x[1:] if x.startswith('X') else x)                  
             # filter the data to contain only the features of interest 
@@ -530,77 +377,109 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
             features_temp.columns = features_temp.columns.map(lambda x: f'X{numeric_columns.index(x)+1}' if x in numeric_columns else x)
 
             features_df = pd.concat([features_df, features_temp])
-          
 
-    nPCs = 9
+    # Remove any rows with NA   
+    features_df.dropna(inplace=True)
+
     # remove the individual spectral reflectance bands from the training data
     features_noWavelengths = features_df.drop([col for col in features_df.columns if col.startswith("X")], axis=1)
+    features_noWavelengths.drop(columns=['pixelNumber','eastingIDs','northingIDs'], inplace=True)
+       
     scaler = StandardScaler()
     features_scaled = scaler.fit_transform(features_df[[col for col in features_df.columns if col.startswith("X")]])
-    pca = PCA(n_components=nPCs)
-    features_pca = pca.fit_transform(features_scaled) #features_scaled[[col for col in features_df_scaled.columns if col.startswith("X")]])
+    pca = PCA(n_components=0.99) #figure out why so much variance is explained by PC1
+    features_pca = pca.fit_transform(features_scaled) 
+    nPCs = features_pca.shape[1] 
     features = pd.concat([features_noWavelengths.reset_index(drop=True), pd.DataFrame(features_pca, columns=[f"PC{i+1}" for i in range(nPCs)])],axis=1)
-    features.drop(columns=['indvdID','center_X','center_Y','groupID','pixelNumber','eastingIDs','northingIDs'], inplace=True)
+    if nPCs > 2:    
+        # visualize PCA    
+        plt.figure(figsize=(8, 6))
+        for value in features['pft'].unique():
+            plt.scatter(features.loc[features['pft'] == value, 'PC1'], features.loc[features['pft'] == value, 'PC2'], label=value)
+        plt.xlabel('PC1')
+        plt.ylabel('PC2')
+        plt.title('PC1 vs PC2')
+        plt.legend()
+        plt.savefig(os.path.join(rf_output_dir, 'pc1_vs_pc2.png')) # plot PC1 vs PC2
+        
+        plt.figure(figsize=(8, 6))
+        for value in features['pft'].unique():
+            plt.scatter(features.loc[features['pft'] == value, 'PC2'], features.loc[features['pft'] == value, 'PC3'], label=value)
+        plt.xlabel('PC2')
+        plt.ylabel('PC3')
+        plt.title('PC2 vs PC3')
+        plt.legend()
+        plt.savefig(os.path.join(rf_output_dir, 'pc2_vs_pc3.png')) # plot PC2 vs PC3
+
+        if nPCs > 3:       
+            plt.figure(figsize=(8, 6))
+            for value in features['pft'].unique():
+                plt.scatter(features.loc[features['pft'] == value, 'PC3'], features.loc[features['pft'] == value, 'PC4'], label=value)
+            plt.xlabel('PC3')
+            plt.ylabel('PC4')
+            plt.title('PC3 vs PC4')
+            plt.legend()
+            plt.savefig(os.path.join(rf_output_dir, 'pc3_vs_pc4.png')) 
+
+
+
+
+    # # Define evaluation procedure for CV
+    # rng = np.random.RandomState(1338)
+    # cmap_data = plt.cm.Paired
+    # cmap_cv = plt.cm.coolwarm
+    # n_splits = 4 #ais make n_splits a global param 
+    # # example: https://stackoverflow.com/questions/56872664/complex-dataset-split-stratifiedgroupshufflesplit
+
+    # # Reorder features by pft
+    # features_sort = features.sort_values(['pft', 'shapeID'])
+    # X = features_sort.drop(columns=['pft','shapeID']) #list(range(len(features)))
+    # y = [list(set(features_sort['pft'])).index(pft) for pft in features_sort['pft'] ] #use index number
+    # groups = [list(set(features_sort['shapeID'])).index(shapeID) for shapeID in features_sort['shapeID']]  #use index number  
+    # # for train, test in sgkf.split(X, y, groups=groups):
+    # #     print("%s %s" % (train, test))
+    # # ais need to print the index of each class - otherwise hard to interpret results of 0-10
+    # best_model, X_train, X_test = fit_RF_CV_class(X=X, y=y, groups=groups, k_fold=n_splits, pca=False, 
+    #             savefile=os.path.join(rf_output_dir,'pipeline_output'))
     
-    # visualize PCA    
-    plt.figure(figsize=(8, 6))
-    for value in features['pft'].unique():
-        plt.scatter(features.loc[features['pft'] == value, 'PC1'], features.loc[features['pft'] == value, 'PC2'], label=value)
-    plt.xlabel('PC1')
-    plt.ylabel('PC2')
-    plt.title('PC1 vs PC2')
-    plt.legend()
-    plt.savefig(os.path.join(rf_output_dir, 'pc1_vs_pc2.png')) # plot PC1 vs PC2
-    
-    plt.figure(figsize=(8, 6))
-    for value in features['pft'].unique():
-        plt.scatter(features.loc[features['pft'] == value, 'PC2'], features.loc[features['pft'] == value, 'PC3'], label=value)
-    plt.xlabel('PC2')
-    plt.ylabel('PC3')
-    plt.title('PC2 vs PC3')
-    plt.legend()
-    plt.savefig(os.path.join(rf_output_dir, 'pc2_vs_pc3.png')) # plot PC2 vs PC3
+    # # split the groups into training and testing sets
+    # train_df = pd.concat(X_train)
+    # test_df = pd.concat(X_test)
+
+    # # ais need to put this code ^ into a for-loop to choose best hyperparameters
+
+    # fig, ax = plt.subplots(figsize=(6, 3))
+    # plot_cv_indices(StratifiedGroupKFold(n_splits), X, y, groups, ax, n_splits, cmap_data, cmap_cv)
+    # ax.legend(
+    #     [Patch(color=cmap_cv(0.8)), Patch(color=cmap_cv(0.02))],
+    #     ["Testing set", "Training set"],
+    #     loc=(1.02, 0.8),
+    # ) #ais adapt this code to add key for class
+    # # Make the legend fit
+    # plt.tight_layout()
+    # fig.subplots_adjust(right=0.7)
+    # plt.savefig(os.path.join(rf_output_dir,'StratGroupKFold_split.png'))
+
+
+
 
     # group the data by 'pft' and 'shapeID'
     grouped_features = features.groupby(['pft', 'shapeID'])
-
-    # create a list of groups
-    groups = [group for _, group in grouped_features]
+    groups = [group for _, group in grouped_features] # create a list of groups
 
     # split the groups into training and testing sets
     train_groups, test_groups = train_test_split(groups, test_size=0.2, random_state=42)
-
     train_df = pd.concat(train_groups)
     test_df = pd.concat(test_groups)
-    
-    # # never finished this
-    # # Balance training data so that no group has more training data than the smallest target PFT
-    # # in this case, the smallest target PFT is cedar
-    # if balance_training_to_min_PFT:
 
-    #     # how many pixels in training data for smallest target PFT?
-    #     min_pft = 'cedar'
-    #     min_pft_pixel_count = len(train_df[train_df['pft'] == min_pft])
 
-    #     for pft_class in train_df['pft'].unique():
-    #         class_df = train_df[train_df['pft'] == pft_class]
 
-    #         # while number of pixels in this class are much larger than cedar 
-    #         # move all pixels from one shape into testing
-    #         while len(class_df) > (min_pft_pixel_count*1.4): 
-    #             #ais I just chose 1.4 arbitrarily as an acceptable size
 
-    #             shapeID_to_move = class_df['shapeID'].unique()[0]  # move the first shape_ID
-    #             rows_to_move = train_df[train_df['shapeID'] == shapeID_to_move]
-    #             test_df = pd.concat([test_df, rows_to_move])
-    #             train_df = train_df.drop(rows_to_move.index)
-                
-                
     # create the training and testing DataFrames
     train_df = train_df[train_df['pft'] != "other_herb"]
-    train_df_final = train_df.drop(["shapeID",'site','year'],axis=1)
+    train_df = train_df.drop(["shapeID"],axis=1) #'site', 'year'
     test_df = test_df[test_df['pft'] != "other_herb"]
-    test_df_final = test_df.drop(["shapeID",'site','year'],axis=1)
+    test_df = test_df.drop(["shapeID"],axis=1) #'site','year'
     # check the class distribution in the training and testing sets
     print("Training set class distribution:")
     print(train_df['pft'].value_counts(normalize=True))
@@ -618,19 +497,6 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
     plt.title('Count of Data Points in Training and Testing Datasets')
     plt.legend()
     plt.savefig(os.path.join(rf_output_dir, 'train_test_count.png'))
-    
-    # # create a bar plot to visualize the percentage of data points in training and testing datasets for each prediction class
-    # # ais doesn't visualize the %s I want
-    # plt.figure(figsize=(10, 6))
-    # train_percentages = (train_df['pft'].value_counts() / len(train_df)) * 100
-    # test_percentages = (test_df['pft'].value_counts() / len(test_df)) * 100
-    # plt.bar(train_percentages.index, train_percentages.values, label='Training')
-    # plt.bar(test_percentages.index, test_percentages.values, label='Testing')
-    # plt.xlabel('Prediction Class')
-    # plt.ylabel('Percentage')
-    # plt.title('Percentage of Data Points in Training and Testing Datasets')
-    # plt.legend()
-    # plt.savefig(os.path.join(rf_output_dir, 'train_test_percentage.png'))
 
     if randomMinSamples:
         minSamples = train_df["pft"].value_counts().min()
@@ -638,19 +504,19 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
 
     rf_model_path = os.path.join(rf_output_dir, f"rf_model_{shapefile_description}.joblib")
     if not os.path.exists(rf_model_path):
-        rf_model = RandomForestClassifier(n_estimators=ntree, random_state=42, class_weight="balanced")
-        rf_model.fit(train_df_final.drop("pft", axis=1), train_df_final["pft"])
+        rf_model = RF(n_estimators=ntree, random_state=42, class_weight="balanced")
+        rf_model.fit(train_df.drop("pft", axis=1), train_df["pft"])
         dump(rf_model, rf_model_path)
     else:
         rf_model = load(rf_model_path)
 
-    y_pred_val = rf_model.predict(test_df_final.drop("pft", axis=1))
-    accuracy_val = accuracy_score(test_df_final["pft"], y_pred_val)
+    y_pred_val = rf_model.predict(test_df.drop("pft", axis=1))
+    accuracy_val = accuracy_score(test_df["pft"], y_pred_val)
     print("Validation Accuracy:", accuracy_val)
     print("Validation Classification Report:")
-    print(classification_report(test_df_final["pft"], y_pred_val))
+    print(classification_report(test_df["pft"], y_pred_val))
     print("Validation Confusion Matrix:")
-    print(confusion_matrix(test_df_final["pft"], y_pred_val))
+    print(confusion_matrix(test_df["pft"], y_pred_val))
     
     # # Visualize classifications
     # # in the testing dataframe, group to identify which plants are near each other
@@ -737,7 +603,180 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
     log.info('Trained PFT classifier saved in this folder: '
              f'{rf_model_path}')
     
-    return rf_model_path    
+    return rf_model_path   
+
+
+
+def plot_cv_indices(cv, X, y, groups, ax, n_splits, cmap_data, cmap_cv, lw=10):
+    """Create a sample plot for indices of a cross-validation object.
+    from: https://scikit-learn.org/stable/auto_examples/model_selection/plot_cv_indices.html"""
+    #use_groups = "Group" in type(cv).__name__
+    # groups = group if use_groups else None
+    # Generate the training/testing visualizations for each CV split
+    for ii, (tr, tt) in enumerate(cv.split(X=X, y=y, groups=groups)):
+        # Fill in indices with the training/test groups
+        indices = np.array([np.nan] * len(X))
+        indices[tt] = 1
+        indices[tr] = 0
+
+        # Visualize the results
+        ax.scatter(
+            range(len(indices)),
+            [ii + 0.5] * len(indices), 
+            c=indices,
+            marker="_",
+            lw=lw,
+            cmap=cmap_cv,
+            vmin=-0.2,
+            vmax=1.2,
+        )
+
+    # Plot the data classes and groups at the end
+    ax.scatter(
+        range(len(X)), [ii + 1.5] * len(X), c=y, marker="_", lw=lw, cmap=cmap_data
+    )
+    ax.scatter(
+        range(len(X)), [ii + 2.5] * len(X), c=groups, marker="_", lw=lw, cmap=cmap_data
+    )
+
+    # Formatting
+    yticklabels = list(range(n_splits)) + ["class", "group"]
+    ax.set(
+        yticks=np.arange(n_splits + 2) + 0.5,
+        yticklabels=yticklabels,
+        xlabel="Sample index",
+        ylabel="CV iteration",
+        ylim=[n_splits + 2.2, -0.2],
+        # xlim=[0, 100],
+    )
+    ax.set_title("{}".format(type(cv).__name__), fontsize=15)
+    return ax
+
+
+
+def fit_RF_CV_class(X, y, groups, k_fold, pca, savefile):
+    # Written by Nicola Falco
+    # Adapted by Anna Spiers Nov 2024
+  
+    ##################### Define evaluation procedure for CV
+    cv = StratifiedKFold(n_splits=k_fold)#, shuffle=True, random_state=10210)
+
+    ##################### test/training 
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=111)
+
+    #############################################################################
+    #####################  cross-validation
+    if pca == True:
+        pipeline = Pipeline(steps=[
+            ['pca', PCA(n_components=0.99, whiten= True)],
+            # ['scaler', MinMaxScaler()],
+            ['classifier', RF(class_weight='balanced')] 
+            ])
+        savefile = (str(savefile) + '_PCA')
+
+    else:
+        pipeline = Pipeline(steps=[
+            # ['scaler', MinMaxScaler()],
+            ['classifier', RF(class_weight='balanced')]
+            ])
+        savefile = (str(savefile))
+        
+    ##################### Define grid search RF Parameter optimization
+    # Number of trees in random forest
+    n_estimators = [int(x) for x in np.linspace(start = 1000, stop = 10000, num = 4)] #5
+
+    # Number of features to consider at every split
+    max_features = ['auto', 'sqrt']
+
+    # Maximum number of levels in tree
+    max_depth = [int(x) for x in np.linspace(10, 110, num = 4)] #5
+    max_depth.append(None)
+
+    # Minimum number of samples required to split a node
+    # min_samples_split = [2, 5, 10]
+
+    # Minimum number of samples required at each leaf node
+    min_samples_leaf = [1, 2, 4]
+
+    # Method of selecting samples for training each tree
+    bootstrap = [True]#, False]
+
+    param_rf ={'classifier__n_estimators': n_estimators,
+               'classifier__max_features': max_features,
+               'classifier__min_samples_leaf': min_samples_leaf,
+               'classifier__max_depth': max_depth,
+               # 'classifier__min_samples_split': min_samples_split,
+               # 'classifier__min_samples_leaf': min_samples_leaf,
+               'classifier__bootstrap': bootstrap
+               }
+
+    search = GridSearchCV(estimator=pipeline, param_grid=param_rf,
+                           scoring='f1_weighted', cv=cv, refit=True, verbose=3, n_jobs = 128)
+  
+    ##################### Fit the search to the data
+    # Fit the grid search to the data
+    search.fit(X_train, y_train)
+    search.best_params_
+
+    ##################### get the best performing model fit on the whole training set
+    best_model = search.best_estimator_
+  
+    ##################### Prediction
+    p_test = best_model.predict(X_test)
+
+    ##################### Report performance
+    #### average CM and classification report
+    class_list= np.unique(y_test)
+
+    cm_analysis(y_test, p_test, class_list, savefile)
+    class_report(y_test, p_test, class_list,savefile)
+    
+    return best_model, X_train, X_test
+
+
+
+def cm_analysis(y_true, y_pred, labels,savefile): 
+
+    SMALL_SIZE = 12
+    MEDIUM_SIZE = 15
+    BIGGER_SIZE = 18
+   
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+ 
+    sns.set(style="whitegrid")
+
+    ##############################
+ 
+    # compute the CM
+    cm = confusion_matrix(y_true, y_pred, labels=labels, normalize='true')
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    fig, ax = plt.subplots(figsize=(8,8))
+    disp.plot(ax=ax, cmap=plt.cm.Blues)
+
+    # save the plot as PNG
+    save2png= (str(savefile) + '_CMnorm.png')
+    plt.savefig(save2png, dpi=300, bbox_inches='tight')    
+
+    # transform cm into dataframe and save and CSV
+    df_cm = pd.DataFrame(cm)
+    save2csv= (str(savefile) + '_CMnorm.csv')
+    df_cm.to_csv(save2csv)
+
+    
+
+def class_report(y_test, y_pred, labels,savefile):
+    report = classification_report(y_test,y_pred,labels=labels,output_dict=True)
+    df_report = pd.DataFrame(report).transpose()
+    save2csv = (str(savefile) + '_ClassReport.csv')
+    df_report.to_csv(save2csv)
+
+
 
 
 def serial_index_to_coordinates(serial_index, raster_width=1000):
@@ -759,109 +798,29 @@ def serial_index_to_coordinates(serial_index, raster_width=1000):
 
 
 
-# def train_pft_classifier(sites, data_int_path,
-#                          pcaInsteadOfWavelengths, ntree, randomMinSamples, independentValidationSet):
+def filter_out_wavelengths(wavelengths, layer_names):
+    # define the "bad bands" wavelength ranges in nanometers, where atmospheric 
+    # absorption creates unreliable reflectance values. 
+    # bad_band_window_1 = (1340, 1445)
+    # bad_band_window_2 = (1790, 1955)
+    wavelengths_np = np.array(wavelengths)
 
-# # used originaly when I was training the RF in R
-
-#     """Train a Random Forest (RF) model to classify tree PFT using in-situ tree
-#         measurements for PFT labels and remote sensing data as descriptive features
-#         Analog to 08-classify_species.R from https://github.com/earthlab/neon-veg 
-
-#         Evaluate classifier performance: Out-of-Bag accuracy, independent
-#         validation set accuracy, and Cohen's kappa. Generate confusion matrix
-#         to show the classification accuracy for each PFT. 
-#         Analog to 09-assess_accuracy.R from https://github.com/earthlab/neon-veg 
-#     """
+    # remove the bad bands from the list of wavelengths 
+    remove_bands = wavelengths_np[(wavelengths_np > 1340) & 
+                               (wavelengths_np < 1445) | 
+                               (wavelengths_np > 1790) & 
+                               (wavelengths_np < 1955)]
     
-#     log.info(f'Training model on sites: {sites}')
-#     r_source = ro.r['source']
-#     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    # Make sure printed wavelengths and stacked AOP wavelengths match
+    if not np.allclose(np.round(wavelengths_np), np.array([float(name) for name in layer_names[:len(wavelengths_np)]])):
+        print("wavelengths do not match between wavelength.txt and the stacked imagery")
     
-#     # Train random forest model 
-#     train_pft_classifier = ro.r('train_pft_classifier')
-#     rf_model_path = train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree, 
-#                                          randomMinSamples, independentValidationSet)
-#     log.info('Trained PFT classifier saved in this folder: '
-#              f'{rf_model_path}')
+    # create a LUT that matches actual wavelength values with the column names,
+    # X followed by the rounded wavelength values. 
+    # Remove the rows that are within the bad band ranges. 
+    wavelength_lut = pd.DataFrame({'wavelength': wavelengths_np,
+                                  'xwavelength': ['X' + str(round(w)) for w in wavelengths_np]})[~np.in1d(wavelengths_np, remove_bands)]
     
-#     return rf_model_path
+    return wavelength_lut
 
 
-
-
-
-# def train_pft_classifier2(sites, data_int_path, pcaInsteadOfWavelengths, ntree, 
-#                          randomMinSamples, independentValidationSet):  
-
-# # Started adapting from Fricker et al
-
-#     # Load shapefiles and remote sensing imagery
-#     shapefiles = []
-#     for file in os.listdir('shapefiles'):
-#         shapefiles.append(fiona.open(os.path.join('shapefiles', file), 'r'))
-
-#     imagery = rasterio.open('imagery.tif', 'r')
-
-#     # Extract pixels and create dataset
-#     dataset = []
-#     for shapefile in shapefiles:
-#         for feature in shapefile:
-#             pixels = []
-#             for x, y in feature['geometry']['coordinates'][0]:
-#                 pixels.append(imagery.read(1, window=rasterio.windows.Window(x, y, 1, 1)))
-#             dataset.append((np.array(pixels), feature['properties']['pft']))
-
-#     # Split dataset into training and testing data
-#     train_data, test_data = train_test_split(dataset, test_size=0.2, random_state=42) 
-
-#     # Normalize pixel values
-#     scaler = StandardScaler()
-#     for i, (pixels, label) in enumerate(train_data):
-#         train_data[i] = (scaler.fit_transform(pixels), label)
-
-#     for i, (pixels, label) in enumerate(test_data):
-#         test_data[i] = (scaler.transform(pixels), label)
-
-#     # One-hot encode labels
-#     encoder = OneHotEncoder()
-#     labels = [label for _, label in train_data]
-#     encoder.fit(labels)
-#     for i, (pixels, label) in enumerate(train_data):
-#         train_data[i] = (pixels, encoder.transform([label]))
-
-#     for i, (pixels, label) in enumerate(test_data):
-#         test_data[i] = (pixels, encoder.transform([label]))
-
-#     # TRAIN THE CNN
-#     # Define CNN architecture
-#     model = Sequential()
-#     model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(1, 1, 3)))
-#     model.add(MaxPooling2D((2, 2)))
-#     model.add(Conv2D(64, (3, 3), activation='relu'))
-#     model.add(MaxPooling2D((2, 2)))
-#     model.add(Conv2D(128, (3, 3), activation='relu'))
-#     model.add(MaxPooling2D((2, 2)))
-#     model.add(Flatten())
-#     model.add(Dense(128, activation='relu'))
-#     model.add(Dense(len(encoder.categories_[0]), activation='softmax'))
-
-#     # Compile model
-#     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-#     # Train model
-#     model.fit([pixels for pixels, _ in train_data], [label for _, label in train_data], epochs=10, batch_size=32)
-
-#     # VISUALIZE
-
-#     # Make predictions on testing data
-#     predictions = model.predict([pixels for pixels, _ in test_data])
-
-#     # Visualize predictions
-#     for i, (pixels, label) in enumerate(test_data):
-#         prediction = predictions[i]
-#         pft = encoder.inverse_transform(prediction)
-#         plt.imshow(imagery.read(1, window=rasterio.windows.Window(pixels[0, 0], pixels[0, 1], 1, 1)), cmap='gray')
-#         plt.text(pixels[0, 0], pixels[0, 1], pft, fontsize=10, color='red')
-#         plt.savefig(f'prediction_{i}.png')
-#         plt.close()

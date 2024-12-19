@@ -63,6 +63,9 @@ def preprocess_veg_structure_data(site, year_inv, year_aop, data_path, month_win
 
     earliest_date = datetime.strptime(year_aop,"%Y-%m")  - timedelta(days=month_window*31)
     latest_date = datetime.strptime(year_aop,"%Y-%m")  + timedelta(days=month_window*31)
+
+    if site=='SOAP' and year_inv=='2021':
+        earliest_date = datetime(2020, 9, 4)
     
     df = pd.read_csv(site_path/'veg_structure.csv')
     df['date.x'] = pd.to_datetime(df['date.x']) # Convert the date column to datetime format
