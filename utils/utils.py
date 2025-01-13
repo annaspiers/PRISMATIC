@@ -61,11 +61,11 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
     _add_to_cache('generate_pft_reference',
                   str(data_int_path/'pft_reference.csv'),
                   l, cache)
-    _add_to_cache('preprocess_veg_structure_data',
+    _add_to_cache('prep_veg_structure',
                   [str(data_raw_inv_path/site/year_inventory/'pp_veg_structure.csv'),
                    str(data_raw_inv_path/site/year_inventory/'pp_plot_sampling_effort.csv')],
                   l, cache)
-    _add_to_cache('preprocess_polygons',
+    _add_to_cache('prep_polygons',
                   str(data_int_path/site/year_inventory/'inventory_plots'),
                   l, cache)
     _add_to_cache('normalize_laz',
@@ -74,17 +74,17 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
     _add_to_cache('clip_lidar_by_plots',
                   str(data_int_path/site/year_inventory/'clipped_to_plots'),
                   l, cache)
-    _add_to_cache('preprocess_biomass',
+    _add_to_cache('prep_biomass',
                   str(data_int_path/site/year_inventory/'biomass'),
                   l, cache)
-    _add_to_cache('preprocess_lad',
+    _add_to_cache('prep_lad',
                   str(data_int_path/site/year_inventory/'clipped_to_plots'),
                   l, cache)
     if hs_type=="flightline":
         _add_to_cache('correct_flightlines',
                     str(data_int_path/site/year_inventory/'hs_envi_flightline'),
                     l, cache)
-    _add_to_cache('create_tree_crown_polygons',
+    _add_to_cache('prep_manual_training_data',
                   str(data_int_path/site/year_inventory/'training'/'tree_crowns_training.shp'),
                   l, cache)
     _add_to_cache('prep_aop_imagery',

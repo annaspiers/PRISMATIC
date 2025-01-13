@@ -14,7 +14,7 @@ from matplotlib.patches import Patch
 import rasterio
 from rasterio.plot import show
 import fiona
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preping import OneHotEncoder
 # from keras.models import Sequential
 # from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 import geopandas as gpd
@@ -25,8 +25,8 @@ import seaborn as sns
 
 # data preparation
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import StandardScaler
+from sklearn.preping import MinMaxScaler
+from sklearn.preping import StandardScaler
 from sklearn.pipeline import Pipeline
 
 # model selection
@@ -191,18 +191,10 @@ def correct_flightlines(site, year_inv, year_aop, data_raw_aop_path, data_int_pa
     log.info(f'Merging spatially overlapping tiffs for: {site} {year_inv}')
     
 
-def create_tree_crown_polygons(site, year, data_raw_inv_path, data_int_path, biomass_path, 
+def prep_manual_training_data(site, year, data_raw_inv_path, data_int_path, biomass_path, 
                                pft_reference_path, px_thresh):
-    """Create geospatial features (points, polygons with half the maximum crown diameter) 
-        for every tree in the NEON woody vegetation data set. 
-        Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
-
-        Generate polygons that intersect with independent pixels in the AOP data 
-        Analog to 03-process_tree_features.R from https://github.com/earthlab/neon-veg 
-
-        Extract features (remote sensing data) for each sample (pixel) within the 
-        specified shapefile (containing polygons that correspond to trees at the NEON site)
-        Analog to 07-extract_training_features.R from https://github.com/earthlab/neon-veg 
+    """
+    Clean and organize manually delineated tree crowns with PFT labels
     """
 
     # Create features (points or polygons) for each tree 
@@ -211,9 +203,8 @@ def create_tree_crown_polygons(site, year, data_raw_inv_path, data_int_path, bio
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
     
     # Create tree polygons
-    # create_tree_crown_polygons = ro.r('create_tree_crown_polygons') #swap out for manually identified crowns
-    create_tree_crown_polygons = ro.r('sort_out_manual_delineations') #ais replace python function name with this later on?
-    training_shp_path = create_tree_crown_polygons(site, year, data_raw_inv_path, data_int_path, 
+    prep_manual_crown_delineations = ro.r('prep_manual_crown_delineations') 
+    training_shp_path = prep_manual_crown_delineations(site, year, data_raw_inv_path, data_int_path, 
                                                    biomass_path, pft_reference_path, px_thresh)
     log.info('Clipped tree crown polygons data saved at: '
              f'{training_shp_path}')

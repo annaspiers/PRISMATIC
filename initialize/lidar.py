@@ -104,7 +104,7 @@ def clip_lidar_by_plots(laz_path,
     str
         Path to the folder that the result of this function is saved to
     """
-    log.info(f'Processing LiDAR data for site: {site} / year: {year}')
+    log.info(f'Clipping laz and tif data to plots for site: {site} / year: {year}')
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'leaf_area_density_helper.R'))
     clip_lidar_to_polygon_lidR = ro.r('clip_lidar_to_polygon_lidR')

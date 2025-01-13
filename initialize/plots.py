@@ -50,7 +50,7 @@ def download_polygons(data_path):
     return output_folder_path
 
 
-def preprocess_polygons(input_data_path,
+def prep_polygons(input_data_path,
                         sampling_effort_path,
                         inventory_path,
                         site, year,

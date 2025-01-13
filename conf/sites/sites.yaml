@@ -8,14 +8,14 @@ run:
         download_veg_structure_data: False
         download_polygons: False
         generate_pft_reference: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
@@ -28,14 +28,14 @@ run:
     #     download_veg_structure_data: False
     #     download_polygons: False
     #     generate_pft_reference: False
-    #     preprocess_veg_structure_data: False
-    #     preprocess_polygons: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
     #     normalize_laz: False
     #     clip_lidar_by_plots: False
-    #     preprocess_lad: False
-    #     preprocess_biomass: False
+    #     prep_lad: False
+    #     prep_biomass: False
     #     correct_flightlines: False
-    #     create_tree_crown_polygons: False
+    #     prep_manual_training_data: False
     #     prep_aop_imagery: False
     #     extract_spectra_from_polygon: False
     #     train_pft_classifier: False
@@ -48,14 +48,14 @@ run:
         download_veg_structure_data: False
         download_polygons: False
         generate_pft_reference: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
@@ -68,14 +68,14 @@ run:
     #     download_veg_structure_data: False
     #     download_polygons: False
     #     generate_pft_reference: False
-    #     preprocess_veg_structure_data: False
-    #     preprocess_polygons: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
     #     normalize_laz: False
     #     clip_lidar_by_plots: False
-    #     preprocess_lad: False
-    #     preprocess_biomass: False
+    #     prep_lad: False
+    #     prep_biomass: False
     #     correct_flightlines: False
-    #     create_tree_crown_polygons: False
+    #     prep_manual_training_data: False
     #     prep_aop_imagery: False
     #     extract_spectra_from_polygon: False
     #     train_pft_classifier: False
@@ -91,14 +91,14 @@ run:
         download_veg_structure_data: False
         download_polygons: False
         generate_pft_reference: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
@@ -111,14 +111,14 @@ run:
         download_veg_structure_data: False
         download_polygons: False
         generate_pft_reference: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False 
-        preprocess_biomass: False
+        prep_lad: False 
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
@@ -131,14 +131,14 @@ run:
     #     download_veg_structure_data: False
     #     download_polygons: False
     #     generate_pft_reference: False
-    #     preprocess_veg_structure_data: False
-    #     preprocess_polygons: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
     #     normalize_laz: False
     #     clip_lidar_by_plots: False
-    #     preprocess_lad: False
-    #     preprocess_biomass: False
+    #     prep_lad: False
+    #     prep_biomass: False
     #     correct_flightlines: False
-    #     create_tree_crown_polygons: False
+    #     prep_manual_training_data: False
     #     prep_aop_imagery: False
     #     extract_spectra_from_polygon: False
     #     train_pft_classifier: False
@@ -153,14 +153,14 @@ run:
         download_veg_structure_data: False
         download_polygons: False
         generate_pft_reference: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
@@ -173,14 +173,14 @@ run:
     #     download_veg_structure_data: False
     #     download_polygons: False
     #     generate_pft_reference: False
-    #     preprocess_veg_structure_data: False
-    #     preprocess_polygons: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
     #     normalize_laz: False
     #     clip_lidar_by_plots: False
-    #     preprocess_lad: False
-    #     preprocess_biomass: False
+    #     prep_lad: False
+    #     prep_biomass: False
     #     correct_flightlines: False
-    #     create_tree_crown_polygons: False
+    #     prep_manual_training_data: False
     #     prep_aop_imagery: False
     #     extract_spectra_from_polygon: False
     #     train_pft_classifier: False
@@ -194,14 +194,14 @@ global_run_params:
     download_veg_structure_data: False
     download_polygons: False
     generate_pft_reference: False
-    preprocess_veg_structure_data: False
-    preprocess_polygons: False
+    prep_veg_structure: False
+    prep_polygons: False
     normalize_laz: False 
     clip_lidar_by_plots: False
-    preprocess_lad: False
-    preprocess_biomass: False
+    prep_lad: False
+    prep_biomass: False
     correct_flightlines: False
-    create_tree_crown_polygons: False 
+    prep_manual_training_data: False 
     prep_aop_imagery: False
     extract_spectra_from_polygon: False 
     train_pft_classifier: True  #why does this repeat so many times when I predict?

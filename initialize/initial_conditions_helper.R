@@ -133,11 +133,11 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
         
         # Load leaf area density files
         lad_json <- rjson::fromJSON(file=paste0(lad_laz_plot_paths[c],"_lad.json"))
-        lad_csv <- read.csv(paste0(lad_laz_plot_paths[c],"_lad.csv"))
+        lad_csv <- read.csv(paste0(lad_laz_plot_paths[c],"_lad.csv")) 
         
         if ( nrow(lad_csv)==0 | length(lad_json$layer_height)==0 ) {
             # In this case, the patch is flat and has no cohorts
-            patch_temp <- data.frame()
+            patch_temp <- data.frame() #ais change this so that an empty patch is added to patch file, even though no cohorts
             print(paste0("patch ",c," has nrow(lad_csv)==0 | length(lad_json$layer_height)==0"))
             # ais look through some of these cases with Marcos
             # note that the index c is not the same as the patch number
@@ -149,8 +149,7 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
             
         } else {
             # lad units are m2/m3
-            #lad_json$cohort_idx <- length(lad_json$layer_height):1
-            if (is.null(lad_csv$X)) {
+            if (is.null(lad_csv$X)) { #ais what is this column X?
                 lad_csv <- lad_csv %>%
                     #cut off rows beyond highest layer_height
                     filter(z <= max(lad_json$layer_height)) #ais add 0.5 here?
@@ -184,10 +183,11 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
                 arrange(desc(cohort_height)) %>%
                 dplyr::mutate(cohort_idx = row_number())
             
-            if (grepl("central", basename(lad_laz_plot_paths[c]))) {
+            # ais when would 'central' be part of filename now?
+            if (grepl("central", basename(lad_laz_plot_paths[c]))) { 
                 patch_temp <- lad_csv %>%
                     filter(lad>0) %>%
-                    # assign patch # and cohort index
+                    # assign patch and cohort index
                     mutate(patch = basename(lad_laz_plot_paths[c])) %>%
                     left_join(cohort_idx_df)
             } else {
@@ -214,23 +214,21 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
         by_patch_df <- rbind(by_patch_df, patch_temp)
     }
     
-    # by_patch_df$patch <- as.numeric(by_patch_df$patch)
-    
     return(by_patch_df)
 }
 
 
-assign_pft_across_cohorts <- function(by_patch_df, allom_params, 
+assign_pft_across_cohorts <- function(by_patch_df, allom_params,
                                       pfts_by_cohort_wide) {
 
-    pfts_by_cohort_wide$patch = as.character(pfts_by_cohort_wide$patch)                                    
-    
-    # Sort out number of layers based on number of distinct Hmax's 
+    pfts_by_cohort_wide$patch = as.character(pfts_by_cohort_wide$patch)
+
+    # Sort out number of layers based on number of distinct Hmax's
     hmax_values = sort(unique(allom_params$Hmax))
-    by_patch_df$layer <- base::cut(by_patch_df$cohort_height, 
+    by_patch_df$layer <- base::cut(by_patch_df$cohort_height,
                              breaks = c(0,hmax_values), 
                              labels = c(letters[1:length(hmax_values)]))
-    
+
     breakdown_to_pft_df <- by_patch_df %>%
         # lai = sum(layer thickness (diff_z) * LAD of layer)
         # lai (layer 1) = stem density (layer 1) * ILA(as a function of z)
@@ -239,12 +237,12 @@ assign_pft_across_cohorts <- function(by_patch_df, allom_params,
         dplyr::group_by(patch,cohort_idx,cohort_height,layer) %>%
         dplyr::reframe(lai_cohort = sum(lai)) %>%
         dplyr::ungroup() %>%
-        
+
         # assign layer LAI
         dplyr::group_by(patch, layer) %>%
         dplyr::mutate(lai_layer = sum(lai_cohort)) %>%
         dplyr::ungroup() %>%
-        
+
         # assign total LAI for patch
         dplyr::group_by(patch) %>%
         dplyr::mutate( lai_patch_T = sum(lai_cohort) ) %>%
@@ -845,15 +843,14 @@ generate_pcss <- function(site, year, data_int_path, biomass_path,
         # Load cleaned individual-level data
         veg <- read.csv(biomass_path)%>% 
             rename(SLA_sytoan = SLA) %>% #to differentiate from SLA from allometry file
-            #ais isn't this path name a global variable?, assign with this instead
-            # already filtered to live plants
             
-            # Filter to single stem if plant is an oak
+            # If an individual is multistem, select only the largest stem (usually oak)
             dplyr::group_by(individualID) %>% 
-            dplyr::slice(which.max(used_diameter)) %>% #ais select largest stem on any multistem trees?
+            dplyr::slice(which.max(used_diameter)) %>% 
             ungroup() %>%
             
             #Assign pft
+            # ais how does this work for non-NEON inventory data?
             mutate(pft = ifelse(growthForm == "small shrub" | 
                                     growthForm == "single shrub" ,"shrub",
                                 ifelse(taxonID=="PIPO" | taxonID=="PILA" | taxonID=="PINUS", "pine", 
@@ -885,6 +882,7 @@ generate_pcss <- function(site, year, data_int_path, biomass_path,
             # ILA = Bleaf * SLA , SLA is specific to height and PFT - for now just pft
 
         # Visualize / sanity check
+        # ais check that i'm generating these plots the way i intend
         # by patch
         veg %>% group_by(patch) %>% summarize(sum_lai = sum(lai,na.rm=T)) %>% 
             left_join( veg %>% 
@@ -965,47 +963,38 @@ generate_pcss <- function(site, year, data_int_path, biomass_path,
         plots_sf <- sf::st_read(plots_shp_path)
         
         # load plots classified as PFT by percentage
-        plot_by_pft_majority_raw <- read.csv(classified_PFTs_path)
+        classified_PFTs <- read.csv(classified_PFTs_path)
         # ais why do some patches have no PFT classification? only a few e.g. random plot 15, 162
         
-        plot_by_pft_majority <- plot_by_pft_majority_raw %>%
-            dplyr::rename(patch = shapeID) %>% 
-            dplyr::mutate(patch = patch) %>% 
-            group_by(patch) %>%
-            # choose PFT with greatest coverage of patch, break tie with count 
-            slice_max(tibble(pct, count), n = 1, with_ties = FALSE) 
-        # to search for a specific patch: which(stringr::str_detect(lad_laz_plot_paths,"_862"))
-        
-        pfts_by_cohort_wide <- plot_by_pft_majority_raw %>%
+        pfts_by_cohort_wide_raw <- classified_PFTs %>%
             dplyr::rename(pft = pred_PFT,
                           patch = shapeID) %>% 
             dplyr::mutate(patch = patch) %>%
             dplyr::select(-c(count)) %>% 
             tidyr::pivot_wider(names_from = pft, values_from = pct)
+        pfts_by_cohort_wide_raw[is.na(pfts_by_cohort_wide_raw)] <- 0 
         
         #ais change the code below so taht I save somewhere the names of all the
         # Rename columns
-        if ("pine" %in% colnames(pfts_by_cohort_wide)) {
-            pfts_by_cohort_wide <- pfts_by_cohort_wide %>% dplyr::rename(p_p_T=pine)
+        if ("pine" %in% colnames(pfts_by_cohort_wide_raw)) {
+            pfts_by_cohort_wide_raw <- pfts_by_cohort_wide_raw %>% dplyr::rename(p_p_T=pine)
         } 
-        if ("cedar" %in% colnames(pfts_by_cohort_wide)) {
-            pfts_by_cohort_wide <- pfts_by_cohort_wide %>% dplyr::rename(p_c_T=cedar)
+        if ("cedar" %in% colnames(pfts_by_cohort_wide_raw)) {
+            pfts_by_cohort_wide_raw <- pfts_by_cohort_wide_raw %>% dplyr::rename(p_c_T=cedar)
         } 
-        if ("fir" %in% colnames(pfts_by_cohort_wide)) {
-            pfts_by_cohort_wide <- pfts_by_cohort_wide %>% dplyr::rename(p_f_T=fir)
+        if ("fir" %in% colnames(pfts_by_cohort_wide_raw)) {
+            pfts_by_cohort_wide_raw <- pfts_by_cohort_wide_raw %>% dplyr::rename(p_f_T=fir)
         } 
-        if ("oak" %in% colnames(pfts_by_cohort_wide)) {
-            pfts_by_cohort_wide <- pfts_by_cohort_wide %>% dplyr::rename(p_o_T=oak)
+        if ("oak" %in% colnames(pfts_by_cohort_wide_raw)) {
+            pfts_by_cohort_wide_raw <- pfts_by_cohort_wide_raw %>% dplyr::rename(p_o_T=oak)
         } 
-        if ("shrub" %in% colnames(pfts_by_cohort_wide)) {
-            pfts_by_cohort_wide <- pfts_by_cohort_wide %>% dplyr::rename(p_s_T=shrub)
+        if ("shrub" %in% colnames(pfts_by_cohort_wide_raw)) {
+            pfts_by_cohort_wide_raw <- pfts_by_cohort_wide_raw %>% dplyr::rename(p_s_T=shrub)
         }
-        
-        # Keep only these columns: patch + focal PFT
-        pfts_by_cohort_wide <- pfts_by_cohort_wide %>%
-            dplyr::select(patch, starts_with("p_"))
-        pfts_by_cohort_wide[is.na(pfts_by_cohort_wide)] <- 0 
-        pfts_by_cohort_wide = pfts_by_cohort_wide %>%
+                
+        pfts_by_cohort_wide <- pfts_by_cohort_wide_raw %>%
+            # Keep only these columns: patch + focal PFTs
+            dplyr::select(patch, starts_with("p_")) %>%
             # sum across the p_ columns
             dplyr::mutate(pft_sum = rowSums(pfts_by_cohort_wide %>% dplyr::select(-patch))) %>%
             # Get rid of any patches that have no target PFT classification
@@ -1016,7 +1005,8 @@ generate_pcss <- function(site, year, data_int_path, biomass_path,
         for (c in colnames(pfts_by_cohort_wide)) {
             if (grepl("p_", c)) {
                 # divide each p_ column value by sum 
-                pfts_by_cohort_wide[,c] = pfts_by_cohort_wide[,c]/pfts_by_cohort_wide$pft_sum
+                pfts_by_cohort_wide[,c] = pfts_by_cohort_wide[,c]/pfts_by_cohort_wide$pft_sum 
+                #ais doublecheck math - number/pft_sum = ?/100
             }
         }
         # Drop pft_sum column, no longer of use
@@ -1028,11 +1018,6 @@ generate_pcss <- function(site, year, data_int_path, biomass_path,
         
         by_patch_df <- divide_patch_into_cohorts(lad_laz_plot_paths, ic_type)
         
-        # Do patches in pft df match that in patch df?
-        # if (ic_type=="rs_inv_plots" & site=="SOAP" & year=="2021") {
-        #     by_patch_df = by_patch_df %>% mutate(patch = paste0(site,"_0",patch))
-        #     #as.numeric(stringr::str_extract(plot_by_pft_majority$patch, "\\d+"))
-        # }
         assertthat::assert_that(sum(unique(by_patch_df$patch) %in% #ais why do these two vectors have slightly different subsets in the rs_random_plots case?
                                         unique(plot_by_pft_majority$patch))>1,
                                 msg="Patch names in pft df and patch df don't match")

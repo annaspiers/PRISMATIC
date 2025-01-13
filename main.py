@@ -14,17 +14,17 @@ os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R')
 from utils.utils import build_cache_site, build_cache_all, force_rerun
 from initialize.inventory import download_veg_structure_data, \
                                     download_trait_table, \
-                                    preprocess_veg_structure_data
+                                    prep_veg_structure
 from initialize.plots import download_polygons, \
-                                preprocess_polygons
+                                prep_polygons
 from initialize.lidar import download_lidar, \
                                 clip_lidar_by_plots, \
                                 normalize_laz
-from initialize.biomass import preprocess_biomass
-from initialize.lad import preprocess_lad
+from initialize.biomass import prep_biomass
+from initialize.lad import prep_lad
 from initialize.hyperspectral import download_hyperspectral, \
                                         generate_pft_reference, \
-                                        create_tree_crown_polygons, \
+                                        prep_manual_training_data, \
                                         prep_aop_imagery, \
                                         extract_spectra_from_polygon, \
                                         correct_flightlines, \
@@ -99,7 +99,16 @@ def main(cfg):
                                             year=year_aop,
                                             data_raw_aop_path=data_raw_aop_path,
                                             hs_type=hs_type))
+                                                        
+                    _, _ = (force_rerun(cache, force=rerun_status)
+                            (download_veg_structure_data)
+                            (site=site, 
+                            data_path=data_raw_inv_path))
                     
+                    neon_plots_path = (force_rerun(cache, force=rerun_status)
+                                    (download_polygons)
+                                    (data_path=data_raw_inv_path))
+
                     # download neon_trait_table
                     url = cfg.others.neon_trait_table.neon_trait_link
                     trait_table_path = (force_rerun(cache, force={
@@ -111,16 +120,6 @@ def main(cfg):
                                                         (download_trait_table)
                                                         (download_link=url, 
                                                         data_path=data_raw_inv_path))
-                                    
-                    _, _ = (force_rerun(cache, force=rerun_status)
-                            (download_veg_structure_data)
-                            (site=site, 
-                            data_path=data_raw_inv_path))
-                    
-                    neon_plots_path = (force_rerun(cache, force=rerun_status)
-                                    (download_polygons)
-                                    (data_path=data_raw_inv_path))
-
 
 
         sites = []
@@ -167,7 +166,7 @@ def main(cfg):
                         # process plots   
                     inventory_file_path, \
                         sampling_effort_path = (force_rerun(cache, force=rerun_status)
-                                                (preprocess_veg_structure_data)
+                                                (prep_veg_structure)
                                                 (site=site,
                                                 year_inv=year_inventory,
                                                 year_aop=year_aop,
@@ -175,7 +174,7 @@ def main(cfg):
                                                 month_window=month_window))
                     
                     partitioned_plots_path = (force_rerun(cache, force=rerun_status)
-                                            (preprocess_polygons)
+                                            (prep_polygons)
                                             (input_data_path=neon_plots_path,
                                             sampling_effort_path=sampling_effort_path,
                                             inventory_path=inventory_file_path,
@@ -192,6 +191,8 @@ def main(cfg):
                                             output_path=data_int_path))
                     
                     # ais walk through workflow below with a fine-toothed comb 
+                    # ais is this for both laz and tif files? or just laz?
+                    # if for both laz and tif, then the output, clipped_laz_path, should be used more than just 1 time in following function...
                     clipped_laz_path = (force_rerun(cache, force=rerun_status)
                                         (clip_lidar_by_plots)
                                         (laz_path=normalized_laz_path,
@@ -204,7 +205,7 @@ def main(cfg):
                     
                     # leaf area density
                     (force_rerun(cache, force=rerun_status)
-                            (preprocess_lad)
+                            (prep_lad)
                             (laz_path=clipped_laz_path,
                             inventory_path=inventory_file_path,
                             site=site,
@@ -214,7 +215,7 @@ def main(cfg):
 
                     # biomass
                     biomass_path = (force_rerun(cache, force=rerun_status)
-                                    (preprocess_biomass)
+                                    (prep_biomass)
                                     (data_path=inventory_file_path,
                                     site_plots_path=partitioned_plots_path,
                                     sampling_effort_path=sampling_effort_path,
@@ -237,7 +238,7 @@ def main(cfg):
                     
                     training_crown_shp_path = (force_rerun(cache, 
                                                             force=rerun_status)
-                                                (create_tree_crown_polygons)
+                                                (prep_manual_training_data)
                                                 (site=site,
                                                 year=year_inventory,
                                                 data_raw_inv_path=data_raw_inv_path, 
@@ -276,11 +277,8 @@ def main(cfg):
         rerun_status[k] = v or global_force_rerun.get(k, False)
     # log.info(f'Run process for all sites, '
     #     f'with rerun status: {rerun_status}')
-        #ais ask sy-toan how to code this to train RF only once,, and not for every function in sites.yaml (stepped through k)
+        #ais ask sy-toan how to code this to train RF only once, and not for every function in sites.yaml (stepped through k)
     
-        # from pathlib import Path #ais temporary
-        # trait_table_path=Path("/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/raw/inventory/NEON_trait_table.csv") #ais temporary 
-        
         cache = build_cache_all(
                             data_int_path=data_int_path, 
                             data_final_path=data_final_path, 

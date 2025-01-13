@@ -27,7 +27,7 @@ conda_env_path = Path(sys.executable).parent.parent
 os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
 
 # custom functions in another script
-from initialize.lad import preprocess_lad
+from initialize.lad import prep_lad
 from initialize.hyperspectral import filter_out_wavelengths, \
                                         extract_spectra_from_polygon
 
@@ -99,7 +99,7 @@ def generate_initial_conditions(site, year_inv, year_aop, data_raw_aop_path, dat
         if ic_type=="rs_random_plots":
             if not glob.glob(str(ic_type_path+'/clipped_to_plots/'+'*lad.json') ):
                 # Generate new LAD profiles
-                preprocess_lad(laz_path=lad_laz_clipped_path, 
+                prep_lad(laz_path=lad_laz_clipped_path, 
                             inventory_path=None, 
                             site=site, 
                             year=year_inv, 

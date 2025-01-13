@@ -52,9 +52,9 @@ def download_veg_structure_data(site, data_path):
     return veg_structure, plot_sampling_effort
 
 
-def preprocess_veg_structure_data(site, year_inv, year_aop, data_path, month_window): 
+def prep_veg_structure(site, year_inv, year_aop, data_path, month_window): 
     """
-    Filter vegetation structure and plot sampling to the year
+    Filter vegetation structure and plot sampling to year
     """
     year_inv = str(year_inv)
     site_path = Path(data_path)/site
@@ -84,6 +84,5 @@ def preprocess_veg_structure_data(site, year_inv, year_aop, data_path, month_win
     e_file_path = site_year_path/e_file_name
     e_pp_df_by_year.to_csv(e_file_path, index=False)
 
-    log.info(f'Processed inventory data for site: {site} / year: {year_inv} '
-             f'saved at: {file_name}')
+    log.info(f'Processed inventory data for site: {site} / year: {year_inv} ' )
     return str(file_path), str(e_file_path)

@@ -938,12 +938,13 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
 create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_path, 
                               biomass_path, pft_reference_path, px_thresh) {
   # modified from Scholl et al from https://github.com/earthlab/neon-veg
-  
+
   # Create geospatial features (points, polygons with half the maximum crown diameter) 
-  # for every tree in the NEON woody vegetation data set that intersect with independent 
-  # pixels in the AOP data 
-  # Analog to 02-create_tree_features.R and 03-process_tree_features.R
-  # from https://github.com/earthlab/neon-veg
+  #       for every tree in the NEON woody vegetation data set. 
+  #       Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
+
+  #       Generate polygons that intersect with independent pixels in the AOP data 
+  #       Analog to 03-process_tree_features.R from https://github.com/earthlab/neon-veg 
   
   # px_thresh is the area threshold (# of of 1m pixels) to filter out small tree crowns
   
@@ -1090,7 +1091,7 @@ create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_p
 }
 
 
-sort_out_manual_delineations <- function(site, year, data_raw_inv_path, data_int_path, 
+prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_int_path, 
                                        biomass_path, pft_reference_path, px_thresh) {
     #ais automate this function
     

@@ -13,12 +13,12 @@ BIOMASS_PLOTS_FOLDER = 'biomass_plots'
 log = logging.getLogger(__name__)
 
 
-def preprocess_biomass(data_path,
+def prep_biomass(data_path,
                        site_plots_path,
                        sampling_effort_path,
                        site,
                        year,
-                       output_data_path,
+                       data_int_path,
                        neon_trait_table_path,
                        end_result=True):
     """Calculate biomass for all invidivuals in neon_data
@@ -31,7 +31,7 @@ def preprocess_biomass(data_path,
     site_plots_path : str
         Path to the clipped plots result folder.
         This is the resulted folder from inititalize/plots.py,
-        function preprocess_polygons().
+        function prep_polygons().
         Format '*/inventory_plots'
     sampling_effort_path : str
         Path to the site-year plot sampling effort file.
@@ -40,7 +40,7 @@ def preprocess_biomass(data_path,
         Site name
     year : str
         Inventory year
-    output_data_path : str
+    data_int_path : str
         Default output data root
     neon_trait_table_path : str
         Path to the neon_trait_table (Marcos is the maintainer)
@@ -59,7 +59,7 @@ def preprocess_biomass(data_path,
     sampling_effort_path = Path(sampling_effort_path)
     year = str(year)
     output_folder = 'output' if end_result else 'biomass'
-    output_data_path = Path(output_data_path)/site/year/output_folder
+    output_data_path = Path(data_int_path)/site/year/output_folder
     output_data_path.mkdir(parents=True, exist_ok=True)
 
     neon_trait_table_df = pd.read_csv(neon_trait_table_path)
@@ -68,7 +68,7 @@ def preprocess_biomass(data_path,
     # and invidividuals do not belong into any plotID.
     avail_veg_df = veg_df[(~pd.isna(veg_df.basalStemDiameter) |
                           ~pd.isna(veg_df.stemDiameter)) &
-                          ~pd.isna(veg_df.plotID)]
+                          ~pd.isna(veg_df.plotID)] #ais should we be using 'subplotID' or other?
 
     # neon_data sientific name also has author name,
     # for example,
@@ -179,38 +179,67 @@ def preprocess_biomass(data_path,
     # depending on the growth form (shrub/tree)
     sampling_area = []
     for row in avail_veg_df.itertuples():
-        try:
-            query = (f'plotID == "{row.plotID}" '
-                     'and '
-                     f'subplotID == "{int(row.subplotID)}"')
-            v = polygons.query(query).area.values[0]
-        except (IndexError, ValueError):
-            try:
-                query = (f'plotID == "{row.plotID}" '
-                         'and '
-                         f'subplotID == "central"')
-                v = polygons.query(query).area.values[0]
-            except (IndexError, ValueError):
-                v = np.nan
+        #ais need to fix the below code - all sorts of confused. may not have needed to change it from what it was?
         try:
             if row.is_shrub:
                 v = (sampling_effort_df
-                     .query(f'plotID == "{row.plotID}"')
-                     .totalSampledAreaShrubSapling.values[0])
+                    .query(f'plotID == "{row.plotID}"')
+                    .totalSampledAreaShrubSapling.values[0])
             else:
                 v = (sampling_effort_df
-                     .query(f'plotID == "{row.plotID}"')
-                     .totalSampledAreaTrees.values[0])
+                    .query(f'plotID == "{row.plotID}"')
+                    .totalSampledAreaTrees.values[0])
         except (IndexError, ValueError):
-            pass
+            pass          
+        if np.isnan(v): #ais I added this because the v above was being overwritten
+            try:
+                query = (f'plotID == "{row.plotID}" '
+                        'and '
+                        f'subplotID == "{row.subplotID}"') #ais int(row.subplotID)}"')
+                v = polygons.query(query).area.values[0]
+            except (IndexError, ValueError):
+                try:
+                    query = (f'plotID == "{row.plotID}" '
+                            'and '
+                            f'subplotID == "central"')
+                    v = polygons.query(query).area.values[0]
+                except (IndexError, ValueError):
+                    v = np.nan            
         sampling_area.append(v)
+    # for row in avail_veg_df.itertuples():
+    #     try:
+    #         query = (f'plotID == "{row.plotID}" '
+    #                  'and '
+    #                  f'subplotID == "{int(row.subplotID)}"')
+    #         v = polygons.query(query).area.values[0]
+    #     except (IndexError, ValueError):
+    #         try:
+    #             query = (f'plotID == "{row.plotID}" '
+    #                      'and '
+    #                      f'subplotID == "central"')
+    #             v = polygons.query(query).area.values[0]
+    #         except (IndexError, ValueError):
+    #             v = np.nan
+    #     try:
+    #         if row.is_shrub:
+    #             v = (sampling_effort_df
+    #                  .query(f'plotID == "{row.plotID}"')
+    #                  .totalSampledAreaShrubSapling.values[0])
+    #         else:
+    #             v = (sampling_effort_df
+    #                  .query(f'plotID == "{row.plotID}"')
+    #                  .totalSampledAreaTrees.values[0])
+    #     except (IndexError, ValueError):
+    #         pass
+    #     sampling_area.append(v)
 
     avail_veg_df['sampling_area'] = sampling_area
+    #we lost over 70 rows in SOAP 2021 because sampling_area turned out nan, which is why I made the above changes
 
     # refine the result by eliminate invididuals
     # with nan biomass and sampling effort
     avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.biomass)].copy()
-    avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.sampling_area)].copy()
+    avail_veg_df = avail_veg_df[~pd.isna(avail_veg_df.sampling_area)].copy() 
     avail_veg_df['individualStemNumberDensity'] = 1/avail_veg_df.sampling_area
     avail_veg_df['individualBasalArea'] = \
         np.pi/4*avail_veg_df.used_diameter**2

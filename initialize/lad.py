@@ -14,7 +14,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 LAD_FOLDER = 'lad'
 
-def preprocess_lad(laz_path, inventory_path, site, year, output_path, 
+def prep_lad(laz_path, inventory_path, site, year, output_path, 
                    use_case):
     log.info(f'Preprocessing leaf area density for site: {site}')
     year = str(year)
@@ -49,7 +49,7 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_path,
         except Exception:
             lad_df = empty_df
             infl_points = {}
-            log.error(f'Cannot preprocess leaf area density for site: {site}, {laz_file.stem}')
+            log.error(f'Cannot prep leaf area density for site: {site}, {laz_file.stem}')
         lad_df.to_csv(str(output_data_path)+'/'+f'{laz_file.stem}_lad.csv')
         with open(str(output_data_path)+'/'+f'{laz_file.stem}_lad.json', 'w') as f:
             f.write(json.dumps(infl_points))
