@@ -551,7 +551,7 @@ assign_pft_across_cohorts <- function(by_patch_df, allom_params,
         dplyr::rename(lai_cohort=lai)
     
     # Sanity check: LAI
-    breakdown_to_pft_df %>% group_by(patch) %>% 
+    breakdown_to_pft_df %>% group_by(patch) %>%
         dplyr::summarize(lai_patch_Tot_a = sum(lai_cohort)) %>%
         dplyr::left_join(patch_all_df %>% group_by(patch) %>% 
                              dplyr::summarize(lai_patch_Tot_b = sum(lai_cohort)) ) %>%
@@ -973,6 +973,7 @@ generate_pcss <- function(site, year, data_int_path, biomass_path,
             dplyr::select(-c(count)) %>% 
             tidyr::pivot_wider(names_from = pft, values_from = pct)
         pfts_by_cohort_wide_raw[is.na(pfts_by_cohort_wide_raw)] <- 0 
+        # ^ ais what does this line do? 
         
         #ais change the code below so taht I save somewhere the names of all the
         # Rename columns
@@ -998,7 +999,8 @@ generate_pcss <- function(site, year, data_int_path, biomass_path,
             # sum across the p_ columns
             dplyr::mutate(pft_sum = rowSums(pfts_by_cohort_wide %>% dplyr::select(-patch))) %>%
             # Get rid of any patches that have no target PFT classification
-            dplyr::filter(pft_sum>0)
+            dplyr::filter(pft_sum>0) #ais i want to make sure that bareground/rock is represented 
+        # as taking up space in patches
         
         # After removing non-PFT columns, now scale PFT percentage columns 
         # so that they sum to 1 
