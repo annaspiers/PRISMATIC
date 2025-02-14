@@ -14,31 +14,32 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 LAD_FOLDER = 'lad'
 
-def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, use_case, end_result):
+def prep_lad(laz_path, inventory_path, site, year, output_path, 
+                   use_case):
     log.info(f'Preprocessing leaf area density for site: {site}')
     year = str(year)
 
     if use_case=="train":
-        output_folder = 'output' if end_result else 'clipped_to_plots' #'lad'
-        output_folder_diagnostics_path = (Path(output_data_path)/'diagnostics'/site
+        output_folder = 'clipped_to_plots' 
+        output_folder_diagnostics_path = (Path(output_path)/'diagnostics'/site
                                         / year/LAD_FOLDER)
         output_folder_diagnostics_path.mkdir(parents=True, exist_ok=True)
-        output_data_path = Path(output_data_path)/site/year/output_folder
+        output_data_path = Path(output_path)/site/year/output_folder
         output_data_path.mkdir(parents=True, exist_ok=True)
     if use_case=="predict":
-        output_data_path = Path(output_data_path)/'clipped_to_plots'
-        output_data_path.mkdir(parents=True, exist_ok=True)
+        output_data_path = Path(output_path)/'clipped_to_plots'
         output_folder_diagnostics_path = output_data_path
         
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'leaf_area_density_helper.R'))
-    preprocess_lad_func = ro.r('calc_leaf_area_density')
+    calc_leaf_area_density = ro.r('calc_leaf_area_density')
     laz_files = [f for f in Path(laz_path).glob('*.laz')]
     column_names = ['height', 'lad']
     empty_df = pd.DataFrame(columns=column_names)
     for laz_file in laz_files:
         try:
-            r_df = preprocess_lad_func(str(laz_file))
+            print(laz_file)
+            r_df = calc_leaf_area_density(str(laz_file))
             with (ro.default_converter + pandas2ri.converter).context():
                 lad_df = ro.conversion.get_conversion().rpy2py(r_df)
             infl_points = calculate_infl_points(lad_df)
@@ -48,7 +49,7 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, use_c
         except Exception:
             lad_df = empty_df
             infl_points = {}
-            log.error(f'Cannot preprocess leaf area density for site: {site}, {laz_file.stem}')
+            log.error(f'Cannot prep leaf area density for site: {site}, {laz_file.stem}')
         lad_df.to_csv(str(output_data_path)+'/'+f'{laz_file.stem}_lad.csv')
         with open(str(output_data_path)+'/'+f'{laz_file.stem}_lad.json', 'w') as f:
             f.write(json.dumps(infl_points))
@@ -56,7 +57,7 @@ def preprocess_lad(laz_path, inventory_path, site, year, output_data_path, use_c
     if use_case=="train":
         # calculate SND
         inventory_df = pd.read_csv(inventory_path)
-        calculate_snd(inventory_df, lad_df, infl_points)
+        #calculate_snd(inventory_df, lad_df, infl_points)
 
     return str(output_data_path)
 

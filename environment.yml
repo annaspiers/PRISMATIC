@@ -7,10 +7,11 @@ dependencies:
   - pdal
   - python-pdal
   - gdal
-  - whitebox
+  # - whitebox
   - folium
   - mapclassify
   - matplotlib
+  - tensorflow
   - r-base
   - r-devtools
   - r-sf
@@ -29,6 +30,8 @@ dependencies:
   - r-terra
   - r-neonUtilities
   - r-glue
+  - r-readr
+  - r-vscDebugger
   - bioconductor-rhdf5
   # - r-neonOS
   # - r-geoNEON

@@ -209,7 +209,8 @@ def download_aop_files(product,
         #     files = matching_files
         for i in range(len(files)):
             pathname = os.path.join(download_folder,files[i]['name'])
-            if ("VegIndices.zip" in pathname) | os.path.exists(pathname): #ais how to only download VegIndices.zip
+            if os.path.exists(pathname):
+            # if ("VegIndices.zip" in pathname) | os.path.exists(pathname): #ais how to only download VegIndices.zip
                 print(files[i]['name']+" already downloaded")               # files if unzipped tifs are not present
                 continue
             else:

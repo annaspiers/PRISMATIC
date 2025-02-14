@@ -7,37 +7,39 @@ run:
         download_hyperspectral: False
         download_veg_structure_data: False
         download_polygons: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        generate_pft_reference: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
         generate_initial_conditions: False
-    '2019':
-      year_aop: 2019-03
-      force_rerun:
-        download_lidar: False
-        download_hyperspectral: False
-        download_veg_structure_data: False
-        download_polygons: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
-        normalize_laz: False
-        clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
-        correct_flightlines: False
-        create_tree_crown_polygons: False
-        prep_aop_imagery: False
-        extract_spectra_from_polygon: False
-        train_pft_classifier: False
-        generate_initial_conditions: False
+    # '2019':
+    #   year_aop: 2019-03
+    #   force_rerun:
+    #     download_lidar: False
+    #     download_hyperspectral: False
+    #     download_veg_structure_data: False
+    #     download_polygons: False
+    #     generate_pft_reference: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
+    #     normalize_laz: False
+    #     clip_lidar_by_plots: False
+    #     prep_lad: False
+    #     prep_biomass: False
+    #     correct_flightlines: False
+    #     prep_manual_training_data: False
+    #     prep_aop_imagery: False
+    #     extract_spectra_from_polygon: False
+    #     train_pft_classifier: False
+    #     generate_initial_conditions: False
     '2021':
       year_aop: 2021-03
       force_rerun:
@@ -45,18 +47,40 @@ run:
         download_hyperspectral: False
         download_veg_structure_data: False
         download_polygons: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        generate_pft_reference: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
         generate_initial_conditions: False
+    # '2023':
+    #   year_aop: 2023-04
+    #   force_rerun:
+    #     download_lidar: False
+    #     download_hyperspectral: False
+    #     download_veg_structure_data: False
+    #     download_polygons: False
+    #     generate_pft_reference: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
+    #     normalize_laz: False
+    #     clip_lidar_by_plots: False
+    #     prep_lad: False
+    #     prep_biomass: False
+    #     correct_flightlines: False
+    #     prep_manual_training_data: False
+    #     prep_aop_imagery: False
+    #     extract_spectra_from_polygon: False
+    #     train_pft_classifier: False
+    #     generate_initial_conditions: False
+
 
   SOAP:
     '2019':
@@ -66,14 +90,15 @@ run:
         download_hyperspectral: False
         download_veg_structure_data: False
         download_polygons: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        generate_pft_reference: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
@@ -85,18 +110,39 @@ run:
         download_hyperspectral: False
         download_veg_structure_data: False
         download_polygons: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        generate_pft_reference: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False 
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
         generate_initial_conditions: False
+    # '2023':
+    #   year_aop: 2023-06
+    #   force_rerun:
+    #     download_lidar: False
+    #     download_hyperspectral: False
+    #     download_veg_structure_data: False
+    #     download_polygons: False
+    #     generate_pft_reference: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
+    #     normalize_laz: False
+    #     clip_lidar_by_plots: False
+    #     prep_lad: False
+    #     prep_biomass: False
+    #     correct_flightlines: False
+    #     prep_manual_training_data: False
+    #     prep_aop_imagery: False
+    #     extract_spectra_from_polygon: False
+    #     train_pft_classifier: False
+    #     generate_initial_conditions: False
   
   TEAK:
     '2021':
@@ -106,18 +152,39 @@ run:
         download_hyperspectral: False
         download_veg_structure_data: False
         download_polygons: False
-        preprocess_veg_structure_data: False
-        preprocess_polygons: False
+        generate_pft_reference: False
+        prep_veg_structure: False
+        prep_polygons: False
         normalize_laz: False
         clip_lidar_by_plots: False
-        preprocess_lad: False
-        preprocess_biomass: False
+        prep_lad: False
+        prep_biomass: False
         correct_flightlines: False
-        create_tree_crown_polygons: False
+        prep_manual_training_data: False
         prep_aop_imagery: False
         extract_spectra_from_polygon: False
         train_pft_classifier: False
         generate_initial_conditions: False
+    # '2023':
+    #   year_aop: 2023-07
+    #   force_rerun:
+    #     download_lidar: False
+    #     download_hyperspectral: False
+    #     download_veg_structure_data: False
+    #     download_polygons: False
+    #     generate_pft_reference: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
+    #     normalize_laz: False
+    #     clip_lidar_by_plots: False
+    #     prep_lad: False
+    #     prep_biomass: False
+    #     correct_flightlines: False
+    #     prep_manual_training_data: False
+    #     prep_aop_imagery: False
+    #     extract_spectra_from_polygon: False
+    #     train_pft_classifier: False
+    #     generate_initial_conditions: False
 
 global_run_params:
   run:
@@ -126,15 +193,16 @@ global_run_params:
     download_hyperspectral: False
     download_veg_structure_data: False
     download_polygons: False
-    preprocess_veg_structure_data: False
-    preprocess_polygons: False
-    normalize_laz: False
+    generate_pft_reference: False
+    prep_veg_structure: False
+    prep_polygons: False
+    normalize_laz: False 
     clip_lidar_by_plots: False
-    preprocess_lad: False
-    preprocess_biomass: False
-    correct_flightlines: True
-    create_tree_crown_polygons: False
+    prep_lad: False
+    prep_biomass: False
+    correct_flightlines: False
+    prep_manual_training_data: False 
     prep_aop_imagery: False
-    extract_spectra_from_polygon: False
-    train_pft_classifier: False
-    generate_initial_conditions: False
+    extract_spectra_from_polygon: False 
+    train_pft_classifier: True  #why does this repeat so many times when I predict?
+    generate_initial_conditions: True  #ais why is this repeating? #change use_case=predict 
