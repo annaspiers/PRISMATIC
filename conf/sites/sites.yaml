@@ -1,25 +1,25 @@
 run:
   SJER:
-    '2017':
-      year_aop: 2017-03
-      force_rerun:
-        download_lidar: False
-        download_hyperspectral: False
-        download_veg_structure_data: False
-        download_polygons: False
-        generate_pft_reference: False
-        prep_veg_structure: False
-        prep_polygons: False
-        normalize_laz: False
-        clip_lidar_by_plots: False
-        prep_lad: False
-        prep_biomass: False
-        correct_flightlines: False
-        prep_manual_training_data: False
-        prep_aop_imagery: False
-        extract_spectra_from_polygon: False
-        train_pft_classifier: False
-        generate_initial_conditions: False
+    # '2017':
+    #   year_aop: 2017-03
+    #   force_rerun:
+    #     download_lidar: False
+    #     download_hyperspectral: False
+    #     download_veg_structure_data: False
+    #     download_polygons: False
+    #     generate_pft_reference: False
+    #     prep_veg_structure: False
+    #     prep_polygons: False
+    #     normalize_laz: False
+    #     clip_lidar_by_plots: False
+    #     prep_lad: False
+    #     prep_biomass: False
+    #     correct_flightlines: False
+    #     prep_manual_training_data: False
+    #     prep_aop_imagery: False
+    #     extract_spectra_from_polygon: False
+    #     train_pft_classifier: False
+    #     generate_initial_conditions: False
     # '2019':
     #   year_aop: 2019-03
     #   force_rerun:
@@ -82,47 +82,47 @@ run:
     #     generate_initial_conditions: False
 
 
-  SOAP:
-    '2019':
-      year_aop: 2019-06
-      force_rerun:
-        download_lidar: False
-        download_hyperspectral: False
-        download_veg_structure_data: False
-        download_polygons: False
-        generate_pft_reference: False
-        prep_veg_structure: False
-        prep_polygons: False
-        normalize_laz: False
-        clip_lidar_by_plots: False
-        prep_lad: False
-        prep_biomass: False
-        correct_flightlines: False
-        prep_manual_training_data: False
-        prep_aop_imagery: False
-        extract_spectra_from_polygon: False
-        train_pft_classifier: False
-        generate_initial_conditions: False
-    '2021':
-      year_aop: 2021-07
-      force_rerun:
-        download_lidar: False
-        download_hyperspectral: False
-        download_veg_structure_data: False
-        download_polygons: False
-        generate_pft_reference: False
-        prep_veg_structure: False
-        prep_polygons: False
-        normalize_laz: False
-        clip_lidar_by_plots: False
-        prep_lad: False 
-        prep_biomass: False
-        correct_flightlines: False
-        prep_manual_training_data: False
-        prep_aop_imagery: False
-        extract_spectra_from_polygon: False
-        train_pft_classifier: False
-        generate_initial_conditions: False
+  # SOAP:
+  #   '2019':
+  #     year_aop: 2019-06
+  #     force_rerun:
+  #       download_lidar: False
+  #       download_hyperspectral: False
+  #       download_veg_structure_data: False
+  #       download_polygons: False
+  #       generate_pft_reference: False
+  #       prep_veg_structure: False
+  #       prep_polygons: False
+  #       normalize_laz: False
+  #       clip_lidar_by_plots: False
+  #       prep_lad: False
+  #       prep_biomass: False
+  #       correct_flightlines: False
+  #       prep_manual_training_data: False
+  #       prep_aop_imagery: False
+  #       extract_spectra_from_polygon: False
+  #       train_pft_classifier: False
+  #       generate_initial_conditions: False
+  #   '2021':
+  #     year_aop: 2021-07
+  #     force_rerun:
+  #       download_lidar: False
+  #       download_hyperspectral: False
+  #       download_veg_structure_data: False
+  #       download_polygons: False
+  #       generate_pft_reference: False
+  #       prep_veg_structure: False
+  #       prep_polygons: False
+  #       normalize_laz: False
+  #       clip_lidar_by_plots: False
+  #       prep_lad: False 
+  #       prep_biomass: False
+  #       correct_flightlines: False
+  #       prep_manual_training_data: False
+  #       prep_aop_imagery: False
+  #       extract_spectra_from_polygon: False
+  #       train_pft_classifier: False
+  #       generate_initial_conditions: False
     # '2023':
     #   year_aop: 2023-06
     #   force_rerun:
@@ -144,27 +144,27 @@ run:
     #     train_pft_classifier: False
     #     generate_initial_conditions: False
   
-  TEAK:
-    '2021':
-      year_aop: 2021-07
-      force_rerun:
-        download_lidar: False
-        download_hyperspectral: False
-        download_veg_structure_data: False
-        download_polygons: False
-        generate_pft_reference: False
-        prep_veg_structure: False
-        prep_polygons: False
-        normalize_laz: False
-        clip_lidar_by_plots: False
-        prep_lad: False
-        prep_biomass: False
-        correct_flightlines: False
-        prep_manual_training_data: False
-        prep_aop_imagery: False
-        extract_spectra_from_polygon: False
-        train_pft_classifier: False
-        generate_initial_conditions: False
+  # TEAK:
+  #   '2021':
+  #     year_aop: 2021-07
+  #     force_rerun:
+  #       download_lidar: False
+  #       download_hyperspectral: False
+  #       download_veg_structure_data: False
+  #       download_polygons: False
+  #       generate_pft_reference: False
+  #       prep_veg_structure: False
+  #       prep_polygons: False
+  #       normalize_laz: False
+  #       clip_lidar_by_plots: False
+  #       prep_lad: False
+  #       prep_biomass: False
+  #       correct_flightlines: False
+  #       prep_manual_training_data: False
+  #       prep_aop_imagery: False
+  #       extract_spectra_from_polygon: False
+  #       train_pft_classifier: False
+  #       generate_initial_conditions: False
     # '2023':
     #   year_aop: 2023-07
     #   force_rerun:
