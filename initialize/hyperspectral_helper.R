@@ -674,7 +674,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
                         pattern = "reflectance.h5", recursive=T, full.names=T)
     } else {
       hs_ls <- list.files(path = file.path({hs_path}),
-                        pattern = "????corrected_tile.tif", recursive=T, full.names=T)
+                        pattern = "????corrected_tile.tif", recursive=T, full.names=T) #ais
     }    
     chm_ls <- list.files(path = file.path({tif_path}),
                          pattern = "_CHM.tif", recursive = T, full.names = T)
@@ -1153,35 +1153,35 @@ prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_i
       # ais need to make this an exhaustive match for all sites, not just SOAP
       # ais use neon trait table from Marcos?
       veg_training <- veg_has_coords_size %>%
-    left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
-    dplyr::mutate(pft = case_when(
-        grepl("CADE27",taxonID,ignore.case=T) ~ "cedar",
-        grepl("ABCO",taxonID,ignore.case=T) |
-            grepl("ABMA",taxonID,ignore.case=T) ~ "fir",
-        grepl("PIPO",taxonID,ignore.case=T) |
-            grepl("PILA",taxonID,ignore.case=T) |
-            grepl("PISA2",taxonID,ignore.case=T) |
-            grepl("PINUS",taxonID,ignore.case=T) ~ "pine",
-        grepl("QUCH2",taxonID,ignore.case=T)  |
-            grepl("QUDO",taxonID,ignore.case=T) |
-            grepl("QUKE",taxonID,ignore.case=T) |
-            grepl("QUERC",taxonID,ignore.case=T) |
-            grepl("QUWI2",taxonID,ignore.case=T) ~ "oak",
-        grepl("SANI4",taxonID,ignore.case=T) |
-            grepl("AECA",taxonID,ignore.case=T) |
-            grepl("FRCA6",taxonID,ignore.case=T) |
-            grepl("FRCAC7",taxonID,ignore.case=T) |
-            grepl("RIRO",taxonID,ignore.case=T) |
-            grepl("RIRO",taxonID,ignore.case=T) |
-            grepl("LUAL4",taxonID,ignore.case=T) |
-            grepl("CEMOG",taxonID,ignore.case=T) |
-            grepl("CELE2",taxonID,ignore.case=T) |
-            grepl("CECU",taxonID,ignore.case=T) |
-            grepl("CEIN3",taxonID,ignore.case=T) |
-            grepl("ARVIM",taxonID,ignore.case=T) |
-            grepl("RHIL",taxonID,ignore.case=T) |
-            grepl("CEANO",taxonID,ignore.case=T) ~ "shrub",
-        .default="other" ))
+        left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
+        dplyr::mutate(pft = case_when(
+            grepl("CADE27",taxonID,ignore.case=T) ~ "cedar",
+            grepl("ABCO",taxonID,ignore.case=T) |
+                grepl("ABMA",taxonID,ignore.case=T) ~ "fir",
+            grepl("PIPO",taxonID,ignore.case=T) |
+                grepl("PILA",taxonID,ignore.case=T) |
+                grepl("PISA2",taxonID,ignore.case=T) |
+                grepl("PINUS",taxonID,ignore.case=T) ~ "pine",
+            grepl("QUCH2",taxonID,ignore.case=T)  |
+                grepl("QUDO",taxonID,ignore.case=T) |
+                grepl("QUKE",taxonID,ignore.case=T) |
+                grepl("QUERC",taxonID,ignore.case=T) |
+                grepl("QUWI2",taxonID,ignore.case=T) ~ "oak",
+            grepl("SANI4",taxonID,ignore.case=T) |
+                grepl("AECA",taxonID,ignore.case=T) |
+                grepl("FRCA6",taxonID,ignore.case=T) |
+                grepl("FRCAC7",taxonID,ignore.case=T) |
+                grepl("RIRO",taxonID,ignore.case=T) |
+                grepl("RIRO",taxonID,ignore.case=T) |
+                grepl("LUAL4",taxonID,ignore.case=T) |
+                grepl("CEMOG",taxonID,ignore.case=T) |
+                grepl("CELE2",taxonID,ignore.case=T) |
+                grepl("CECU",taxonID,ignore.case=T) |
+                grepl("CEIN3",taxonID,ignore.case=T) |
+                grepl("ARVIM",taxonID,ignore.case=T) |
+                grepl("RHIL",taxonID,ignore.case=T) |
+                grepl("CEANO",taxonID,ignore.case=T) ~ "shrub",
+            .default="other" ))
 
       #3) link inventory csv and manual shapes
       merge_manual_inventory_sf <- manual_shps %>% 
@@ -1196,8 +1196,7 @@ prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_i
     tiles <- list_tiles_w_veg(veg_df = merge_manual_inventory_sf,
                               out_dir = training_data_dir)
     
-    #4) exprt as training_crowns.shp....
-    # Write shapefile with clipped tree crown polygons half the max crown diameter 
+    #4) exprt as training_crowns.shp
     training_shp_path <- file.path(training_data_dir, "tree_crowns_training.shp")
     sf::st_write(obj = merge_manual_inventory_sf,
                  dsn = training_shp_path,
@@ -1208,7 +1207,7 @@ prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_i
 }
 
 
-extract_spectra_from_polygon <- function(site, year, data_int_path, data_final_path,
+extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final_path,
                                         stacked_aop_path, shp_path, use_case, 
                                          aggregate_from_1m_to_2m_res, ic_type=NA, ic_type_path=NA ) {
         # modified from Scholl et al from https://github.com/earthlab/neon-veg
@@ -1776,7 +1775,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       dplyr::mutate(growthForm_neon = ifelse(grepl("tree", growthForm), "tree",
                                     ifelse(grepl("sapling", growthForm), "tree",
                                             ifelse(grepl("shrub", growthForm), "shrub", growthForm)))) %>%
-      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) %>%
+      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) %>% #site=siteID)
         filter(!is.na(scientificName))
 
     all_veg_structure <- rbind(all_veg_structure, site_veg_structure)
@@ -1854,7 +1853,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       dplyr::mutate(scientific = stringr::word(scientificName, 1,2, sep=" "),
               dummy = 1) %>%
       tidyr::pivot_wider(names_from=site, values_from=dummy) %>%
-      dplyr::select(scientific, taxonID, SOAP, SJER, TEAK, growthForm_neon) %>%
+      dplyr::select(scientific, taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm_neon) %>%
       mutate(growthForm_neon = ifelse(taxonID=="CONU4","tree",
                                     ifelse(taxonID=="ARNE","shrub",growthForm_neon))) %>%
       # Otherwise get rid of rows with NA in growthForm_neon (these are duplicates)
@@ -1881,7 +1880,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
               taxonID == "2PLANT-S" |
               taxonID == "LUAL4" ~ NA,
           .default = growthForm  )) %>%
-      dplyr::select(scientific,taxonID, SOAP, SJER, TEAK, growthForm) %>%
+      dplyr::select(scientific,taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm) %>%
       distinct()
       
   # Add in Carissa's dataset
@@ -1891,7 +1890,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       # mutate(scientific = ifelse(is.na(scientific), scientificName, scientific)) %>%
       # dplyr::select( scientific, taxonID, SOAP, SJER, TEAK, growthForm) %>%
       distinct() %>% 
-      tidyr::unite("siteID", c(SOAP,  SJER,  TEAK), na.rm = TRUE) %>%
+      tidyr::unite("siteID", any_of(c("SOAP", "SJER", "TEAK")), na.rm = TRUE) %>%
       # Manually remove remaining duplicates
       mutate(siteID=ifelse(taxonID=="AECA", "SOAP_SJER", siteID),
             siteID=ifelse(taxonID=="QUWIF", "SJER_TEAK", siteID),

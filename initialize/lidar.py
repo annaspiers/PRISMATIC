@@ -4,8 +4,11 @@ import geopandas as gpd
 import os
 import pdal
 import sys
+import numpy as np
 # import whitebox
 import rpy2.robjects as ro
+import shutil
+import zipfile
 
 from pathlib import Path
 from tqdm import tqdm
@@ -18,6 +21,114 @@ os.environ['PROJ_LIB'] = str(conda_env_path/'share'/'proj')
 log = logging.getLogger(__name__)
 # wht = whitebox.WhiteboxTools()
 # wht.set_verbose_mode(False)
+
+
+def download_aop_bbox(site, year, path, hs_type, coords_bbox):
+    """Download lidar data (raw and raster) for site-year
+
+    Parameters
+    ----------
+    site : str
+        Site name
+    year : str
+        Lidar year
+    path : str
+        Path to store the downloaded data
+    coords_bbox : str
+        UTM coordinates for bounding box of data subset to download 
+
+    Returns
+    -------
+    (str, str)
+        Path to the result lidar folder ('*/laz'), hyperspectral folder 
+        ('*/hs_tile' or '*/hs_flightline'), and the result raster folder ('*/tif')
+    """
+    r_source = ro.r['source']
+    r_source(str(Path(__file__).resolve().parent/'leaf_area_density_helper.R'))
+    download_by_tile = ro.r('download_by_tile')
+    move_downloaded_files = ro.r('move_downloaded_files')
+
+    # expand coords_bbox 
+    # Generate easting and northing coordinates, 1000m apart
+    easting = np.arange(coords_bbox[0], coords_bbox[1] , 1000)
+    northing = np.arange(coords_bbox[2], coords_bbox[3] , 1000)
+
+    # Create a meshgrid of coordinates
+    easting_grid, northing_grid = np.meshgrid(easting, northing)
+
+    # Flatten the grids into 1D arrays
+    easting_flat = easting_grid.flatten()
+    northing_flat = northing_grid.flatten()
+
+    path = Path(path)/site/year
+    
+    # lidar and mosaic/tile shp
+    product_code = 'DP1.30003.001' #lidar
+    # p = path/'laz'
+    download_by_tile(dpID=product_code, 
+                        site=site, year=year, 
+                        eastings=ro.IntVector(easting_flat),
+                        northings=ro.IntVector(northing_flat), 
+                        savepath=str(path) )
+    # Move shp stuff to appropriate folders
+    file_types = ['prj', 'shx', 'shp', 'dbf', 'merged_tiles', 'laz']
+    for file_type in file_types:
+        if file_type == 'laz':
+            file_type = '_classified_point_cloud_colorized.laz'
+            # p = path/'laz'
+            move_downloaded_files(dir_out = str(path), dp_id = product_code
+                     ,dp_name = "laz", file_pattern = file_type, delete_orig=True)
+        else:
+            # p = path/'shape'
+            move_downloaded_files(dir_out = str(path), dp_id = product_code
+                     ,dp_name = "shape", file_pattern = file_type, delete_orig=False)
+
+    # rasters
+    product_codes = ['DP3.30024.001', 'DP3.30025.001', #DTM, slope/aspect
+                     'DP3.30015.001', 'DP3.30010.001'] #chm, rgb
+    for product_code in product_codes:
+        download_by_tile(dpID=product_code, 
+                        site=site, year=year, 
+                        eastings=ro.IntVector(easting_flat),
+                        northings=ro.IntVector(northing_flat), 
+                        savepath=str(path) )
+        move_downloaded_files(dir_out = str(path), dp_id = product_code
+                     ,dp_name = "tif", file_pattern =  ".tif", delete_orig=True)
+        
+    product_code = 'DP3.30026.001' #veg indices
+    download_by_tile(dpID=product_code, 
+                        site=site, year=year, 
+                        eastings=ro.IntVector(easting_flat),
+                        northings=ro.IntVector(northing_flat), 
+                        savepath=str(path) )
+    move_downloaded_files(dir_out = str(path), dp_id = product_code
+                     ,dp_name = "tif", file_pattern = ".zip", delete_orig=True, unzip=True)
+    
+    # zip_files = [file for file in os.listdir(p) if file.endswith('.zip')] # get the list of files
+    # for zip_file in zip_files:  #for each zipfile
+    #     with zipfile.ZipFile(Path(p/zip_file)) as item: # treat the file as a zip
+    #         item.extractall(p)  # extract it in the working directory
+    #         item.close()
+    vi_error_files = [file for file in os.listdir(Path(path/"tif")) if file.endswith('_error.tif')]
+    for vi_error_file in vi_error_files: 
+        os.remove(Path(path/"tif"/vi_error_file)) # remove error files
+
+    # hyperspectral
+    if hs_type=="tile":
+        product_code = 'DP3.30006.001'
+    elif hs_type=="flightline": 
+        product_code = 'DP1.30006.001'
+    else:
+        print("must specify hs_type argument")
+    download_by_tile(dpID=product_code, 
+                        site=site, year=year, 
+                        eastings=ro.IntVector(easting_flat),
+                        northings=ro.IntVector(northing_flat), 
+                        savepath=str(path) )
+    move_downloaded_files(dir_out = str(path), dp_id = product_code
+                     ,dp_name = "hs_"+hs_type, file_pattern =  ".h5", delete_orig=True)
+    
+    return str(path/'laz'), str(path/hs_type), str(path/'tif')
 
 
 def download_lidar(site, year, lidar_path, use_tiles_w_veg):
@@ -38,9 +149,11 @@ def download_lidar(site, year, lidar_path, use_tiles_w_veg):
         Path to the result lidar folder ('*/laz')
         and the result raster folder ('*/tif')
     """
+
     lidar_path = Path(lidar_path)
-    product_code = 'DP1.30003.001' #lidar
     path = lidar_path/site/year
+        
+    product_code = 'DP1.30003.001' #lidar
     file_types = ['prj', 'shx', 'shp', 'dbf', 'merged_tiles', 'laz']
     for file_type in file_types:
         if file_type == 'laz':
@@ -66,7 +179,85 @@ def download_lidar(site, year, lidar_path, use_tiles_w_veg):
                         match_string=file_type,
                         check_size=False,
                         use_tiles_w_veg=use_tiles_w_veg)
+            
     return str(path/'laz'), str(path/'tif')
+
+# def download_lidar(site, year, lidar_path, use_tiles_w_veg, coords_bbox=[]):
+#     """Download lidar data (raw and raster) for site-year
+
+#     Parameters
+#     ----------
+#     site : str
+#         Site name
+#     year : str
+#         Lidar year
+#     lidar_path : str
+#         Path to store the downloaded data
+
+#     Returns
+#     -------
+#     (str, str)
+#         Path to the result lidar folder ('*/laz')
+#         and the result raster folder ('*/tif')
+#     """
+
+#     if coords_bbox:
+#         # Generate easting and northing coordinates, 1000m apart
+#         easting = np.arange(coords_bbox[0], coords_bbox[1] + 1, 1000)
+#         northing = np.arange(coords_bbox[2], coords_bbox[3] + 1, 1000)
+
+#         # Create a meshgrid of coordinates
+#         easting_grid, northing_grid = np.meshgrid(easting, northing)
+
+#         # Flatten the grids into 1D arrays
+#         easting_flat = easting_grid.flatten()
+#         northing_flat = northing_grid.flatten()
+
+#         # Combine the coordinates into a single array of strings
+#         coords = np.array([f"{easting}_{northing}" for easting, northing in zip(easting_flat, northing_flat)])
+
+#     lidar_path = Path(lidar_path)
+#     path = lidar_path/site/year
+    
+#     for coord in coords:
+#         product_code = 'DP1.30003.001' #lidar
+#         file_types = ['prj', 'shx', 'shp', 'dbf', 'laz']
+#         for file_type in file_types:
+#             if file_type == 'laz':
+#                 file_type = '_classified_point_cloud_colorized.laz'
+#                 p = path/'laz'
+#             else:
+#                 p = path/'shape'
+#             download_aop_files(product_code,
+#                             site,
+#                             year,
+#                             str(p),
+#                             match_string=[coord,file_type],
+#                             check_size=False)
+            
+#         file_types = ['merged_tiles']
+#         for file_type in file_types:
+#             p = path/'shape'
+#             download_aop_files(product_code,
+#                             site,
+#                             year,
+#                             str(p),
+#                             match_string=[coord,file_type],
+#                             check_size=False)
+
+#         product_codes = ['DP3.30024.001', 'DP3.30025.001'] #DTM, slope/aspect
+#         file_type = 'tif'
+#         for product_code in product_codes:
+#             p = path/file_type
+#             download_aop_files(product_code,
+#                             site,
+#                             year,
+#                             str(p),
+#                             match_string=[coord,file_type],
+#                             check_size=False,
+#                             use_tiles_w_veg=use_tiles_w_veg)
+            
+#     return str(path/'laz'), str(path/'tif')
 
 
 def clip_lidar_by_plots(laz_path,

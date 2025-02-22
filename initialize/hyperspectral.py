@@ -14,7 +14,7 @@ from matplotlib.patches import Patch
 import rasterio
 from rasterio.plot import show
 import fiona
-from sklearn.preping import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder
 # from keras.models import Sequential
 # from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 import geopandas as gpd
@@ -25,8 +25,8 @@ import seaborn as sns
 
 # data preparation
 from sklearn.decomposition import PCA
-from sklearn.preping import MinMaxScaler
-from sklearn.preping import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
 # model selection
@@ -85,12 +85,12 @@ def download_hyperspectral(site, year, data_raw_aop_path, hs_type):
     Returns
     -------
     (str, str)
-        Path to the result folder for hyperspectral uncorrected imagery (L3 tiles) ('*/hs_tile_h5' or '*/hs_flightline_h5')
+        Path to the result folder for hyperspectral uncorrected imagery (L3 tiles) ('*/hs_tile' or '*/hs_flightline')
         and the result raster folder ('*/tif')
     """
     path = Path(data_raw_aop_path)/site/year
 
-    product_codes = ['DP3.30015.001', 'DP3.30010.001'] 
+    product_codes = ['DP3.30015.001', 'DP3.30010.001'] #chm, rgb
     file_type = 'tif' 
     for product_code in product_codes: 
         p = path/file_type
@@ -101,7 +101,7 @@ def download_hyperspectral(site, year, data_raw_aop_path, hs_type):
                            match_string=file_type,
                            check_size=False)
 
-    product_code = 'DP3.30026.001'
+    product_code = 'DP3.30026.001' #veg indices
     p = path/file_type
     download_aop_files(product_code,
                        site,
@@ -121,10 +121,10 @@ def download_hyperspectral(site, year, data_raw_aop_path, hs_type):
 
     if hs_type=="tile":
         product_code = 'DP3.30006.001'
-        p = path/'hs_tile_h5'
+        p = path/'hs_tile'
     elif hs_type=="flightline": 
         product_code = 'DP1.30006.001'
-        p = path/'hs_flightline_h5'
+        p = path/'hs_flightline'
     else:
         print("must specify hs_type argument")
     file_type = 'h5'
@@ -166,7 +166,7 @@ def correct_flightlines(site, year_inv, year_aop, data_raw_aop_path, data_int_pa
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
 
-    flightline_h5_path = os.path.join(data_raw_aop_path,site,year_aop,"hs_flightline_h5")
+    flightline_h5_path = os.path.join(data_raw_aop_path,site,year_aop,"hs_flightline")
     
     # 1) Apply BRDF/topographic corrections
     log.info(f'Applying BRDF/topo corrections for: {site} {year_inv}')
@@ -271,9 +271,10 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     log.info(f'Extracting spectra from tree crowns for: {site} {year}')
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
-    
+    extract_spectra_from_polygon_r = ro.r('extract_spectra_from_polygon_r')
+
     # Extract training data from AOP data with tree polygons
-    training_spectra_path = extract_spectra_from_polygon(site=site, 
+    training_spectra_path = extract_spectra_from_polygon_r(site=site, 
                                                          year=year, 
                                                          data_int_path=data_int_path, 
                                                          data_final_path=data_final_path, 

@@ -1,6 +1,7 @@
 install.packages("neonUtilities")
 install.packages("neonOS")
 install.packages("devtools")
+install.packages("glue")
 devtools::install_github("NEONScience/NEON-geolocation/geoNEON", dependencies=TRUE)
 library(neonUtilities)
 library(neonOS)
@@ -36,7 +37,7 @@ download_veg_structure_data <- function(site, data_path) {
     write.csv(df, glue("{wd}/veg_structure.csv"), row.names = FALSE)
     write.csv(df_perplotperyear, glue("{wd}/plot_sampling_effort.csv"),
               row.names = FALSE)
-    return("{wd}")
+    return("wd")
 }
 
 # match_species_to_PFT <- function(site, data_int_path) {

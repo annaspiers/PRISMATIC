@@ -120,7 +120,7 @@ def get_file_size(urls, match_string):
         files = r.json()['data']['files']
         for i in range(len(files)):
             if match_string is not None:
-                if match_string in files[i]['name']:
+                if all(sub in files[i]['name'] for sub in match_string if sub != []): #ais if match_string in files[i]['name']:
                     size += int(files[i]['size'])
             else:
                 size += int(files[i]['size'])
@@ -213,9 +213,9 @@ def download_aop_files(product,
             # if ("VegIndices.zip" in pathname) | os.path.exists(pathname): #ais how to only download VegIndices.zip
                 print(files[i]['name']+" already downloaded")               # files if unzipped tifs are not present
                 continue
-            else:
+            else: 
                 if match_string is not None:
-                    if match_string in files[i]['name']:
+                    if all(sub in files[i]['name'] for sub in match_string if sub != []): #ais match_string in files[i]['name']:
                         print(f"downloading {files[i]['name']} to {download_folder}")
                         try:
                             download_file(files[i]['url'],
