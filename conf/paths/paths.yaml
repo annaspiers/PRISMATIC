@@ -1,18 +1,20 @@
 
+# if perlmutter
 # data_raw_aop_path:  ${SCRATCH}/data/raw/aop
 # data_raw_inv_path:  ${SCRATCH}/data/raw/inventory
 # data_int_path:      ${SCRATCH}/data/intermediate
 # data_final_path:    ${SCRATCH}/data/final
 
-data_raw_aop_path:  /pscratch/sd/a/aspiers/data/raw/aop
-data_raw_inv_path:  /pscratch/sd/a/aspiers/data/raw/inventory
-data_int_path:      /pscratch/sd/a/aspiers/data/intermediate
-data_final_path:    /pscratch/sd/a/aspiers/data/final
+# data_raw_aop_path:  /pscratch/sd/a/aspiers/data/raw/aop
+# data_raw_inv_path:  /pscratch/sd/a/aspiers/data/raw/inventory
+# data_int_path:      /pscratch/sd/a/aspiers/data/intermediate
+# data_final_path:    /pscratch/sd/a/aspiers/data/final
 
-# data_raw_aop_path:  ${hydra:runtime.cwd}/data/raw/aop
-# data_raw_inv_path:  ${hydra:runtime.cwd}/data/raw/inventory
-# data_int_path:      ${hydra:runtime.cwd}/data/intermediate
-# data_final_path:    ${hydra:runtime.cwd}/data/final
+# # if local computer
+data_raw_aop_path:  ${hydra:runtime.cwd}/data/raw/aop
+data_raw_inv_path:  ${hydra:runtime.cwd}/data/raw/inventory
+data_int_path:      ${hydra:runtime.cwd}/data/intermediate
+data_final_path:    ${hydra:runtime.cwd}/data/final
 
 # ais update this so that if run on Perlmutter, use the first set of paths, and if run on
 # a local computer, sue the second set of paths

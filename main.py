@@ -11,13 +11,14 @@ os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R')
 #     # add to function_workflow.drawio and data structure diagram
 #     # push to github
 
-from utils.utils import build_cache_site, build_cache_all, force_rerun
+from utils.utils import build_cache_site, build_cache_predict, force_rerun #ais build_cache_all
 from initialize.inventory import download_veg_structure_data, \
                                     download_trait_table, \
                                     prep_veg_structure
 from initialize.plots import download_polygons, \
                                 prep_polygons
-from initialize.lidar import download_lidar, \
+from initialize.lidar import download_aop_bbox, \
+                                download_lidar, \
                                 clip_lidar_by_plots, \
                                 normalize_laz
 from initialize.biomass import prep_biomass
@@ -38,8 +39,8 @@ def main(cfg):
     log.info(f'Run with configuration: {cfg}')
     data_raw_aop_path = cfg.paths.data_raw_aop_path
     data_raw_inv_path = cfg.paths.data_raw_inv_path
-    data_int_path = cfg.paths.data_int_path
-    data_final_path = cfg.paths.data_final_path
+    data_int_path     = cfg.paths.data_int_path
+    data_final_path   = cfg.paths.data_final_path
 
     # Parameters to change manually
     use_case    = cfg.others.use_case 
@@ -56,6 +57,7 @@ def main(cfg):
     aggregate_from_1m_to_2m_res = cfg.others.aggregate_from_1m_to_2m_res 
     independentValidationSet    = cfg.others.independentValidationSet
     pcaInsteadOfWavelengths     = cfg.others.pcaInsteadOfWavelengths 
+    coords_bbox = cfg.others.coords_bbox 
     # balance_training_to_min_PFT = cfg.others.balance_training_to_min_PFT
     
     global_force_rerun = cfg.sites.global_run_params.force_rerun
@@ -84,21 +86,32 @@ def main(cfg):
                                         data_int_path=data_int_path, 
                                         hs_type=hs_type)
                     
-                    # download lidar
-                    laz_path, tif_path = (force_rerun(cache, force=rerun_status)
-                                        (download_lidar)
-                                        (site=site,
-                                            year=year_aop,
-                                            lidar_path=data_raw_aop_path,
-                                            use_tiles_w_veg=use_tiles_w_veg))
-                    
-                    # download hs data
-                    hs_path = (force_rerun(cache, force=rerun_status)
-                                            (download_hyperspectral)
+                    if coords_bbox is None:
+                        # download lidar
+                        laz_path, tif_path = (force_rerun(cache, force=rerun_status)
+                                            (download_lidar)
                                             (site=site,
-                                            year=year_aop,
-                                            data_raw_aop_path=data_raw_aop_path,
-                                            hs_type=hs_type))
+                                                year=year_aop,
+                                                lidar_path=data_raw_aop_path,
+                                                use_tiles_w_veg=use_tiles_w_veg))
+                        
+                        # download hs data
+                        hs_path = (force_rerun(cache, force=rerun_status)
+                                                (download_hyperspectral)
+                                                (site=site,
+                                                year=year_aop,
+                                                data_raw_aop_path=data_raw_aop_path,
+                                                hs_type=hs_type))
+                    
+                    else:
+                        # download lidar and HS data together
+                        hs_path, laz_path, tif_path  = (force_rerun(cache, force=rerun_status)
+                                                (download_aop_bbox)
+                                                (site=site,
+                                                year=year_aop,
+                                                path=data_raw_aop_path,
+                                                hs_type=hs_type,
+                                                coords_bbox=coords_bbox))
                                                         
                     _, _ = (force_rerun(cache, force=rerun_status)
                             (download_veg_structure_data)
@@ -157,9 +170,9 @@ def main(cfg):
                         # ais is there a cleaner way to do this? ask sy-toan
                         laz_path=os.path.join(data_raw_aop_path,site,year_aop,"laz")
                         if hs_type=="tile":
-                            hs_path=os.path.join(data_raw_aop_path,site,year_aop,"hs_tile_h5")
+                            hs_path=os.path.join(data_raw_aop_path,site,year_aop,"hs_tile")
                         else:
-                            hs_path=os.path.join(data_raw_aop_path,site,year_aop,"hs_flightline_h5")
+                            hs_path=os.path.join(data_raw_aop_path,site,year_aop,"hs_flightline")
                         tif_path=os.path.join(data_raw_aop_path,site,year_aop,"tif")
                         neon_plots_path=os.path.join(data_raw_inv_path,"All_NEON_TOS_Plots_V9")
                         
@@ -273,21 +286,21 @@ def main(cfg):
         # ^ intermediate data finished processing for all site/years. Next, train RF 
 
     
-    for k, v in p.force_rerun.items():
-        rerun_status[k] = v or global_force_rerun.get(k, False)
-    # log.info(f'Run process for all sites, '
-    #     f'with rerun status: {rerun_status}')
-        #ais ask sy-toan how to code this to train RF only once, and not for every function in sites.yaml (stepped through k)
-    
-        cache = build_cache_all(
-                            data_int_path=data_int_path, 
-                            data_final_path=data_final_path, 
-                            use_case=use_case, 
-                            site=site,
-                            year_inventory=year_inventory,
-                            ic_type=ic_type)                
-    
-        if use_case=="predict" and ic_type=="field_inv_plots":
+        # for k, v in p.force_rerun.items():
+        #rerun_status[k] = v or global_force_rerun.get(k, False)
+        # log.info(f'Run process for all sites, '
+        #     f'with rerun status: {rerun_status}')
+            #ais ask sy-toan how to code this to train RF only once, and not for every function in sites.yaml (stepped through k)
+        
+            # cache = build_cache_all(
+            #                     data_int_path=data_int_path, 
+            #                     data_final_path=data_final_path, 
+            #                     use_case=use_case, 
+            #                     site=site,
+            #                     year_inventory=year_inventory,
+            #                     ic_type=ic_type)                
+        
+        if ic_type=="field_inv_plots": #use_case=="predict" and 
             rf_model_path = None 
         else:
             rf_model_path = (force_rerun(cache,  force=rerun_status)
@@ -302,13 +315,29 @@ def main(cfg):
 
 
     if use_case=="predict": #ais why is the below function running even when use_case is train
+
+
+        for site, v in cfg.sites.run.items():
+            print(cfg.sites.run.items())
+            if not global_run or site in global_run:
+                for year_inventory, p in v.items():
+                    rerun_status = {}
+                    for k, v in p.force_rerun.items():
+                        rerun_status[k] = v or global_force_rerun.get(k, False)
+                    year_aop = p.year_aop
+                    log.info(f'Download raw data for site: {site}, '
+                            f'year: {year_inventory}, year_aop: {year_aop}, '
+                            f'with rerun status: {rerun_status}')
+                    cache = build_cache_predict(site=site, 
+                                                    year_inventory=year_inventory, 
+                                                    year_aop=year_aop, 
+                                                    data_raw_aop_path=data_raw_aop_path, 
+                                                    data_int_path=data_int_path,
+                                                    data_final_path=data_final_path,
+                                                    use_case=use_case,
+                                                    ic_type = ic_type)
                 
-        # ais set this up so that I can specify site/year or generate initial conditions for ALL sites
         rf_model_path=os.path.join(data_int_path,'rf_dir/rf_model_tree_crowns_training.joblib')
-        site='SOAP' #ais how to specify this automatically? - when I specify 'usecase=predict'
-        year_inventory='2021'  #ais how to specify this automatically?
-        year_aop = '2021-07'  #ais how to specify this automatically?
-        # ais do I actually need to specify year_inv and year_aop?
 
         # Generate initial conditions
         cohort_path, patch_path = (force_rerun(cache,  force=rerun_status)
@@ -334,3 +363,4 @@ def main(cfg):
 
 if __name__ == '__main__':
     main()
+    

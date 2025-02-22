@@ -44,6 +44,7 @@ def download_veg_structure_data(site, data_path):
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'inventory_helper.R'))
     download_veg_structure_data = ro.r('download_veg_structure_data')
+    if not os.path.exists(Path(data_path,site)): os.makedirs(Path(data_path,site))
     wd = download_veg_structure_data(site, data_path)
     veg_structure = f'{wd}/veg_structure.csv'
     plot_sampling_effort = f'{wd}/plot_sampling_effort.csv'

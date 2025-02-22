@@ -18,11 +18,11 @@ def _add_to_cache(func_name, ps, l, cache):
 
 
 def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, 
-                data_int_path, hs_type):
+                     data_int_path, hs_type):
     l = []
     data_raw_aop_path = Path(data_raw_aop_path)
     data_raw_inv_path = Path(data_raw_inv_path)
-    data_int_path = Path(data_int_path)
+    data_int_path     = Path(data_int_path)
 
     l.extend([str(p) for p in data_raw_aop_path.glob('**/') if p.is_dir()])
     l.extend([str(p) for p in data_raw_inv_path.glob('**/') if p.is_dir()])
@@ -40,11 +40,21 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
                   l, cache)
     if hs_type=="tile":
         _add_to_cache('download_hyperspectral',
-                    str(data_raw_aop_path/site/year_aop/'hs_tile_h5'),
+                    str(data_raw_aop_path/site/year_aop/'hs_tile'),
+                    l, cache)
+        _add_to_cache('download_aop_bbox',
+                    [str(data_raw_aop_path/site/year_aop/'laz'),
+                    str(data_raw_aop_path/site/year_aop/'tif'),
+                    str(data_raw_aop_path/site/year_aop/'hs_tile')],
                     l, cache)
     if hs_type=="flightline":
         _add_to_cache('download_hyperspectral',
-                    str(data_raw_aop_path/site/year_aop/'hs_flightline_h5'),
+                    str(data_raw_aop_path/site/year_aop/'hs_flightline'),
+                    l, cache)
+        _add_to_cache('download_aop_bbox',
+                    [str(data_raw_aop_path/site/year_aop/'laz'),
+                    str(data_raw_aop_path/site/year_aop/'tif'),
+                    str(data_raw_aop_path/site/year_aop/'hs_flightline')],
                     l, cache)
     _add_to_cache('download_trait_table',
                   str(data_raw_inv_path/'NEON_trait_table.csv'),
@@ -93,13 +103,20 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
     _add_to_cache('extract_spectra_from_polygon',
                   str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_inv.csv'),
                   l, cache)
+    
+
+    _add_to_cache('train_pft_classifier',
+                  str(data_int_path/'rf_dir'/'rf_model_tree_crowns_training.joblib'),
+                    l, cache) #ais where to put this?
                 
     return cache
 
 
 
-def build_cache_all( data_int_path, data_final_path, use_case, site, year_inventory, ic_type):
+def build_cache_predict( data_raw_aop_path, data_int_path, data_final_path, use_case, site, 
+                        year_inventory, year_aop, ic_type):  
     l = []
+    data_raw_aop_path = Path(data_raw_aop_path)
     data_int_path = Path(data_int_path)
     data_final_path = Path(data_final_path)
 
@@ -110,10 +127,6 @@ def build_cache_all( data_int_path, data_final_path, use_case, site, year_invent
     l.extend([str(p) for p in data_final_path.glob('**/*.pss')])
     
     cache = {}
-
-    _add_to_cache('train_pft_classifier',
-                  str(data_int_path/'rf_dir'/'rf_model_tree_crowns_training.joblib'),
-                    l, cache)
     
     if use_case=="predict":        
         if (ic_type == "field_inv_plots"):
