@@ -120,10 +120,10 @@ def download_hyperspectral(site, year, data_raw_aop_path, hs_type):
         os.remove(Path(p/vi_error_file)) # remove error files
 
     if hs_type=="tile":
-        product_code = 'DP3.30006.001'
+        product_code = 'DP3.30006.001'  #DP3.30006.002
         p = path/'hs_tile'
     elif hs_type=="flightline": 
-        product_code = 'DP1.30006.001'
+        product_code = 'DP1.30006.001' #DP1.30006.002
         p = path/'hs_flightline'
     else:
         print("must specify hs_type argument")
