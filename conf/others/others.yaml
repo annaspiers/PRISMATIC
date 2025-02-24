@@ -17,4 +17,4 @@ randomMinSamples: False
 aggregate_from_1m_to_2m_res: False
 independentValidationSet: True
 pcaInsteadOfWavelengths: True
-coords_bbox: [253000, 260000, 4107000, 4110000] #None
+coords_bbox: [258000, 259000, 4108000, 4109000] #None #all of SJER 2021 [253000, 260000, 4107000, 4110000]
