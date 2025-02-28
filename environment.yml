@@ -8,7 +8,6 @@ dependencies:
   - pdal
   - python-pdal
   - gdal
-  # - whitebox
   - folium
   - mapclassify
   - matplotlib
@@ -29,10 +28,8 @@ dependencies:
   - r-bvls #bvls()
   - r-tidyr #pivot_longer()
   - r-terra
-  #- r-neonUtilities
   - r-glue
   - r-readr
-  - r-vscDebugger
   - bioconductor-rhdf5
   - pip
   - pip:
