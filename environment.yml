@@ -12,7 +12,7 @@ dependencies:
   - mapclassify
   - matplotlib
   - tensorflow
-  - r-base
+  - r-base=4.3
   - r-devtools
   - r-sf
   - r-ggplot2
