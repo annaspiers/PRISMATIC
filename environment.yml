@@ -29,14 +29,11 @@ dependencies:
   - r-bvls #bvls()
   - r-tidyr #pivot_longer()
   - r-terra
-  - r-neonUtilities
+  #- r-neonUtilities
   - r-glue
   - r-readr
   - r-vscDebugger
   - bioconductor-rhdf5
-  # - r-neonOS
-  # - r-geoNEON
-  # - r-ggbiplot
   - pip
   - pip:
     - gdown
