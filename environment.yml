@@ -25,7 +25,7 @@ dependencies:
   - r-randomForest
   - r-assertthat
   - r-stringr
-  - r-bvls #bvls()
+  #- r-bvls #bvls()
   - r-tidyr #pivot_longer()
   - r-terra
   - r-glue
