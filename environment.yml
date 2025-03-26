@@ -2,17 +2,17 @@ name: prismatic
 channels:
   - conda-forge
   - r
+  - bioconda
 dependencies:
   - python=3.10
   - pdal
   - python-pdal
   - gdal
-  # - whitebox
   - folium
   - mapclassify
   - matplotlib
   - tensorflow
-  - r-base
+  - r-base=4.3
   - r-devtools
   - r-sf
   - r-ggplot2
@@ -25,17 +25,12 @@ dependencies:
   - r-randomForest
   - r-assertthat
   - r-stringr
-  - r-bvls #bvls()
+  #- r-bvls #bvls()
   - r-tidyr #pivot_longer()
   - r-terra
-  - r-neonUtilities
   - r-glue
   - r-readr
-  - r-vscDebugger
   - bioconductor-rhdf5
-  # - r-neonOS
-  # - r-geoNEON
-  # - r-ggbiplot
   - pip
   - pip:
     - gdown

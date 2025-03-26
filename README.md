@@ -42,7 +42,7 @@ Data procesing workflow:
     - `download_polygons`:  polygons for woody veg plots
     - `download_trait_table`: table of trait values for species
 - For all sites at once, `generate_pft_reference`: generates table linking species
-- For one site at a time, process intermediate data products:
+- For each site, process intermediate data products:
     - `prep_veg_structure`: organize woody veg data into year and sampling effort
     - `prep_polygons`: identify subplot associated with woody veg data
     - `normalize_laz`: normalize laz tiles
