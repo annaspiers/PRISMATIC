@@ -121,11 +121,9 @@ clip_lidar_to_polygon_lidR <- function(las_norm_path, shp_path, clipped_output_p
     opt_laz_compression(ctg) <- TRUE
 
     plots_shp <- sf::st_read(shp_path)
-    
-    # o <- lidR::clip_roi(ctg, plots_shp)
 
     # Plots
-    o <- clip_roi(ctg, plots_shp)
+    o <- lidR::clip_roi(ctg, plots_shp)
 }
 
 

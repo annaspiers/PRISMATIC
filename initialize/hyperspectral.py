@@ -13,12 +13,15 @@ import matplotlib.cm as cm
 from matplotlib.patches import Patch
 import rasterio
 from rasterio.plot import show
+from rasterio.features import geometry_mask
 import fiona
 from sklearn.preprocessing import OneHotEncoder
 # from keras.models import Sequential
 # from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 import geopandas as gpd
 from shapely.geometry import Point
+from shapely.geometry import mapping
+from shapely.geometry import box
 import rpy2.robjects as ro
 from collections import Counter
 import seaborn as sns
@@ -90,26 +93,23 @@ def download_hyperspectral(site, year, data_raw_aop_path, hs_type):
     """
     path = Path(data_raw_aop_path)/site/year
 
-    product_codes = ['DP3.30015.001', 'DP3.30010.001'] #chm, rgb
+    product_code = 'DP3.30010.001' #rgb
     file_type = 'tif' 
-    for product_code in product_codes: 
-        p = path/file_type
-        download_aop_files(product_code,
-                           site,
-                           year,
-                           str(p),
-                           match_string=file_type,
-                           check_size=False)
+    p = path/file_type
+    download_aop_files(product_code,
+                        site,
+                        year,
+                        str(p),
+                        match_string=file_type,
+                        check_size=False)
 
     product_code = 'DP3.30026.001' #veg indices
-    p = path/file_type
     download_aop_files(product_code,
                        site,
                        year,
                        str(p),
                        match_string='.zip',
                        check_size=False)
-    file_type = 'tif'
     zip_files = [file for file in os.listdir(p) if file.endswith('.zip')] # get the list of files
     for zip_file in zip_files:  #for each zipfile
         with zipfile.ZipFile(Path(p/zip_file)) as item: # treat the file as a zip
@@ -254,7 +254,7 @@ def prep_aop_imagery(site, year, hs_type, hs_path, tif_path, data_int_path, use_
 
 
 def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final_path, stacked_aop_path, 
-                         use_case, aggregate_from_1m_to_2m_res, ic_type=None, ic_type_path=None):
+                         use_case, aggregate_from_1m_to_2m_res, ic_type):
     """Create geospatial features (points, polygons with half the maximum crown diameter) 
         for every tree in the NEON woody vegetation data set. 
         Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
@@ -269,25 +269,193 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
 
     # Create features (points or polygons) for each tree 
     log.info(f'Extracting spectra from tree crowns for: {site} {year}')
-    r_source = ro.r['source']
-    r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
-    extract_spectra_from_polygon_r = ro.r('extract_spectra_from_polygon_r')
 
-    # Extract training data from AOP data with tree polygons
-    training_spectra_path = extract_spectra_from_polygon_r(site=site, 
-                                                         year=year, 
-                                                         data_int_path=data_int_path, 
-                                                         data_final_path=data_final_path, 
-                                                         stacked_aop_path=stacked_aop_path, 
-                                                         shp_path=shp_path,
-                                                         use_case=use_case, 
-                                                         aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res)
- 
+    training_data_dir = os.path.join(data_int_path, site, year, "training")
+    ic_type_path = os.path.join(data_final_path,site,year,ic_type)
+
+    # get a description of the shapefile to use for naming outputs
+    shapefile_description = os.path.splitext(os.path.basename(shp_path))[0]
+
+    # Specify destination for extracted features
+    if use_case == "train":
+        extracted_features_path     = os.path.join(training_data_dir)
+        extracted_features_filename = os.path.join(extracted_features_path,
+                                                 shapefile_description+"-extracted_features_inv.tif")        
+        
+    elif use_case=="predict":
+        extracted_features_path     = os.path.join(ic_type_path) 
+        extracted_features_filename = os.path.join(extracted_features_path,
+                                                 shapefile_description+"-extracted_features.tif")
+    else:
+        print("need to specify use_case")
+
+    # Only run if the extracted features do not exist
+    if not os.path.exists(extracted_features_filename):
+        # Load shapefile
+        shp_gdf = gpd.read_file(shp_path)
+
+        # Compute centroid for each geometry
+        shp_gdf["center_X"] = shp_gdf.geometry.centroid.x
+        shp_gdf["center_Y"] = shp_gdf.geometry.centroid.y
+
+        # List all .tif raster files in the directory
+        stacked_aop_list = [os.path.join(stacked_aop_path, f) for f in os.listdir(stacked_aop_path) if f.endswith(".tif")]
+
+        # create column to track shape ID 
+        # if training, this is the tree crown boundary
+        # if predicting, this is the plot boundary)
+        if use_case == "train":
+            shp_gdf["shapeID"] = [f"tree_crown_{i}" for i in range(len(shp_gdf))]
+        elif use_case == "predict":
+            if "PLOTID" in shp_gdf.columns:
+                shp_gdf = shp_gdf.rename(columns={"PLOTID": "shapeID"})
+            elif "plotID" in shp_gdf.columns:
+                shp_gdf = shp_gdf.rename(columns={"plotID": "shapeID"})
+            else:
+                print("Trying to predict without training data. Need to first switch use_case to train from predict")
+
+        # Filter to tiles containing veg to speed up the next for-loop
+        # ais does this code include tiles with only a crown from the ucla field data though?
+        if use_case == 'train' or ic_type=='rs_inv_plots':
+            # Read tiles_w_veg.txt and extract the first column as a list
+            tiles_w_veg = pd.read_csv(os.path.join(training_data_dir, "tiles_w_veg.txt"), header=None)[0].tolist()
+            
+            # Filter stacked_aop_list based on the presence of any tile name
+            stacked_aop_list = [path for path in stacked_aop_list if any(tile in path for tile in tiles_w_veg)]
+
+        # Loop through AOP tiles
+        for stacked_aop_filename in stacked_aop_list:
+                        
+            #training_array, combined_mask = extract_spectra_3darray(east_north_csv_path, shp_gdf)
+
+            # Read current tile of stacked AOP data
+            with rasterio.open(stacked_aop_filename) as src:
+                stacked_aop_data = src.read()
+                raster_transform = src.transform
+                raster_crs = src.crs
+                raster_bounds = src.bounds  # Get raster bounds
+
+                # Construct the easting northing string for naming outputs
+                east_north_string = f"{round(raster_bounds[0])}_{round(raster_bounds[1])}"
+
+                east_north_tif_path = os.path.join(extracted_features_path, f"extracted_features_mask_{east_north_string}_{shapefile_description}.tif")
+                
+                # If CSV file already exists, skip
+                if os.path.exists(east_north_tif_path):
+                    continue
+
+                # Check which polygons overlap with the raster
+                shp_gdf = shp_gdf[shp_gdf.intersects(box(*raster_bounds))]
+
+                # If no polygons overlap, exit
+                if shp_gdf.empty:
+                    print("No overlapping polygons found.")
+                    continue
+                else:
+                    # Convert overlapping polygons to GeoJSON format
+                    shapes_geojson = [mapping(geom) for geom in shp_gdf.geometry]
+                    
+                    # Mask the raster using the overlapping polygons
+                    with rasterio.open(stacked_aop_filename) as src:
+                        masked_raster, masked_transform = rasterio.mask.mask(dataset=src, shapes=shapes_geojson, crop=False, nodata=np.nan)
+                    
+                    # Save the masked raster as a new GeoTIFF file
+                    with rasterio.open(
+                        east_north_tif_path, "w", driver="GTiff",
+                        height=masked_raster.shape[1], width=masked_raster.shape[2],
+                        count=masked_raster.shape[0], dtype=str(masked_raster.dtype),
+                        crs=raster_crs, transform=masked_transform
+                    ) as dst:
+                        dst.write(masked_raster)
+                    
+                    print(f"Masked raster saved to {east_north_tif_path}")
+
+        # combine all extracted features into a single .tif
+        paths_ls = glob.glob(os.path.join(extracted_features_path, "*.tif"))
+        
+        # refine the output csv selection 
+        tifs = [path for path in paths_ls if f"000_{shapefile_description}.tif" in path]
+        
+        # Open and merge TIF files
+        src_files_to_mosaic = [rasterio.open(tif) for tif in tifs]
+        mosaic, out_trans = merge(src_files_to_mosaic)
+
+        # Get metadata from the first file
+        out_meta = src_files_to_mosaic[0].meta.copy()   
+
+        # Update metadata for the merged file
+        out_meta.update({
+            "driver": "GTiff",
+            "height": mosaic.shape[1],
+            "width": mosaic.shape[2],
+            "transform": out_trans
+        })
+
+        # Write the merged TIF file
+        with rasterio.open(extracted_features_filename, "w", **out_meta) as dest:
+            dest.write(mosaic)
+
+        # Close input files
+        for src in src_files_to_mosaic:
+            src.close()
+
+        # Delete the individual TIF files for each tile
+        for tif in tifs:
+            os.remove(tif)
+
+    # r_source = ro.r['source']
+    # r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    # extract_spectra_from_polygon_r = ro.r('extract_spectra_from_polygon_r')
+
+    # # Extract training data from AOP data with tree polygons
+    # training_spectra_path = extract_spectra_from_polygon_r(site=site, 
+    #                                                      year=year, 
+    #                                                      data_int_path=data_int_path, 
+    #                                                      data_final_path=data_final_path, 
+    #                                                      stacked_aop_path=stacked_aop_path, 
+    #                                                      shp_path=shp_path,
+    #                                                      use_case=use_case, 
+    #                                                      aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,
+    #                                                      ic_type=ic_type)
 
     log.info('Spectral features for training data saved at: '
-             f'{training_spectra_path}')
+             f'{extracted_features_filename}')
     
-    return training_spectra_path
+    return extracted_features_filename
+
+
+
+def extract_spectra_3darray(raster_path, training_shp):
+    # generated by cborg, adapted by AIS March 2025
+
+    # Load the multiband raster
+    with rasterio.open(raster_path) as src:
+        # Prepare a 3D array to store training data (bands, height, width)
+        training_array = []
+
+        # Create a combined mask for all polygons
+        combined_mask = np.zeros(src.shape, dtype=bool)
+
+        for _, row in training_shp.iterrows():
+            geometry = row['geometry']
+            # Create a mask for the raster using the polygon
+            mask = geometry_mask([geometry], invert=True, transform=src.transform, out_shape=src.shape)
+
+            # Combine the mask
+            combined_mask |= mask  # Logical OR to combine masks
+
+        # Read the raster values
+        raster_values = src.read()
+
+        # Extract pixel values for the masked area
+        for band in range(raster_values.shape[0]):
+            band_values = raster_values[band][combined_mask]
+            training_array.append(band_values)
+
+        # Convert the list of arrays into a 3D numpy array
+        training_array = np.array(training_array)  # Shape will be (bands, num_samples)
+
+        return training_array, combined_mask
 
 
 

@@ -1,6 +1,7 @@
 import logging
 import hydra
 import os 
+from pathlib import Path
 os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R') 
 
 # # when adding new content to main.py
@@ -11,7 +12,7 @@ os.environ['R_HOME'] = os.path.join(os.environ['CONDA_PREFIX'], 'lib/R')
 #     # add to function_workflow.drawio and data structure diagram
 #     # push to github
 
-from utils.utils import build_cache_site, build_cache_predict, force_rerun #ais build_cache_all
+from utils.utils import build_cache_site, force_rerun 
 from initialize.inventory import download_veg_structure_data, \
                                     download_trait_table, \
                                     prep_veg_structure
@@ -57,6 +58,7 @@ def main(cfg):
     aggregate_from_1m_to_2m_res = cfg.others.aggregate_from_1m_to_2m_res 
     independentValidationSet    = cfg.others.independentValidationSet
     pcaInsteadOfWavelengths     = cfg.others.pcaInsteadOfWavelengths 
+    multisite   = cfg.others.multisite
     coords_bbox = cfg.others.coords_bbox 
     # balance_training_to_min_PFT = cfg.others.balance_training_to_min_PFT
     
@@ -84,9 +86,10 @@ def main(cfg):
                                         data_raw_aop_path=data_raw_aop_path, 
                                         data_raw_inv_path=data_raw_inv_path, 
                                         data_int_path=data_int_path, 
-                                        hs_type=hs_type)
+                                        hs_type=hs_type,
+                                        coords_bbox=coords_bbox)
                     
-                    if coords_bbox is None:
+                    if not coords_bbox:
                         # download lidar
                         laz_path, tif_path = (force_rerun(cache, force=rerun_status)
                                             (download_lidar)
@@ -104,7 +107,7 @@ def main(cfg):
                                                 hs_type=hs_type))
                     
                     else:
-                        # download lidar and HS data together
+                        # download lidar and hyperspectral data 
                         hs_path, laz_path, tif_path  = (force_rerun(cache, force=rerun_status)
                                                 (download_aop_bbox)
                                                 (site=site,
@@ -164,7 +167,8 @@ def main(cfg):
                                         data_raw_aop_path=data_raw_aop_path, 
                                         data_raw_inv_path=data_raw_inv_path, 
                                         data_int_path=data_int_path, 
-                                        hs_type = hs_type )
+                                        hs_type = hs_type,
+                                         coords_bbox=coords_bbox )
                         
                         # Reset variable names to proper site/year
                         # ais is there a cleaner way to do this? ask sy-toan
@@ -239,70 +243,70 @@ def main(cfg):
                                     end_result=False)) 
                     # ais check warnings for utils.allometry - lots of species not detected in neon_trait_table
                     
-                    if hs_type=="flightline":
-                        (force_rerun(cache, force=rerun_status)
-                            (correct_flightlines)
-                            (site=site,
-                            year_inv=year_inventory, 
-                            year_aop=year_aop, 
-                            data_raw_aop_path=data_raw_aop_path,
-                            data_int_path=data_int_path))
-                    
-                    
-                    training_crown_shp_path = (force_rerun(cache, 
-                                                            force=rerun_status)
-                                                (prep_manual_training_data)
-                                                (site=site,
-                                                year=year_inventory,
-                                                data_raw_inv_path=data_raw_inv_path, 
-                                                data_int_path=data_int_path, 
-                                                biomass_path=biomass_path,
-                                                pft_reference_path=pft_reference_path,
-                                                px_thresh=px_thresh))  
-                    
-                    # prep NEON AOP data for classifier
-                    stacked_aop_path = (force_rerun(cache, force=rerun_status)
-                                        (prep_aop_imagery)
-                                        (site=site,
-                                        year=year_inventory,
-                                        hs_type=hs_type,
-                                        hs_path=hs_path,
-                                        tif_path=tif_path,
-                                        data_int_path=data_int_path,
-                                        use_tiles_w_veg=use_tiles_w_veg))
-                    
-                    training_spectra_csv_path = (force_rerun(cache, 
-                                        force=rerun_status)
-                                        (extract_spectra_from_polygon)
-                                        (site=site,
+                    if ic_type!="field_inv_plots": #only run the following functions if RS data is being used
+                        if hs_type=="flightline":
+                            (force_rerun(cache, force=rerun_status)
+                                (correct_flightlines)
+                                (site=site,
+                                year_inv=year_inventory, 
+                                year_aop=year_aop, 
+                                data_raw_aop_path=data_raw_aop_path,
+                                data_int_path=data_int_path))
+                        
+                        
+                        training_crown_shp_path = (force_rerun(cache, 
+                                                                force=rerun_status)
+                                                    (prep_manual_training_data)
+                                                    (site=site,
+                                                    year=year_inventory,
+                                                    data_raw_inv_path=data_raw_inv_path, 
+                                                    data_int_path=data_int_path, 
+                                                    biomass_path=biomass_path,
+                                                    pft_reference_path=pft_reference_path,
+                                                    px_thresh=px_thresh))  
+                        
+                        # prep NEON AOP data for classifier
+                        stacked_aop_path = (force_rerun(cache, force=rerun_status)
+                                            (prep_aop_imagery)
+                                            (site=site,
                                             year=year_inventory,
-                                            shp_path=training_crown_shp_path,
+                                            hs_type=hs_type,
+                                            hs_path=hs_path,
+                                            tif_path=tif_path,
                                             data_int_path=data_int_path,
-                                            data_final_path=data_final_path,
-                                            stacked_aop_path=stacked_aop_path,
-                                            use_case=use_case,
-                                            aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,
-                                            ic_type=ic_type)) 
+                                            use_tiles_w_veg=use_tiles_w_veg))
+                        
+                        training_spectra_csv_path = (force_rerun(cache, 
+                                            force=rerun_status)
+                                            (extract_spectra_from_polygon)
+                                            (site=site,
+                                                year=year_inventory,
+                                                shp_path=training_crown_shp_path,
+                                                data_int_path=data_int_path,
+                                                data_final_path=data_final_path,
+                                                stacked_aop_path=stacked_aop_path,
+                                                use_case=use_case,
+                                                aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,
+                                                ic_type=ic_type)) 
         # ^ intermediate data finished processing for all site/years. Next, train RF 
 
     
-        # for k, v in p.force_rerun.items():
-        #rerun_status[k] = v or global_force_rerun.get(k, False)
-        # log.info(f'Run process for all sites, '
-        #     f'with rerun status: {rerun_status}')
-            #ais ask sy-toan how to code this to train RF only once, and not for every function in sites.yaml (stepped through k)
-        
-            # cache = build_cache_all(
-            #                     data_int_path=data_int_path, 
-            #                     data_final_path=data_final_path, 
-            #                     use_case=use_case, 
-            #                     site=site,
-            #                     year_inventory=year_inventory,
-            #                     ic_type=ic_type)                
-        
-        if ic_type=="field_inv_plots": #use_case=="predict" and 
-            rf_model_path = None 
-        else:
+
+        for k, v in p.force_rerun.items():
+            rerun_status[k] = v or global_force_rerun.get(k, False)
+            log.info(f'Run process for all sites, '
+            f'with rerun status: {rerun_status}')
+            
+        cache = build_cache_site(site=site, 
+                                        year_inventory=year_inventory, 
+                                        year_aop=year_aop, 
+                                        data_raw_aop_path=data_raw_aop_path, 
+                                        data_raw_inv_path=data_raw_inv_path, 
+                                        data_int_path=data_int_path, 
+                                        hs_type=hs_type,
+                                        coords_bbox=coords_bbox)
+                
+        if ic_type!="field_inv_plots": #only run if using RS data
             rf_model_path = (force_rerun(cache,  force=rerun_status)
                             (train_pft_classifier)
                             (sites=sites,
@@ -314,9 +318,11 @@ def main(cfg):
         # ais why does this run 5 times, for each site
 
 
-    if use_case=="predict": #ais why is the below function running even when use_case is train
 
-
+    if use_case=="predict": 
+    
+        #ais think about how to loop through ic_type - ic_type should be in build_cache_predict     - [ ] 
+            #ais - fix code so ‘generate initial conditions’ steps through all sites, years, and ic_types’
         for site, v in cfg.sites.run.items():
             print(cfg.sites.run.items())
             if not global_run or site in global_run:
@@ -325,39 +331,56 @@ def main(cfg):
                     for k, v in p.force_rerun.items():
                         rerun_status[k] = v or global_force_rerun.get(k, False)
                     year_aop = p.year_aop
-                    log.info(f'Download raw data for site: {site}, '
+                    log.info(f'Download raw data for site: {site}, ' #ais change words
                             f'year: {year_inventory}, year_aop: {year_aop}, '
                             f'with rerun status: {rerun_status}')
-                    cache = build_cache_predict(site=site, 
-                                                    year_inventory=year_inventory, 
-                                                    year_aop=year_aop, 
-                                                    data_raw_aop_path=data_raw_aop_path, 
-                                                    data_int_path=data_int_path,
-                                                    data_final_path=data_final_path,
-                                                    use_case=use_case,
-                                                    ic_type = ic_type)
-                
-        rf_model_path=os.path.join(data_int_path,'rf_dir/rf_model_tree_crowns_training.joblib')
+                    cache = build_cache_site(site=site, 
+                                        year_inventory=year_inventory, 
+                                        year_aop=year_aop, 
+                                        data_raw_aop_path=data_raw_aop_path, 
+                                        data_raw_inv_path=data_raw_inv_path, 
+                                        data_int_path=data_int_path, 
+                                        hs_type=hs_type,
+                                        coords_bbox=coords_bbox)
+            # cache = build_cache_predict(site=site, #ais work on swapping this out for build_cache_site
+            #                             year_inventory=year_inventory, 
+            #                             use_case=use_case,
+            #                             data_raw_aop_path=data_raw_aop_path, 
+            #                             data_int_path=data_int_path, 
+            #                             data_final_path=data_final_path,
+            #                             ic_type=ic_type)
+            # #ais ask sy-toan for help so I don't have to manually assign all these arguments
 
-        # Generate initial conditions
-        cohort_path, patch_path = (force_rerun(cache,  force=rerun_status)
-                                (generate_initial_conditions)
-                                (site=site,
-                                    year_inv=year_inventory,
-                                    year_aop = year_aop,
-                                    data_raw_aop_path = data_raw_aop_path,
-                                    data_int_path=data_int_path, 
-                                    data_final_path=data_final_path,
-                                    rf_model_path = rf_model_path, 
-                                    stacked_aop_path = os.path.join(data_int_path,site,year_inventory,'stacked_aop'),
-                                    biomass_path = os.path.join(data_int_path,site,year_inventory,"biomass/pp_veg_structure_IND_IBA_IAGB_live.csv"),
-                                    use_case=use_case,
-                                    ic_type=ic_type,
-                                    n_plots = n_plots,
-                                    min_distance = min_distance, 
-                                    plot_length = plot_length, 
-                                    aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res, 
-                                    pcaInsteadOfWavelengths=pcaInsteadOfWavelengths))
+            # site='TEAK' #SOAP SJER
+            # year_inventory='2021'
+            # year_aop = '2021-07' #2021-07 2021-03
+
+                    rf_model_path=os.path.join(data_int_path,'rf_dir/rf_model_tree_crowns_training.joblib')
+                    ic_type_path = str(data_final_path+'/'+site+'/'+year_inventory+'/'+ic_type) #needs to be str to be input
+                    Path(ic_type_path).mkdir(parents=True, exist_ok=True)
+
+                                                    
+                    # Generate initial conditions
+                    cohort_path, patch_path = (force_rerun(cache,  force=rerun_status)
+                                            (generate_initial_conditions)
+                                            (site=site,
+                                                year_inv= year_inventory,
+                                                year_aop = year_aop,
+                                                data_raw_aop_path = data_raw_aop_path,
+                                                data_int_path=data_int_path, 
+                                                data_final_path=data_final_path,
+                                                rf_model_path = rf_model_path, 
+                                                stacked_aop_path = os.path.join(data_int_path,site,year_inventory,'stacked_aop'),
+                                                biomass_path = os.path.join(data_int_path,site,year_inventory,"biomass/pp_veg_structure_IND_IBA_IAGB_live.csv"),
+                                                use_case=use_case,
+                                                ic_type=ic_type,
+                                                ic_type_path=ic_type_path,
+                                                n_plots = n_plots,
+                                                min_distance = min_distance, 
+                                                plot_length = plot_length, 
+                                                aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res, 
+                                                pcaInsteadOfWavelengths=pcaInsteadOfWavelengths,
+                                                multisite=multisite))
             
     log.info('DONE')
 

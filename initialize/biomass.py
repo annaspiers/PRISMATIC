@@ -287,7 +287,8 @@ def _cal_plot_level_biomass(df, polygons):
     subplots = []
     ND = []
     BA = []
-    ABCD = []
+    AGB = []
+    # LAI = []
     for row in polygons.itertuples():
         plot_id = row.plotID
         subplot_id = row.subplotID
@@ -302,14 +303,16 @@ def _cal_plot_level_biomass(df, polygons):
         ND.append(group.individualStemNumberDensity.sum())
         BA.append((group.individualStemNumberDensity *
                    group.individualBasalArea).sum())
-        ABCD.append((group.individualStemNumberDensity *
+        AGB.append((group.individualStemNumberDensity *
                      group.biomass).sum())
-
+        # LAI.append(group.individualStemNumberDensity.sum())
+        
     plot_level_df = pd.DataFrame.from_dict({'plotID': plots,
                                             'subplotID': subplots,
                                             'stemNumberDensity': ND,
                                             'basalArea': BA,
-                                            'biomass': ABCD})
+                                            'biomass': AGB})
+                                            # 'lai': LAI
     return plot_level_df
 
 

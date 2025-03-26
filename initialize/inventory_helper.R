@@ -1,13 +1,11 @@
-install.packages("neonUtilities")
-install.packages("neonOS")
-install.packages("devtools")
-install.packages("glue")
-devtools::install_github("NEONScience/NEON-geolocation/geoNEON", dependencies=TRUE)
+# install.packages("neonUtilities")
+# install.packages("neonOS")
+# install.packages("devtools")
+# install.packages("glue")
 library(neonUtilities)
 library(neonOS)
+#devtools::install_github("NEONScience/NEON-geolocation/geoNEON", dependencies=TRUE)
 library(geoNEON)
-
-library(sp)
 library(glue)
 options(stringsAsFactors = FALSE)
 
@@ -22,13 +20,13 @@ download_veg_structure_data <- function(site, data_path) {
         print("dir exists")
     }
     setwd(wd)
-    veglist <- loadByProduct(dpID = "DP1.10098.001",
+    veglist <- neonUtilities::loadByProduct(dpID = "DP1.10098.001",
                             site = site,
                             package = "basic",
                             check.size = FALSE)
-    vegmap <- getLocTOS(veglist$vst_mappingandtagging,
+    vegmap <- geoNEON::getLocTOS(veglist$vst_mappingandtagging,
                             "vst_mappingandtagging")
-    veg <- joinTableNEON(veglist$vst_apparentindividual,
+    veg <- neonOS::joinTableNEON(veglist$vst_apparentindividual,
                          vegmap,
                          name1 = "vst_apparentindividual",
                          name2 = "vst_mappingandtagging")
