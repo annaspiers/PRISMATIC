@@ -31,6 +31,8 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
 # model selection
 from sklearn.model_selection import (
@@ -270,153 +272,153 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     # Create features (points or polygons) for each tree 
     log.info(f'Extracting spectra from tree crowns for: {site} {year}')
 
-    training_data_dir = os.path.join(data_int_path, site, year, "training")
-    ic_type_path = os.path.join(data_final_path,site,year,ic_type)
+    # training_data_dir = os.path.join(data_int_path, site, year, "training")
+    # ic_type_path = os.path.join(data_final_path,site,year,ic_type)
 
-    # get a description of the shapefile to use for naming outputs
-    shapefile_description = os.path.splitext(os.path.basename(shp_path))[0]
+    # # get a description of the shapefile to use for naming outputs
+    # shapefile_description = os.path.splitext(os.path.basename(shp_path))[0]
 
-    # Specify destination for extracted features
-    if use_case == "train":
-        extracted_features_path     = os.path.join(training_data_dir)
-        extracted_features_filename = os.path.join(extracted_features_path,
-                                                 shapefile_description+"-extracted_features_inv.tif")        
+    # # Specify destination for extracted features
+    # if use_case == "train":
+    #     extracted_features_path     = os.path.join(training_data_dir)
+    #     extracted_features_filename = os.path.join(extracted_features_path,
+    #                                              shapefile_description+"-extracted_features_inv.tif")        
         
-    elif use_case=="predict":
-        extracted_features_path     = os.path.join(ic_type_path) 
-        extracted_features_filename = os.path.join(extracted_features_path,
-                                                 shapefile_description+"-extracted_features.tif")
-    else:
-        print("need to specify use_case")
+    # elif use_case=="predict":
+    #     extracted_features_path     = os.path.join(ic_type_path) 
+    #     extracted_features_filename = os.path.join(extracted_features_path,
+    #                                              shapefile_description+"-extracted_features.tif")
+    # else:
+    #     print("need to specify use_case")
 
-    # Only run if the extracted features do not exist
-    if not os.path.exists(extracted_features_filename):
-        # Load shapefile
-        shp_gdf = gpd.read_file(shp_path)
+    # # Only run if the extracted features do not exist
+    # if not os.path.exists(extracted_features_filename):
+    #     # Load shapefile
+    #     shp_gdf = gpd.read_file(shp_path)
 
-        # Compute centroid for each geometry
-        shp_gdf["center_X"] = shp_gdf.geometry.centroid.x
-        shp_gdf["center_Y"] = shp_gdf.geometry.centroid.y
+    #     # Compute centroid for each geometry
+    #     shp_gdf["center_X"] = shp_gdf.geometry.centroid.x
+    #     shp_gdf["center_Y"] = shp_gdf.geometry.centroid.y
 
-        # List all .tif raster files in the directory
-        stacked_aop_list = [os.path.join(stacked_aop_path, f) for f in os.listdir(stacked_aop_path) if f.endswith(".tif")]
+    #     # List all .tif raster files in the directory
+    #     stacked_aop_list = [os.path.join(stacked_aop_path, f) for f in os.listdir(stacked_aop_path) if f.endswith(".tif")]
 
-        # create column to track shape ID 
-        # if training, this is the tree crown boundary
-        # if predicting, this is the plot boundary)
-        if use_case == "train":
-            shp_gdf["shapeID"] = [f"tree_crown_{i}" for i in range(len(shp_gdf))]
-        elif use_case == "predict":
-            if "PLOTID" in shp_gdf.columns:
-                shp_gdf = shp_gdf.rename(columns={"PLOTID": "shapeID"})
-            elif "plotID" in shp_gdf.columns:
-                shp_gdf = shp_gdf.rename(columns={"plotID": "shapeID"})
-            else:
-                print("Trying to predict without training data. Need to first switch use_case to train from predict")
+    #     # create column to track shape ID 
+    #     # if training, this is the tree crown boundary
+    #     # if predicting, this is the plot boundary)
+    #     if use_case == "train":
+    #         shp_gdf["shapeID"] = [f"tree_crown_{i}" for i in range(len(shp_gdf))]
+    #     elif use_case == "predict":
+    #         if "PLOTID" in shp_gdf.columns:
+    #             shp_gdf = shp_gdf.rename(columns={"PLOTID": "shapeID"})
+    #         elif "plotID" in shp_gdf.columns:
+    #             shp_gdf = shp_gdf.rename(columns={"plotID": "shapeID"})
+    #         else:
+    #             print("Trying to predict without training data. Need to first switch use_case to train from predict")
 
-        # Filter to tiles containing veg to speed up the next for-loop
-        # ais does this code include tiles with only a crown from the ucla field data though?
-        if use_case == 'train' or ic_type=='rs_inv_plots':
-            # Read tiles_w_veg.txt and extract the first column as a list
-            tiles_w_veg = pd.read_csv(os.path.join(training_data_dir, "tiles_w_veg.txt"), header=None)[0].tolist()
+    #     # Filter to tiles containing veg to speed up the next for-loop
+    #     # ais does this code include tiles with only a crown from the ucla field data though?
+    #     if use_case == 'train' or ic_type=='rs_inv_plots':
+    #         # Read tiles_w_veg.txt and extract the first column as a list
+    #         tiles_w_veg = pd.read_csv(os.path.join(training_data_dir, "tiles_w_veg.txt"), header=None)[0].tolist()
             
-            # Filter stacked_aop_list based on the presence of any tile name
-            stacked_aop_list = [path for path in stacked_aop_list if any(tile in path for tile in tiles_w_veg)]
+    #         # Filter stacked_aop_list based on the presence of any tile name
+    #         stacked_aop_list = [path for path in stacked_aop_list if any(tile in path for tile in tiles_w_veg)]
 
-        # Loop through AOP tiles
-        for stacked_aop_filename in stacked_aop_list:
+    #     # Loop through AOP tiles
+    #     for stacked_aop_filename in stacked_aop_list:
                         
-            #training_array, combined_mask = extract_spectra_3darray(east_north_csv_path, shp_gdf)
+    #         #training_array, combined_mask = extract_spectra_3darray(east_north_csv_path, shp_gdf)
 
-            # Read current tile of stacked AOP data
-            with rasterio.open(stacked_aop_filename) as src:
-                stacked_aop_data = src.read()
-                raster_transform = src.transform
-                raster_crs = src.crs
-                raster_bounds = src.bounds  # Get raster bounds
+    #         # Read current tile of stacked AOP data
+    #         with rasterio.open(stacked_aop_filename) as src:
+    #             stacked_aop_data = src.read()
+    #             raster_transform = src.transform
+    #             raster_crs = src.crs
+    #             raster_bounds = src.bounds  # Get raster bounds
 
-                # Construct the easting northing string for naming outputs
-                east_north_string = f"{round(raster_bounds[0])}_{round(raster_bounds[1])}"
+    #             # Construct the easting northing string for naming outputs
+    #             east_north_string = f"{round(raster_bounds[0])}_{round(raster_bounds[1])}"
 
-                east_north_tif_path = os.path.join(extracted_features_path, f"extracted_features_mask_{east_north_string}_{shapefile_description}.tif")
+    #             east_north_tif_path = os.path.join(extracted_features_path, f"extracted_features_mask_{east_north_string}_{shapefile_description}.tif")
                 
-                # If CSV file already exists, skip
-                if os.path.exists(east_north_tif_path):
-                    continue
+    #             # If CSV file already exists, skip
+    #             if os.path.exists(east_north_tif_path):
+    #                 continue
 
-                # Check which polygons overlap with the raster
-                shp_gdf = shp_gdf[shp_gdf.intersects(box(*raster_bounds))]
+    #             # Check which polygons overlap with the raster
+    #             shp_gdf = shp_gdf[shp_gdf.intersects(box(*raster_bounds))]
 
-                # If no polygons overlap, exit
-                if shp_gdf.empty:
-                    print("No overlapping polygons found.")
-                    continue
-                else:
-                    # Convert overlapping polygons to GeoJSON format
-                    shapes_geojson = [mapping(geom) for geom in shp_gdf.geometry]
+    #             # If no polygons overlap, exit
+    #             if shp_gdf.empty:
+    #                 print("No overlapping polygons found.")
+    #                 continue
+    #             else:
+    #                 # Convert overlapping polygons to GeoJSON format
+    #                 shapes_geojson = [mapping(geom) for geom in shp_gdf.geometry]
                     
-                    # Mask the raster using the overlapping polygons
-                    with rasterio.open(stacked_aop_filename) as src:
-                        masked_raster, masked_transform = rasterio.mask.mask(dataset=src, shapes=shapes_geojson, crop=False, nodata=np.nan)
+    #                 # Mask the raster using the overlapping polygons
+    #                 with rasterio.open(stacked_aop_filename) as src:
+    #                     masked_raster, masked_transform = rasterio.mask.mask(dataset=src, shapes=shapes_geojson, crop=False, nodata=np.nan)
                     
-                    # Save the masked raster as a new GeoTIFF file
-                    with rasterio.open(
-                        east_north_tif_path, "w", driver="GTiff",
-                        height=masked_raster.shape[1], width=masked_raster.shape[2],
-                        count=masked_raster.shape[0], dtype=str(masked_raster.dtype),
-                        crs=raster_crs, transform=masked_transform
-                    ) as dst:
-                        dst.write(masked_raster)
+    #                 # Save the masked raster as a new GeoTIFF file
+    #                 with rasterio.open(
+    #                     east_north_tif_path, "w", driver="GTiff",
+    #                     height=masked_raster.shape[1], width=masked_raster.shape[2],
+    #                     count=masked_raster.shape[0], dtype=str(masked_raster.dtype),
+    #                     crs=raster_crs, transform=masked_transform
+    #                 ) as dst:
+    #                     dst.write(masked_raster)
                     
-                    print(f"Masked raster saved to {east_north_tif_path}")
+    #                 print(f"Masked raster saved to {east_north_tif_path}")
 
-        # combine all extracted features into a single .tif
-        paths_ls = glob.glob(os.path.join(extracted_features_path, "*.tif"))
+    #     # combine all extracted features into a single .tif
+    #     paths_ls = glob.glob(os.path.join(extracted_features_path, "*.tif"))
         
-        # refine the output csv selection 
-        tifs = [path for path in paths_ls if f"000_{shapefile_description}.tif" in path]
+    #     # refine the output csv selection 
+    #     tifs = [path for path in paths_ls if f"000_{shapefile_description}.tif" in path]
         
-        # Open and merge TIF files
-        src_files_to_mosaic = [rasterio.open(tif) for tif in tifs]
-        mosaic, out_trans = merge(src_files_to_mosaic)
+    #     # Open and merge TIF files
+    #     src_files_to_mosaic = [rasterio.open(tif) for tif in tifs]
+    #     mosaic, out_trans = merge(src_files_to_mosaic)
 
-        # Get metadata from the first file
-        out_meta = src_files_to_mosaic[0].meta.copy()   
+    #     # Get metadata from the first file
+    #     out_meta = src_files_to_mosaic[0].meta.copy()   
 
-        # Update metadata for the merged file
-        out_meta.update({
-            "driver": "GTiff",
-            "height": mosaic.shape[1],
-            "width": mosaic.shape[2],
-            "transform": out_trans
-        })
+    #     # Update metadata for the merged file
+    #     out_meta.update({
+    #         "driver": "GTiff",
+    #         "height": mosaic.shape[1],
+    #         "width": mosaic.shape[2],
+    #         "transform": out_trans
+    #     })
 
-        # Write the merged TIF file
-        with rasterio.open(extracted_features_filename, "w", **out_meta) as dest:
-            dest.write(mosaic)
+    #     # Write the merged TIF file
+    #     with rasterio.open(extracted_features_filename, "w", **out_meta) as dest:
+    #         dest.write(mosaic)
 
-        # Close input files
-        for src in src_files_to_mosaic:
-            src.close()
+    #     # Close input files
+    #     for src in src_files_to_mosaic:
+    #         src.close()
 
-        # Delete the individual TIF files for each tile
-        for tif in tifs:
-            os.remove(tif)
+    #     # Delete the individual TIF files for each tile
+    #     for tif in tifs:
+    #         os.remove(tif)
 
-    # r_source = ro.r['source']
-    # r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
-    # extract_spectra_from_polygon_r = ro.r('extract_spectra_from_polygon_r')
+    r_source = ro.r['source']
+    r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    extract_spectra_from_polygon_r = ro.r('extract_spectra_from_polygon_r')
 
-    # # Extract training data from AOP data with tree polygons
-    # training_spectra_path = extract_spectra_from_polygon_r(site=site, 
-    #                                                      year=year, 
-    #                                                      data_int_path=data_int_path, 
-    #                                                      data_final_path=data_final_path, 
-    #                                                      stacked_aop_path=stacked_aop_path, 
-    #                                                      shp_path=shp_path,
-    #                                                      use_case=use_case, 
-    #                                                      aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,
-    #                                                      ic_type=ic_type)
+    # Extract training data from AOP data with tree polygons
+    training_spectra_path = extract_spectra_from_polygon_r(site=site, 
+                                                         year=year, 
+                                                         data_int_path=data_int_path, 
+                                                         data_final_path=data_final_path, 
+                                                         stacked_aop_path=stacked_aop_path, 
+                                                         shp_path=shp_path,
+                                                         use_case=use_case, 
+                                                         aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,
+                                                         ic_type=ic_type)
 
     log.info('Spectral features for training data saved at: '
              f'{extracted_features_filename}')
@@ -543,14 +545,40 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
 
     # remove the individual spectral reflectance bands from the training data
     features_noWavelengths = features_df.drop([col for col in features_df.columns if col.startswith("X")], axis=1)
-    features_noWavelengths.drop(columns=['pixelNumber','eastingIDs','northingIDs'], inplace=True)
-       
+    features_noWavelengths.drop(columns=['pixelNumber','eastingIDs','northingIDs'], inplace=True) #ais one time I won't need this line after I stop using 'stacekd_aop_layers'
+        
+    # group the data by 'pft' and 'shapeID'
+    grouped_features = features.groupby(['pft', 'shapeID'])
+    groups = [group for _, group in grouped_features] # create a list of groups
+
+    # split the groups into training and testing sets
+    train_groups, test_groups = train_test_split(groups, test_size=0.2, random_state=42)
+    train_df = pd.concat(train_groups)
+    test_df = pd.concat(test_groups)
+
+    # create the training and testing DataFrames
+    train_df = train_df[train_df['pft'] != "other_herb"]
+    train_df = train_df.drop(["shapeID"],axis=1) #'site', 'year'
+    test_df = test_df[test_df['pft'] != "other_herb"]
+    test_df = test_df.drop(["shapeID"],axis=1) #'site','year'
+    # check the class distribution in the training and testing sets
+    print("Training set class distribution:")
+    print(train_df['pft'].value_counts(normalize=True))
+    print("Testing set class distribution:")
+    print(test_df['pft'].value_counts(normalize=True))
+
+    # Standardize the Data
     scaler = StandardScaler()
-    features_scaled = scaler.fit_transform(features_df[[col for col in features_df.columns if col.startswith("X")]])
+    train_df_scaled = train_df.fit_transform(features_df[[col for col in features_df.columns if col.startswith("X")]])
+    test_df_scaled = scaler.transform(test_df)  # Use the same scaler
+
+    # Apply PCA
     pca = PCA(n_components=0.99) #figure out why so much variance is explained by PC1
-    features_pca = pca.fit_transform(features_scaled) 
-    nPCs = features_pca.shape[1] 
-    features = pd.concat([features_noWavelengths.reset_index(drop=True), pd.DataFrame(features_pca, columns=[f"PC{i+1}" for i in range(nPCs)])],axis=1)
+    train_df_pca = pca.fit_transform(train_df_scaled) 
+    test_df_pca = pca.transform(test_df_scaled)    
+    nPCs = train_df_pca.shape[1] 
+
+    features = pd.concat([features_noWavelengths.reset_index(drop=True), pd.DataFrame(train_df_pca, columns=[f"PC{i+1}" for i in range(nPCs)])],axis=1)
     if nPCs > 2:    
         # visualize PCA    
         plt.figure(figsize=(8, 6))
@@ -582,70 +610,6 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
             plt.savefig(os.path.join(rf_output_dir, 'pc3_vs_pc4.png')) 
 
 
-
-
-    # # Define evaluation procedure for CV
-    # rng = np.random.RandomState(1338)
-    # cmap_data = plt.cm.Paired
-    # cmap_cv = plt.cm.coolwarm
-    # n_splits = 4 #ais make n_splits a global param 
-    # # example: https://stackoverflow.com/questions/56872664/complex-dataset-split-stratifiedgroupshufflesplit
-
-    # # Reorder features by pft
-    # features_sort = features.sort_values(['pft', 'shapeID'])
-    # X = features_sort.drop(columns=['pft','shapeID']) #list(range(len(features)))
-    # y = [list(set(features_sort['pft'])).index(pft) for pft in features_sort['pft'] ] #use index number
-    # groups = [list(set(features_sort['shapeID'])).index(shapeID) for shapeID in features_sort['shapeID']]  #use index number  
-    # # for train, test in sgkf.split(X, y, groups=groups):
-    # #     print("%s %s" % (train, test))
-    # # ais need to print the index of each class - otherwise hard to interpret results of 0-10
-    # best_model, X_train, X_test = fit_RF_CV_class(X=X, y=y, groups=groups, k_fold=n_splits, pca=False, 
-    #             savefile=os.path.join(rf_output_dir,'pipeline_output'))
-    
-    # # split the groups into training and testing sets
-    # train_df = pd.concat(X_train)
-    # test_df = pd.concat(X_test)
-
-    # # ais need to put this code ^ into a for-loop to choose best hyperparameters
-
-    # fig, ax = plt.subplots(figsize=(6, 3))
-    # plot_cv_indices(StratifiedGroupKFold(n_splits), X, y, groups, ax, n_splits, cmap_data, cmap_cv)
-    # ax.legend(
-    #     [Patch(color=cmap_cv(0.8)), Patch(color=cmap_cv(0.02))],
-    #     ["Testing set", "Training set"],
-    #     loc=(1.02, 0.8),
-    # ) #ais adapt this code to add key for class
-    # # Make the legend fit
-    # plt.tight_layout()
-    # fig.subplots_adjust(right=0.7)
-    # plt.savefig(os.path.join(rf_output_dir,'StratGroupKFold_split.png'))
-
-
-
-
-    # group the data by 'pft' and 'shapeID'
-    grouped_features = features.groupby(['pft', 'shapeID'])
-    groups = [group for _, group in grouped_features] # create a list of groups
-
-    # split the groups into training and testing sets
-    train_groups, test_groups = train_test_split(groups, test_size=0.2, random_state=42)
-    train_df = pd.concat(train_groups)
-    test_df = pd.concat(test_groups)
-
-
-
-
-    # create the training and testing DataFrames
-    train_df = train_df[train_df['pft'] != "other_herb"]
-    train_df = train_df.drop(["shapeID"],axis=1) #'site', 'year'
-    test_df = test_df[test_df['pft'] != "other_herb"]
-    test_df = test_df.drop(["shapeID"],axis=1) #'site','year'
-    # check the class distribution in the training and testing sets
-    print("Training set class distribution:")
-    print(train_df['pft'].value_counts(normalize=True))
-    print("Testing set class distribution:")
-    print(test_df['pft'].value_counts(normalize=True))
-
     # create a bar plot to visualize the count of data points in training and testing datasets for each prediction class
     plt.figure(figsize=(10, 6))
     train_counts = train_df['pft'].value_counts()
@@ -667,101 +631,52 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
         rf_model = RF(n_estimators=ntree, random_state=42, class_weight="balanced")
         rf_model.fit(train_df.drop("pft", axis=1), train_df["pft"])
         dump(rf_model, rf_model_path)
+        log.info('Trained PFT classifier saved in this folder: '
+                f'{rf_model_path}')
     else:
         rf_model = load(rf_model_path)
 
     y_pred_val = rf_model.predict(test_df.drop("pft", axis=1))
-    accuracy_val = accuracy_score(test_df["pft"], y_pred_val)
-    print("Validation Accuracy:", accuracy_val)
+
+    # Calculate metrics
+    conf_matrix = confusion_matrix(test_df["pft"], y_pred_val)
+    accuracy = accuracy_score(accuracy_score(test_df["pft"], y_pred_val))
+    precision = precision_score(test_df["pft"], y_pred_val, average='weighted')
+    recall = recall_score(test_df["pft"], y_pred_val, average='weighted')
+    f1 = f1_score(test_df["pft"], y_pred_val, average='weighted')
+
+    # Prepare summary statistics
+    summary_stats = {
+        'Confusion Matrix': conf_matrix,
+        'Accuracy': accuracy,
+        'Precision': precision,
+        'Recall': recall,
+        'F1 Score': f1,
+
+        'Classification report': classification_report(test_df["pft"], y_pred_val)
+    }
+
+    # Define the filename
+    rf_summ_txt = os.path.join(rf_output_dir,'rf_summary_statistics.txt')
+
+    # Write summary statistics to the file
+    with open(rf_summ_txt, 'w') as f:
+        f.write("Summary Statistics:\n")
+        f.write("\nConfusion Matrix:\n")
+        np.savetxt(f, conf_matrix, fmt='%d')
+        f.write(f"\nAccuracy: {accuracy:.4f}\n")
+        f.write(f"Precision: {precision:.4f}\n")
+        f.write(f"Recall: {recall:.4f}\n")
+        f.write(f"F1 Score: {f1:.4f}\n")
+
+    # Print to terminal window
+    print("Validation Accuracy:", accuracy)
     print("Validation Classification Report:")
     print(classification_report(test_df["pft"], y_pred_val))
     print("Validation Confusion Matrix:")
-    print(confusion_matrix(test_df["pft"], y_pred_val))
+    print(conf_matrix)
     
-    # # Visualize classifications
-    # # in the testing dataframe, group to identify which plants are near each other
-    # # create a new column called "groupID"
-    # vis_predict_df = pd.concat([test_df.drop(['index'],axis=1).reset_index(drop=True),pd.DataFrame(y_pred_val,columns=['pft_pred'])],axis=1,join='outer')
-    # vis_predict_df['groupID'] = np.nan
-    # group_id = 0
-    # # loop through each row in the DataFrame
-    # for i, row in vis_predict_df.iterrows():
-    #     # check if the row has already been assigned a group ID
-    #     if np.isnan(row['groupID']):
-    #         group_id += 1
-    #         vis_predict_df.loc[i, 'groupID'] = group_id
-
-    #         # find all rows within 30m of the current row
-    #         nearby_rows = vis_predict_df[(vis_predict_df['eastingIDs'] >= row['eastingIDs'] - 30) &
-    #                         (vis_predict_df['eastingIDs'] <= row['eastingIDs'] + 30) &
-    #                         (vis_predict_df['northingIDs'] >= row['northingIDs'] - 30) &
-    #                         (vis_predict_df['northingIDs'] <= row['northingIDs'] + 30)]
-    #         # assign the nearby rows to the same group ID
-    #         vis_predict_df.loc[nearby_rows.index, 'groupID'] = group_id
-
-    # # Create a colormap with a discrete color ramp
-    # cmap = cm.get_cmap('tab10', len(vis_predict_df['pft'].unique()))
-    # color_dict = {value: cmap(i) for i, value in enumerate(vis_predict_df['pft'].unique())}    
-    # vis_predict_df['color'] = vis_predict_df['pft'].map(color_dict) # Add a new column with the corresponding colors
-
-    # # Plot predictions
-    # for i in vis_predict_df['groupID'].unique():
-    #     vis_predict_temp = vis_predict_df[vis_predict_df['groupID']==i]
-    #     fig, ax = plt.subplots(figsize=(10, 10))
-
-    #     x = int(vis_predict_temp['eastingIDs'].unique())
-    #     y = int(vis_predict_temp['northingIDs'].unique())
-        
-    #     xmin = x+1000
-    #     xmax = x
-    #     ymin = y
-    #     ymax = y-1000
-    #     for i, row in vis_predict_temp.iterrows():
-    #         if (x+serial_index_to_coordinates(row['pixelNumber'],1000)[0]) < xmin:
-    #             xmin = x+serial_index_to_coordinates(row['pixelNumber'],1000)[0]
-    #         if (x+serial_index_to_coordinates(row['pixelNumber'],1000)[0]) > xmax:
-    #             xmax = x+serial_index_to_coordinates(row['pixelNumber'],1000)[0]
-    #         if (y-(1000-serial_index_to_coordinates(row['pixelNumber'],1000)[1])) < ymin:
-    #             ymin = y-(1000-serial_index_to_coordinates(row['pixelNumber'],1000)[1])
-    #         if (y-(1000-serial_index_to_coordinates(row['pixelNumber'],1000)[1])) > ymax:
-    #             ymax = y-(1000-serial_index_to_coordinates(row['pixelNumber'],1000)[1])
-
-    #     # search for the image that includes the specified easting and northing coordinate
-    #     imagery_folder = os.path.join(data_int_path,row['site'],str(row['year']),"stacked_aop")
-    #     for file in os.listdir(imagery_folder):
-    #         if file.endswith('.tif'):
-    #             imagery_path = os.path.join(imagery_folder, file)
-    #             imagery = rasterio.open(imagery_path)
-    #             if imagery.bounds.left == x and y == imagery.bounds.top:
-
-    #                 # plot the remote sensing pixels used for validation with a 10 pixel buffer
-    #                 window = rasterio.windows.Window(xmin-10, ymin-10, xmax-xmin+20,ymax-ymin+20)
-    #                 data = imagery.read(window=window)
-    #                 # multiband image
-    #                 # specify which three bands to plot
-    #                 bands = [9, 10, 11]  # e.g., plot bands 4, 3, and 2 as RGB                   
-    #                 data = imagery.read(bands)  # read the specified bands                    
-    #                 data = np.transpose(data, (1, 2, 0)) # transpose the data to the correct shape for plotting
-
-    #                 # plot the data with RGB colors
-    #                 ax.imshow(data, cmap='viridis', extent=(xmin-10, xmax+10, ymin-10, ymax+10))
-
-    #                 # loop through each row in the DataFrame
-    #                 for i, row in vis_predict_temp.iterrows():
-    #                     x_temp = serial_index_to_coordinates(row['pixelNumber'],1000)[0]
-    #                     y_temp = serial_index_to_coordinates(row['pixelNumber'],1000)[1]
-                        
-    #                     # plot the classified predictions on top with a small amount of transparency
-    #                     ax.scatter(x, y, c=row['color'], alpha=0.5, label=row['pft']) 
-
-    #                 break
-         
-    #     ax.legend() # add a legend
-    #     # save the plot
-    #     plt.savefig(os.path.join(rf_output_dir, "validation", row['site']+"_"+str(row['year'])+'_'+str(round(imagery.bounds.left))+'_'+str(round(imagery.bounds.top))+'.png'))
-    
-    log.info('Trained PFT classifier saved in this folder: '
-             f'{rf_model_path}')
+    print(f"Summary statistics saved to {filename}")
     
     return rf_model_path   
 

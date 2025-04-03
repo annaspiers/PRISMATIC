@@ -608,7 +608,7 @@ assign_pft_across_cohorts <- function(by_patch_df, allom_params,
 
 
 generate_pcss <- function(site, year, data_int_path, biomass_path, ic_type, ic_type_path, 
-                                        multisite=FALSE, plots_shp_path=NULL, classified_PFTs_path=NULL,
+                                        multisite=FALSE, plots_shp_path=NULL, classified_plot_PFTs_path=NULL,
                                         plots_laz_path=NULL) {
     # Generate cohort (.css) and patch (.pss) files for FATES initialization
     
@@ -753,7 +753,7 @@ generate_pcss <- function(site, year, data_int_path, biomass_path, ic_type, ic_t
         plots_sf <- sf::st_read(plots_shp_path)
         
         # load plots classified as PFT by percentage
-        classified_PFTs <- read.csv(classified_PFTs_path)
+        classified_PFTs <- read.csv(classified_plot_PFTs_path)
         # ais why do some patches have no PFT classification? only a few e.g. random plot 15, 162
         
         pfts_by_cohort_wide_raw <- classified_PFTs %>%

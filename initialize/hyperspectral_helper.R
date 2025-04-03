@@ -249,9 +249,7 @@ clip_overlap <- function(df, thresh) {
 
 extract_ind_validation_set <- function(df, percentTrain=0.8) {
   # randomly select <percentTrain> of individuals (select all pixels from individaul) 
-  # from outlined polygons for training, use the remaining samples for validation.
-  # keep track of which pixelNumber, easting, northing
-  # that these pixels correspond to. 
+  # from outlined polygons for training, use the remaining samples for validation
   
   # percentTrain: randomly select this amount of data for training, 
   # use the rest for validation
@@ -392,25 +390,6 @@ filter_out_wavelengths <- function(wavelengths, layer_names){
     return(wavelength_lut)
 }
 
-
-
-# prep_features_for_RF <- function(extracted_features_filename, featureNames) {
-#     # read the spectra values extracted from the data cube 
-#     df <- read.csv(extracted_features_filename) %>%
-#         #dplyr::select(-rowname) %>%
-#         mutate(dfID = paste(eastingIDs, northingIDs, 
-#                              pixelNumber, sep = "_") ) %>%
-#         # remove gbase::round pixels ais
-#         filter(chm>0)# %>% 
-#         # also reset the factor levels (in case there are dropped pft levels)
-#         #droplevels()
-    
-#     features_df <- df %>% 
-#         # filter the data to contain only the features of interest 
-#         dplyr::select(shapeID, all_of(featureNames))
-    
-#     return(features_df)
-# }
 
 
 
@@ -828,38 +807,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
                     # stack up all the RGB features
                     rgb_features <- c(rgb_meanR, rgb_meanG, rgb_meanB,
                                       rgb_sdR, rgb_sdG, rgb_sdB)
-
-                    # Create the pixel number grid as a layer to add to the data cube.
-                    # this one keeps track of individual pixel ID's to avoid duplicate
-                    # spectra being extracted. Basically, assign an integer ID to each
-                    # pixel in the 1000x1000 raster. This raster needs to have the same
-                    # dimensions, extent, and crs as the other layers so they can be stacked
-                    # together. create a vector of IDs from 1 to the number of pixels in one band
-                    pixelID <- 1:(dim(chm)[1]*dim(chm)[2]) #1:(nrow(s) * ncol(s))
-                    # add tile east, north coordinates 
-                    #pixelID <- paste(pixelID, east_north_string, sep="_")
-                    # reshape this 1D vector into a 2D matrix 
-                    dim(pixelID) <- c(dim(chm)[1],dim(chm)[2]) #c(nrow(s),ncol(s))
-                    # create a raster layer of pixel numbers 
-                    pixelNumbers <- terra::rast(pixelID, crs = terra::crs(chm)) 
-                    terra::ext(pixelNumbers) <- terra::ext(chm) 
-                    names(pixelNumbers) <- "pixelNumber"
                     
-                    # Create similar layers to keep track of the tile where the pixel is located
-                    eastingID <- rep(as.numeric(easting), times = (dim(chm)[1] * dim(chm)[2]))
-                    northingID <- rep(as.numeric(northing), times = (dim(chm)[1] * dim(chm)[2]))
-                    # reshape to be two-dimensional
-                    dim(eastingID) <- c(dim(chm)[1],dim(chm)[2])
-                    dim(northingID) <- c(dim(chm)[1],dim(chm)[2])
-                    # create rasters to contain the easting and northing values
-                    eastingIDs <- terra::rast(eastingID, crs = terra::crs(chm))
-                    northingIDs <- terra::rast(northingID, crs = terra::crs(chm))
-                    # assign extent and CRS to match the other layers in the stack
-                    terra::ext(eastingIDs) <- terra::ext(chm)
-                    terra::ext(northingIDs) <- terra::ext(chm)
-                    names(eastingIDs) <- "eastingIDs"
-                    names(northingIDs) <- "northingIDs"
-
                     ### Apply masks
                     # Create chm mask to mask out non-veg
 
@@ -908,8 +856,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
                     # layer to keep track of pixel number within the tile.
                     stacked_aop_data <- c(hs, chm, dtm, slope, aspect_cat, savi,
                                           pri, ndvi, evi, arvi, 
-                                          rgb_features, pixelNumbers, 
-                                          eastingIDs, northingIDs)
+                                          rgb_features)
                     terra::crs(stacked_aop_data) <- terra::crs(chm)
 
                     # save the stacked AOP data to file for easy clipping later
@@ -1300,94 +1247,86 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
         # loop through AOP tiles 
         for (stacked_aop_filename in stacked_aop_list) { 
 
-          east_north_csv_path = file.path(extracted_features_path,
-                                       paste0("extracted_features_",
-                                              east_north_string, "_",
-                                              shapefile_description,
-                                              ".csv"))
-          if (file.exists(east_north_csv_path)) {
-            next
+          # read current tile of stacked AOP data 
+          stacked_aop_data <- terra::rast(stacked_aop_filename) #old raster::stack
+          
+          # construct the easting northing string for naming outputs
+          east_north_string <- paste0(stacked_aop_data$eastingIDs[1], "_",
+                                      stacked_aop_data$northingIDs[1])
 
-          } else {
-            
-            # read current tile of stacked AOP data 
-            stacked_aop_data <- terra::rast(stacked_aop_filename) #old raster::stack
-            
-            # construct the easting northing string for naming outputs
-            east_north_string <- paste0(stacked_aop_data$eastingIDs[1], "_",
-                                        stacked_aop_data$northingIDs[1])
-            
-            # If csv file already exists, skip
-            if (file.exists(file.path(training_data_dir,paste0("extracted_features_",
-                                                               east_north_string, "_",shapefile_description,".csv")))) {
-                next
-            }
-                        
-            # figure out which plots are within the current tile by comparing each
-            # X,Y coordinate to the extent of the current tile 
-            shapes_in <- shp_sf %>% 
-                dplyr::filter(center_X >= terra::ext(stacked_aop_data)[1] & #old raster::extent
-                                  center_X < terra::ext(stacked_aop_data)[2] & 
-                                  center_Y >= terra::ext(stacked_aop_data)[3] & 
-                                  center_Y  < terra::ext(stacked_aop_data)[4]) 
-            
-            # if no polygons are within the current tile, skip to the next one
-            if (nrow(shapes_in)==0){
-                message("no shapes located within current tile... skipping to next shapefile")
-                next
-            } else {
-                
-                if (use_case == "train") {
-                    message(paste0("Extracting ",nrow(shapes_in), 
-                                   " trees in current tile, ",east_north_string))
-                } else {
-                    message(paste0("Extracting ",nrow(shapes_in), 
-                                   " plots in current tile, ",east_north_string)) 
-                } 
-            }
-            
-            # Aggregate to 2m resolution from 1m
-            if (aggregate_from_1m_to_2m_res == T) {
-                stacked_aop_data <- raster::aggregate(stacked_aop_data,2) 
-                # takes 5min for a 1kmx1km tile
-            }
-            
-            # clip the hyperspectral raster stack with the polygons within current tile.
-            # the returned objects are data frames, each row corresponds to a pixel in the
-            # hyperspectral imagery. The ID number refers to which tree that the 
-            # the pixel belongs to. A large polygon will lead to many extracted pixels
-            # (many rows in the output data frame), whereas tree stem points will
-            # lead to a single extracted pixel per tree. 
-            
-            shapes_in_spv <- terra::vect(shapes_in)
-            extracted_spectra <- terra::extract(stacked_aop_data, shapes_in_spv, ID=TRUE) %>%
-                left_join(data.frame(shapeID = shapes_in_spv$shapeID, 
-                                     ID = 1:nrow(shapes_in_spv))) %>%
-                dplyr::select(-ID)
+          east_north_csv_path = file.path(extracted_features_path,
+            paste0("extracted_features_",east_north_string, "_",
+                  shapefile_description, ".csv"))
+          
+          # If csv file already exists, skip
+          if (file.exists(east_north_csv_path)) {
+              next
+          }
                       
-            # VS-NOTE TO DO: ais
-            # adjust this extract step to only get pixels WITHIN each tree polygon,
-            # also try calculating the percentage that each pixel is within a polygon
-            # and keep only pixels with > 50% overlap 
+          # figure out which plots are within the current tile by comparing each
+          # X,Y coordinate to the extent of the current tile 
+          shapes_in <- shp_sf %>% 
+              dplyr::filter(center_X >= terra::ext(stacked_aop_data)[1] & #old raster::extent
+                                center_X < terra::ext(stacked_aop_data)[2] & 
+                                center_Y >= terra::ext(stacked_aop_data)[3] & 
+                                center_Y  < terra::ext(stacked_aop_data)[4]) 
             
-            # merge the extracted spectra and other data values with the tree info 
-            shapes_metadata <- tibble(shapes_in)
+          # if no polygons are within the current tile, skip to the next one
+          if (nrow(shapes_in)==0){
+              message("no shapes located within current tile... skipping to next shapefile")
+              next
+          } else {
+              
+              if (use_case == "train") {
+                  message(paste0("Extracting ",nrow(shapes_in), 
+                                  " trees in current tile, ",east_north_string))
+              } else {
+                  message(paste0("Extracting ",nrow(shapes_in), 
+                                  " plots in current tile, ",east_north_string)) 
+              } 
+          }
             
-            # combine the additional data with each spectrum for writing to file.
-            # remove the geometry column to avoid issues when writing to csv later 
-            spectra_write <- merge(shapes_metadata,
-                                   extracted_spectra,
-                                   by="shapeID") %>% 
-                dplyr::select(shapeID, everything()) %>% 
-                dplyr::select(-geometry)
-            #ais find where subplotID is assigned
-            
-            # write extracted spectra and other remote sensing data values to file 
-            write.csv(spectra_write, 
-                      file = east_north_csv_path,
-                      row.names = FALSE) 
-          } 
-        }  
+          # Aggregate to 2m resolution from 1m
+          if (aggregate_from_1m_to_2m_res == T) {
+              stacked_aop_data <- raster::aggregate(stacked_aop_data,2) 
+              # takes 5min for a 1kmx1km tile
+          }
+          
+          # clip the hyperspectral raster stack with the polygons within current tile.
+          # the returned objects are data frames, each row corresponds to a pixel in the
+          # hyperspectral imagery. The ID number refers to which tree that the 
+          # the pixel belongs to. A large polygon will lead to many extracted pixels
+          # (many rows in the output data frame), whereas tree stem points will
+          # lead to a single extracted pixel per tree. 
+          
+          shapes_in_spv <- terra::vect(shapes_in)
+          extracted_spectra <- terra::extract(stacked_aop_data, shapes_in_spv, ID=TRUE) %>%
+              left_join(data.frame(shapeID = shapes_in_spv$shapeID, 
+                                    ID = 1:nrow(shapes_in_spv))) %>%
+              dplyr::select(-ID)
+                    
+          # VS-NOTE TO DO: ais
+          # adjust this extract step to only get pixels WITHIN each tree polygon,
+          # also try calculating the percentage that each pixel is within a polygon
+          # and keep only pixels with > 50% overlap 
+          
+          # merge the extracted spectra and other data values with the tree info 
+          shapes_metadata <- tibble(shapes_in)
+          
+          # combine the additional data with each spectrum for writing to file.
+          # remove the geometry column to avoid issues when writing to csv later 
+          spectra_write <- merge(shapes_metadata,
+                                  extracted_spectra,
+                                  by="shapeID") %>% 
+              dplyr::select(shapeID, everything()) %>% 
+              dplyr::select(-geometry)
+          #ais find where subplotID is assigned
+          
+          # write extracted spectra and other remote sensing data values to file 
+          write.csv(spectra_write, 
+                    file = east_north_csv_path,
+                    row.names = FALSE) 
+        } 
         
         # combine all extracted features into a single .csv
         paths_ls <- list.files(extracted_features_path, full.names = TRUE)
