@@ -3,7 +3,7 @@
 
 #install.packages("readr")
 #library(readr)
-# install.packages("ggbiplot", repos = c("https://cloud.r-project.org"))
+#install.packages("ggbiplot", repos = c("https://cloud.r-project.org"))
 library(ggbiplot)
 library(stringr)
 library(terra)
@@ -946,17 +946,7 @@ create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_p
   # ais use neon trait table from Marcos?
   veg_training <- veg_has_coords_size %>%
     left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
-    dplyr::mutate(pft =  ifelse(!is.na(pft),pft,ifelse(growthForm == "small shrub" | growthForm == "single shrub" ,"shrub",
-                                  ifelse(taxonID=="PIPO" | taxonID=="PILA" | taxonID=="PINUS", "pine", 
-                                          ifelse(taxonID=="CADE27", "cedar", 
-                                                ifelse(taxonID=="ABCO" | taxonID=="ABMA" , "fir", 
-                                                        ifelse(taxonID=="QUCH2" | taxonID=="QUKE"| taxonID=="QUERC"|
-                                                               taxonID=="QUWI2", "oak", 
-                                                              ifelse(taxonID=="ARVIM" | taxonID=="CECU" | taxonID=="CEMOG" | 
-                                                                          taxonID=="CEIN3" | taxonID=="RIRO" | taxonID=="FRCA6" | 
-                                                                          taxonID=="RHIL" | taxonID=="AECA" | taxonID=="SANI4" | 
-                                                                          taxonID=="CEANO", "shrub", "other")))))))) 
-  
+    dplyr::mutate(pft = match_species_to_pft(growthForm, taxonID))
   write.csv(veg_training, file = file.path(training_data_dir, "vst_training.csv"))
   
   coord_ref <- sf::st_crs(32611)
@@ -1050,7 +1040,7 @@ prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_i
     
     #1) read in manual shapes (placed in this folder manually from my local machine)
     manual_shps_path <- file.path(data_raw_inv_path,"manually_uploaded",site,year,"my_shapes.shp")
-    manual_shps <- sf::read_sf(manual_shps_path)
+    manual_shps <- sf::read_sf(manual_shps_path) 
     # aisI need to manually put my_shapes.shp into these directories
     
     if (site=="SJER" & year=="2021" | site=="TEAK" & year=="2021") {
@@ -1101,34 +1091,7 @@ prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_i
       # ais use neon trait table from Marcos?
       veg_training <- veg_has_coords_size %>%
         left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
-        dplyr::mutate(pft = case_when(
-            grepl("CADE27",taxonID,ignore.case=T) ~ "cedar",
-            grepl("ABCO",taxonID,ignore.case=T) |
-                grepl("ABMA",taxonID,ignore.case=T) ~ "fir",
-            grepl("PIPO",taxonID,ignore.case=T) |
-                grepl("PILA",taxonID,ignore.case=T) |
-                grepl("PISA2",taxonID,ignore.case=T) |
-                grepl("PINUS",taxonID,ignore.case=T) ~ "pine",
-            grepl("QUCH2",taxonID,ignore.case=T)  |
-                grepl("QUDO",taxonID,ignore.case=T) |
-                grepl("QUKE",taxonID,ignore.case=T) |
-                grepl("QUERC",taxonID,ignore.case=T) |
-                grepl("QUWI2",taxonID,ignore.case=T) ~ "oak",
-            grepl("SANI4",taxonID,ignore.case=T) |
-                grepl("AECA",taxonID,ignore.case=T) |
-                grepl("FRCA6",taxonID,ignore.case=T) |
-                grepl("FRCAC7",taxonID,ignore.case=T) |
-                grepl("RIRO",taxonID,ignore.case=T) |
-                grepl("RIRO",taxonID,ignore.case=T) |
-                grepl("LUAL4",taxonID,ignore.case=T) |
-                grepl("CEMOG",taxonID,ignore.case=T) |
-                grepl("CELE2",taxonID,ignore.case=T) |
-                grepl("CECU",taxonID,ignore.case=T) |
-                grepl("CEIN3",taxonID,ignore.case=T) |
-                grepl("ARVIM",taxonID,ignore.case=T) |
-                grepl("RHIL",taxonID,ignore.case=T) |
-                grepl("CEANO",taxonID,ignore.case=T) ~ "shrub",
-            .default="other" ))
+        dplyr::mutate(pft = match_species_to_pft(growthForm, taxonID))
 
       #3) link inventory csv and manual shapes
       merge_manual_inventory_sf <- manual_shps %>% 
@@ -1136,7 +1099,8 @@ prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_i
                     #  ais ^ will need to change this from being hardcoded to defining globally
                     left_join(veg_training %>% rename(indvdID=individualID)) %>%
                     filter(!is.na(sciNameFull)) %>%
-                    dplyr::select(c(indvdID,pft))
+                    dplyr::select(c(indvdID,pft)) %>%
+                    filter(pft != "other_herb") #too few training data with this class
     } 
     
     # Generate a list of AOP tiles that overlap with the inventory data
@@ -1371,8 +1335,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       dplyr::mutate(growthForm_neon = ifelse(grepl("tree", growthForm), "tree",
                                     ifelse(grepl("sapling", growthForm), "tree",
                                             ifelse(grepl("shrub", growthForm), "shrub", growthForm)))) %>%
-      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) %>% #site=siteID)
-        filter(!is.na(scientificName))
+      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) 
 
     all_veg_structure <- rbind(all_veg_structure, site_veg_structure)
     # ais how to group in Carissa's data here?
@@ -1380,68 +1343,6 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
   
   trait_table <- readr::read_csv(trait_table_path) %>%
       dplyr::select(scientific, leafPhen=leaf.phen, growthForm_traittable=growth.form)
-
-  # carissa <- readr::read_csv("/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/raw/inventory/carissa/neon_2023_field_work_final_ais_grouped_species.csv") %>%
-  #     mutate(scientificName=ifelse(Species=="OTHER",`If other species: describe here`,Species)) %>%
-  #     filter(!is.na(scientificName)) %>%
-  #     #rename(taxonID=) %>%
-  #     rename(siteID = `NEON Site`) %>%
-  #     #rename(growthForm=) %>%
-  #     dplyr::select(scientificName,  siteID) %>% #taxonID,growthForm
-  #     distinct() %>%
-  #     # Use NEON taxonID table taht I downloaded to raw/inventory
-  #     # https://data.neonscience.org/taxonomic-lists?taxonTypeCode=PLANT
-  #     mutate(taxonID = case_when(
-  #         scientificName == "Broad-leaved lupine (Lupinus latifolia var. columbianus)" | 
-  #             scientificName == "Lupinus sp." ~ "LUPINSPP",
-  #         scientificName == "Abies concolor (Gord. & Glend.) Lindl. ex Hildebr. var. lowiana (Gord. & Glend.) Lemmon (white fir)" |
-  #             scientificName == "Abies magnifica A. Murray bis (CA red fir)" ~ "ABIES",
-  #         scientificName == "White leaf manzanita (arctostaphulos viscida)" |
-  #             scientificName == "Arctostaphylos patula Greene (greenleaf manzanita)" |
-  #             scientificName == "White leaf manzanita (arctostaphulos viscida)"  |
-  #             scientificName == "Pinemat manzanita (Arctostaphylos nevadensis)"  |
-  #             scientificName == "Arctostaphylos nevadensis\n\n\n" |
-  #             scientificName == "Arctostaphylos patula Greene (greenleaf manzanita)" ~ "ARCTO3SPP",
-  #         scientificName == "Chrysolepis sempervirens (Kellogg) Hjelmqvist (Sierran Chinkapin)" |
-  #             scientificName == "Bush chinquapin (Chrysolepis (Castonopsis) sempervirens)" ~ "CHSE11",
-  #         scientificName == "Arroyo or Lemmon\xd5s willow" |
-  #             scientificName == "Lemmon\xd5s willow (Salix Lemmonii - see notes)" |
-  #             scientificName == "Pacific Willow or Arroyo Willow" ~ "SALIX",
-  #         scientificName == "Vaccinium sp." ~ "VACCI",
-  #         scientificName == "Sambucus nigra L. (elderberry)" ~ "SANI4",
-  #         scientificName == "Artemesia californica" ~ "ARCA11",
-  #         scientificName == "coffee berry" ~ "PSYCH",
-  #         scientificName == "Quercus douglasii Hook. & Arn. (blue oak)" ~ "QUDO",
-  #         scientificName == "Pinus sabiniana Douglas ex Douglas (CA foothill pine)" ~ "PISA2",
-  #         scientificName == "Ceanothus cuneatus (Hook.) Nutt. (buckbrush)" |
-  #             scientificName == "Ceanothus? thyrsiflorus - blue blossom" ~ "CECU",
-  #         scientificName == "Quercus wislizeni A. DC. (interior live oak)" ~ "QUWI2",
-  #         scientificName == "Ceanothus leucodermis Greene (chaparral whitethorn)" ~ "CELE2",
-  #         scientificName == "Aesculus californica (Spach) Nutt. (CA buckeye)" ~ "AECA",
-  #         scientificName == "Rhamnus ilicifolia Kellogg (hollyleaf redberry)" ~ "RHIL",
-  #         scientificName == "90% thimbleberry, 10% some kind of pea" ~ "RUBUS",
-  #         scientificName == "Scouler\xd5s willow \nSalix scouleriana" ~ "SASC",
-  #         scientificName == "Black oak \n\nQuecus kolleggii" |
-  #             scientificName == "Quercus kelloggii Newberry (CA black oak)" ~ "QUKE",
-  #         scientificName == "Incense cedar" |
-  #             scientificName == "Calocedrus decurrens (Torr.) Florin (CA incense cedar)" ~ "CADE27",
-  #         scientificName == "Quaking aspen (populous tremuloides)" ~ "POTR5",
-  #         scientificName == "Broad-leaved lotus (Lotus crassifolius)" ~ "LOCR",
-  #         scientificName == "Western juniper (Juniperous occidentalis)" ~ "JUOC",
-  #         scientificName == "Black Cottonwood (populus balsamifera)" ~ "POBA2",
-  #         scientificName == "Sequoiadendron giganteum" ~ "SEGI2",
-  #         scientificName == "Chamaebatia foliolosa Benth. (mountain misery)" ~ "CHFO",
-  #         scientificName == "Mountain alder (Alnus incana spp. tenuifolia)" ~ "ALIN2",
-  #         scientificName == "Wax currant (Ribes cereum)" ~ "RICE",
-  #         scientificName == "Pinus lambertiana Douglas (sugar pine)" ~ "PILA",
-  #         scientificName == "Prunus emarginata (Douglas ex Hook.) D. Dietr. (bitter cherry)" ~ "PREM",
-  #         scientificName == "Pinus jeffreyi Balf. (Jeffrey pine)" ~ "PIJE",
-  #         scientificName == "Pinus contorta Douglas ex Loudon (lodgepole pine)" ~ "PICO",
-  #         scientificName == "Fern" ~ "ASPLE",
-  #         .default="2PLANT")) %>%
-  #     mutate(TEAK=ifelse(siteID=="TEAK","TEAK",NA),
-  #            SJER=ifelse(siteID=="SJER","SJER",NA)) %>%
-  #     dplyr::select(-siteID)
   
   neon_sites <- all_veg_structure %>%
       arrange(taxonID) %>%
@@ -1453,27 +1354,20 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       mutate(growthForm_neon = ifelse(taxonID=="CONU4","tree",
                                     ifelse(taxonID=="ARNE","shrub",growthForm_neon))) %>%
       # Otherwise get rid of rows with NA in growthForm_neon (these are duplicates)
-      filter(!is.na(growthForm_neon)) %>%
+      filter(!is.na(growthForm_neon) | !is.na(scientificName)) %>%
       left_join(trait_table) %>%
       # By default use trait table growth form
       mutate(growthForm = ifelse(is.na(growthForm_traittable),
                                 growthForm_neon,growthForm_traittable)) %>%
-      # Filter out remaining unlikely growth forms - AIS search on Calscape
-      mutate(growthForm = case_when(
-          taxonID == "ABIES" |
-              taxonID == "ABLO" |
+      # Filter out remaining unlikely growth forms - found on Calscape
+      mutate(growthForm = match_species_to_pft(growthForm, taxonID)case_when(
+          taxonID == "ABIES" | taxonID == "ABLO" |
               taxonID == "CADE27" ~ "tree",
-          taxonID == "CECO" |
-              taxonID == "FRCA6" |
-              taxonID == "LOIN4" |
-              taxonID == "RHIL" |
-              taxonID == "RIBES" |
-              taxonID == "RIRO" |
-              taxonID == "TODI" ~ "shrub",
-          taxonID == "AECA" |
-              taxonID == "SALIX" ~ "shrub/tree",
-          taxonID == "2PLANT" |
-              taxonID == "2PLANT-S" |
+          taxonID == "CECO" | taxonID == "FRCA6" |
+              taxonID == "LOIN4" | taxonID == "RHIL" |
+              taxonID == "RIBES" |  taxonID == "RIRO" |
+              taxonID == "TODI" | taxonID == "AECA" |  taxonID == "SALIX"  ~ "shrub",
+          taxonID == "2PLANT" | taxonID == "2PLANT-S" |
               taxonID == "LUAL4" ~ NA,
           .default = growthForm  )) %>%
       dplyr::select(scientific,taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm) %>%
@@ -1481,11 +1375,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       
   # Add in Carissa's dataset
   neon_carissa <- neon_sites %>%
-      # full_join(carissa) %>%
-      # # Use NEON species name if it exists, otherwise Carissa's
-      # mutate(scientific = ifelse(is.na(scientific), scientificName, scientific)) %>%
-      # dplyr::select( scientific, taxonID, SOAP, SJER, TEAK, growthForm) %>%
-      distinct() %>% 
+      # Use NEON species name if it exists, otherwise Carissa's
       tidyr::unite("siteID", any_of(c("SOAP", "SJER", "TEAK")), na.rm = TRUE) %>%
       # Manually remove remaining duplicates
       mutate(siteID=ifelse(taxonID=="AECA", "SOAP_SJER", siteID),
@@ -1527,38 +1417,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       
       
   pft_assignment_df <- neon_carissa %>%
-      mutate(pft = case_when(
-          taxonID == "ABIES" | taxonID == "ABCO" |
-              taxonID == "ABLO" |
-              taxonID == "ABMA" ~ "fir", #white or red fir
-          taxonID == "CADE27" | taxonID == "SEGI2" ~ "cedar", #incense cedar
-          taxonID == "PICO" | taxonID == "PIJE" |
-              taxonID == "PILA" | taxonID == "PINACE" |
-              taxonID == "PINACE" | taxonID == "PIPO" |
-              taxonID == "PISA2" |
-              taxonID == "PINUS" ~ "pine", #Ponderosa pine
-          taxonID == "QUCH2" | taxonID == "QUKE" |
-              taxonID == "QUDO" | taxonID == "QUERC" |
-              taxonID == "QUWI2" ~ "oak", #target:canyon live oak (evergreen), also Black oak(deciduous), 
-          taxonID == "ARNE" | taxonID == "ARPA" |
-              taxonID == "ARPA6" | taxonID == "ARVIM" |
-              taxonID == "CEANO" | taxonID == "CECA" |
-              taxonID == "CECO" | taxonID == "CECU" |
-              taxonID == "CEIN3" | taxonID == "CELE2" |
-              taxonID == "CHFO" | taxonID == "CHSE11" |
-              taxonID == "CRSE11" | taxonID == "DAWR2" |
-              taxonID == "FRCA6" | taxonID == "FRCAC7" |
-              taxonID == "LOIN4" | taxonID == "RHAMNA" |
-              taxonID == "RHIL" | taxonID == "PREM" |
-              taxonID == "RICE" | taxonID == "RIBES" |
-              taxonID == "RIRO" | taxonID == "RIVI3" |
-              taxonID == "SALIX" | taxonID == "SANI4" |
-              taxonID == "CEMOG" | taxonID == "ARCTO3SPP" |
-              taxonID == "SEFL3" | taxonID == "TODI" |
-              taxonID == "SASC" | taxonID == "AECA" |
-              taxonID == "CONU4" | taxonID == "LUPINSPP" ~ "shrub", #Ceanothus sp.
-          .default = "other"
-      ))
+      mutate(pft = match_species_to_pft(growthForm, taxonID))
       
   # Print any scientific names that were not addressed in logic tree and instead assigned as 'other'
   message("The following rows were classified as PFT 'other'")
@@ -1567,7 +1426,6 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
   pft_reference_path <- file.path(data_int_path,"pft_reference.csv")
   readr::write_csv(pft_assignment_df, pft_reference_path)
   return(pft_reference_path)
-  #ais change things here to accommodate other_bdlf, other_conif
 }
 
 # crop_flightlines_to_tiles <- function(site, year_aop, data_raw_aop_path,

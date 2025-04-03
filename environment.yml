@@ -12,6 +12,8 @@ dependencies:
   - mapclassify
   - matplotlib
   - tensorflow
+  - seaborn
+  - scipy
   - r-base=4.3
   - r-devtools
   - r-sf

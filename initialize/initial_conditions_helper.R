@@ -2,12 +2,14 @@ library(lidR)
 library(sf)
 library(randomForest)
 library(ggplot2)
+install.packages("bvls")
 library(bvls) #bvls()
 library(tidyr) #pivot_longer()
 library(assertthat)
 library(dplyr)
 library(future)
 plan(multisession, workers = 3L)
+library(rjson)
 
 
 #ais replace this function below with sy-toan's clip_lidar_to_polygon_lidR
@@ -167,7 +169,7 @@ generate_wall2wall_plots <- function(aoi_shp_path, plot_length,ic_type,ic_type_p
 
 
 divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
-    
+        
     # Initialize dataframe
     by_patch_df <- data.frame()
     #height_step <- 0.5 #m #for height step in lad_csv
@@ -179,17 +181,27 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
         lad_json <- rjson::fromJSON(file=paste0(lad_laz_plot_paths[c],"_lad.json"))
         lad_csv <- read.csv(paste0(lad_laz_plot_paths[c],"_lad.csv")) 
         
-        if ( nrow(lad_csv)==0 | length(lad_json$layer_height)==0 ) {
-            # In this case, the patch is flat and has no cohorts
-            patch_temp <- data.frame() #ais change this so that an empty patch is added to patch file, even though no cohorts
-            print(paste0("patch ",c," has nrow(lad_csv)==0 | length(lad_json$layer_height)==0"))
-            # ais look through some of these cases with Marcos
-            # note that the index c is not the same as the patch number
-            # in some cases the csv has values, but json is empty - why?
+        if ( length(lad_json$layer_height)==0 |  nrow(lad_csv)==0 ) {
+            #ais if nrow(lad_csv)==0, then lad could not be caluclated, 
+            # in a previous step, but why?
             
-            #ais but what about the cases where json has data but csv is empty?
-            # ^ in these cases I got the warning "lad could not be calculated"
-            # in a previous step. what's the difference?
+            # In this case, the patch is flat and has no cohorts
+            patch_temp = data.frame(z=1.25,
+                                    lad=0,
+                                    # Then this patch has no canopy, so cohort height is 0
+                                    cohort_height = 1,
+                                    # take the minimum height (for calculating LAI when there is canopy)
+                                    diff_z = 1.25,
+                                    patch = ifelse(grepl("central", basename(lad_laz_plot_paths[c])),
+                                                    sub(".*/plot_(\\d+)_.*", "\\1", lad_laz_plot_paths[c]),
+                                                    ifelse(ic_type=="rs_inv_plots",sub(".*/(.*)$", "\\1", lad_laz_plot_paths[c]),
+                                                            sub(".*/plot_(\\d+)_.*","\\1",lad_laz_plot_paths[c]))),
+                                    patch_bottom_left = ifelse(grepl("central", basename(lad_laz_plot_paths[c])) | ic_type=="rs_inv_plots",
+                                                                NA,sub(".*?(\\d{6}_\\d{7}).*","\\1",lad_laz_plot_paths[c])),
+                                    # This patch has no cohorts
+                                    cohort_idx = 0) 
+            
+            print(paste0("patch ",c," has nrow(lad_csv)==0 | length(lad_json$layer_height)==0"))
             
         } else {
             # lad units are m2/m3
@@ -211,10 +223,6 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
                 lad_csv$cohort_height[l] <- min(lad_json$layer_height[
                     lad_json$layer_height >= lad_csv$z[l]])
                 
-                # assign which cohort number
-                #lad_csv$cohort_idx[l] <- lad_json$cohort_idx[which(
-                #    lad_json$layer_height == lad_csv$cohort_height[l])]
-                
                 # calculate the difference in height from one row to the next
                 # (for calculating LAI)
                 lad_csv$diff_z[l] <- ifelse(l==1,lad_csv$z[l],
@@ -232,25 +240,21 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
                 patch_temp <- lad_csv %>%
                     filter(lad>0) %>%
                     # assign patch and cohort index
-                    mutate(patch = basename(lad_laz_plot_paths[c])) %>%
+                    mutate(patch = basename(lad_laz_plot_paths[c]),
+                            patch_bottom_left=NA) %>%
                     left_join(cohort_idx_df)
             } else {
-                if (ic_type=="rs_inv_plots") {
-                    patch_temp <- lad_csv %>%
+                patch_temp <- lad_csv %>%
                         filter(lad>0) %>%
                         # assign patch # and cohort index
-                        mutate(patch = sub(".*/(.*)$", "\\1", #".*_(.*?)\\.*", "\\1",
-                                           lad_laz_plot_paths[c])) %>%
+                        mutate(patch = ifelse(ic_type=="rs_inv_plots",
+                                                sub(".*/(.*)$", "\\1", lad_laz_plot_paths[c]),
+                                                sub(".*/plot_(\\d+)_.*","\\1",lad_laz_plot_paths[c])),
+                                    ,
+                                patch_bottom_left=ifelse(ic_type=="rs_inv_plots",NA,
+                                                        sub(".*?(\\d{6}_\\d{7}).*", "\\1", 
+                                                            lad_laz_plot_paths[c]))) %>%
                         left_join(cohort_idx_df)
-                } else if (ic_type=="rs_random_plots") {
-                    patch_temp <- lad_csv %>%
-                        filter(lad>0) %>%
-                        # assign patch # and cohort index
-                        mutate(patch = sub(".*/plot_(\\d+)_.*", "\\1", 
-                                           lad_laz_plot_paths[c])) %>%
-                        left_join(cohort_idx_df)
-                }
-                
             }
         }
         
@@ -260,6 +264,7 @@ divide_patch_into_cohorts <- function(lad_laz_plot_paths, ic_type) {
     
     return(by_patch_df)
 }
+
 
 
 assign_pft_across_cohorts <- function(by_patch_df, allom_params,
@@ -274,6 +279,8 @@ assign_pft_across_cohorts <- function(by_patch_df, allom_params,
                              labels = c(letters[1:length(hmax_values)]))
 
     breakdown_to_pft_df <- by_patch_df %>%
+        # Filter out where layer is NA becaause these heights are too tall
+        filter(!is.na(layer)) %>%
         # lai = sum(layer thickness (diff_z) * LAD of layer)
         # lai (layer 1) = stem density (layer 1) * ILA(as a function of z)
         # ILA = Bleaf * SLA , SLA is specific to height and PFT - for now just pft
@@ -629,19 +636,9 @@ generate_pcss <- function(site, year, data_int_path, biomass_path, ic_type, ic_t
             
             #Assign pft
             # ais how does this work for non-NEON inventory data?
-            mutate(pft = ifelse(growthForm == "small shrub" | 
-                                    growthForm == "single shrub" ,"shrub",
-                                ifelse(taxonID=="PIPO" | taxonID=="PILA" | taxonID=="PINUS", "pine", 
-                                       
-                                       ifelse(taxonID=="CADE27", "cedar", 
-                                              
-                                              ifelse(taxonID=="ABCO" | taxonID=="ABMA" , "fir", 
-                                                     
-                                                     ifelse(taxonID=="QUCH2" | taxonID=="QUKE"| taxonID=="QUERC", "oak", 
-                                                            
-                                                            ifelse(taxonID %in% c("ARVIM","CECU","CEMOG","CEIN3","RIRO","FRCA6","RHIL","AECA","SANI4","CEANO"), "shrub", "other"))))))) %>% 
+            mutate(pft = match_species_to_pft(growthForm, taxonID)) %>% 
             # Filter out pft 'other'
-            filter(pft != "other") %>%
+            filter(pft != "other") %>% #ais do I want to do this?
             # Assign unknown plants to PFT - ais do this - all of them were shrubs anyway
             #filter(scientificName != "Unknown plant") %>% #20 plants
             left_join(allom_params) %>%

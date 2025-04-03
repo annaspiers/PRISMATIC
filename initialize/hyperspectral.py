@@ -24,7 +24,7 @@ from shapely.geometry import mapping
 from shapely.geometry import box
 import rpy2.robjects as ro
 from collections import Counter
-import seaborn as sns
+# import seaborn as sns
 
 # data preparation
 from sklearn.decomposition import PCA
@@ -274,10 +274,19 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
 
     # training_data_dir = os.path.join(data_int_path, site, year, "training")
     # ic_type_path = os.path.join(data_final_path,site,year,ic_type)
+    # training_data_dir = os.path.join(data_int_path, site, year, "training")
+    # ic_type_path = os.path.join(data_final_path,site,year,ic_type)
 
     # # get a description of the shapefile to use for naming outputs
     # shapefile_description = os.path.splitext(os.path.basename(shp_path))[0]
+    # # get a description of the shapefile to use for naming outputs
+    # shapefile_description = os.path.splitext(os.path.basename(shp_path))[0]
 
+    # # Specify destination for extracted features
+    # if use_case == "train":
+    #     extracted_features_path     = os.path.join(training_data_dir)
+    #     extracted_features_filename = os.path.join(extracted_features_path,
+    #                                              shapefile_description+"-extracted_features_inv.tif")        
     # # Specify destination for extracted features
     # if use_case == "train":
     #     extracted_features_path     = os.path.join(training_data_dir)
@@ -290,7 +299,17 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     #                                              shapefile_description+"-extracted_features.tif")
     # else:
     #     print("need to specify use_case")
+    # elif use_case=="predict":
+    #     extracted_features_path     = os.path.join(ic_type_path) 
+    #     extracted_features_filename = os.path.join(extracted_features_path,
+    #                                              shapefile_description+"-extracted_features.tif")
+    # else:
+    #     print("need to specify use_case")
 
+    # # Only run if the extracted features do not exist
+    # if not os.path.exists(extracted_features_filename):
+    #     # Load shapefile
+    #     shp_gdf = gpd.read_file(shp_path)
     # # Only run if the extracted features do not exist
     # if not os.path.exists(extracted_features_filename):
     #     # Load shapefile
@@ -299,10 +318,27 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     #     # Compute centroid for each geometry
     #     shp_gdf["center_X"] = shp_gdf.geometry.centroid.x
     #     shp_gdf["center_Y"] = shp_gdf.geometry.centroid.y
+    #     # Compute centroid for each geometry
+    #     shp_gdf["center_X"] = shp_gdf.geometry.centroid.x
+    #     shp_gdf["center_Y"] = shp_gdf.geometry.centroid.y
 
     #     # List all .tif raster files in the directory
     #     stacked_aop_list = [os.path.join(stacked_aop_path, f) for f in os.listdir(stacked_aop_path) if f.endswith(".tif")]
+    #     # List all .tif raster files in the directory
+    #     stacked_aop_list = [os.path.join(stacked_aop_path, f) for f in os.listdir(stacked_aop_path) if f.endswith(".tif")]
 
+    #     # create column to track shape ID 
+    #     # if training, this is the tree crown boundary
+    #     # if predicting, this is the plot boundary)
+    #     if use_case == "train":
+    #         shp_gdf["shapeID"] = [f"tree_crown_{i}" for i in range(len(shp_gdf))]
+    #     elif use_case == "predict":
+    #         if "PLOTID" in shp_gdf.columns:
+    #             shp_gdf = shp_gdf.rename(columns={"PLOTID": "shapeID"})
+    #         elif "plotID" in shp_gdf.columns:
+    #             shp_gdf = shp_gdf.rename(columns={"plotID": "shapeID"})
+    #         else:
+    #             print("Trying to predict without training data. Need to first switch use_case to train from predict")
     #     # create column to track shape ID 
     #     # if training, this is the tree crown boundary
     #     # if predicting, this is the plot boundary)
@@ -321,15 +357,31 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     #     if use_case == 'train' or ic_type=='rs_inv_plots':
     #         # Read tiles_w_veg.txt and extract the first column as a list
     #         tiles_w_veg = pd.read_csv(os.path.join(training_data_dir, "tiles_w_veg.txt"), header=None)[0].tolist()
+    #     # Filter to tiles containing veg to speed up the next for-loop
+    #     # ais does this code include tiles with only a crown from the ucla field data though?
+    #     if use_case == 'train' or ic_type=='rs_inv_plots':
+    #         # Read tiles_w_veg.txt and extract the first column as a list
+    #         tiles_w_veg = pd.read_csv(os.path.join(training_data_dir, "tiles_w_veg.txt"), header=None)[0].tolist()
             
+    #         # Filter stacked_aop_list based on the presence of any tile name
+    #         stacked_aop_list = [path for path in stacked_aop_list if any(tile in path for tile in tiles_w_veg)]
     #         # Filter stacked_aop_list based on the presence of any tile name
     #         stacked_aop_list = [path for path in stacked_aop_list if any(tile in path for tile in tiles_w_veg)]
 
     #     # Loop through AOP tiles
     #     for stacked_aop_filename in stacked_aop_list:
+    #     # Loop through AOP tiles
+    #     for stacked_aop_filename in stacked_aop_list:
                         
     #         #training_array, combined_mask = extract_spectra_3darray(east_north_csv_path, shp_gdf)
+    #         #training_array, combined_mask = extract_spectra_3darray(east_north_csv_path, shp_gdf)
 
+    #         # Read current tile of stacked AOP data
+    #         with rasterio.open(stacked_aop_filename) as src:
+    #             stacked_aop_data = src.read()
+    #             raster_transform = src.transform
+    #             raster_crs = src.crs
+    #             raster_bounds = src.bounds  # Get raster bounds
     #         # Read current tile of stacked AOP data
     #         with rasterio.open(stacked_aop_filename) as src:
     #             stacked_aop_data = src.read()
@@ -339,13 +391,21 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
 
     #             # Construct the easting northing string for naming outputs
     #             east_north_string = f"{round(raster_bounds[0])}_{round(raster_bounds[1])}"
+    #             # Construct the easting northing string for naming outputs
+    #             east_north_string = f"{round(raster_bounds[0])}_{round(raster_bounds[1])}"
 
+    #             east_north_tif_path = os.path.join(extracted_features_path, f"extracted_features_mask_{east_north_string}_{shapefile_description}.tif")
     #             east_north_tif_path = os.path.join(extracted_features_path, f"extracted_features_mask_{east_north_string}_{shapefile_description}.tif")
                 
     #             # If CSV file already exists, skip
     #             if os.path.exists(east_north_tif_path):
     #                 continue
+    #             # If CSV file already exists, skip
+    #             if os.path.exists(east_north_tif_path):
+    #                 continue
 
+    #             # Check which polygons overlap with the raster
+    #             shp_gdf = shp_gdf[shp_gdf.intersects(box(*raster_bounds))]
     #             # Check which polygons overlap with the raster
     #             shp_gdf = shp_gdf[shp_gdf.intersects(box(*raster_bounds))]
 
@@ -356,7 +416,17 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     #             else:
     #                 # Convert overlapping polygons to GeoJSON format
     #                 shapes_geojson = [mapping(geom) for geom in shp_gdf.geometry]
+    #             # If no polygons overlap, exit
+    #             if shp_gdf.empty:
+    #                 print("No overlapping polygons found.")
+    #                 continue
+    #             else:
+    #                 # Convert overlapping polygons to GeoJSON format
+    #                 shapes_geojson = [mapping(geom) for geom in shp_gdf.geometry]
                     
+    #                 # Mask the raster using the overlapping polygons
+    #                 with rasterio.open(stacked_aop_filename) as src:
+    #                     masked_raster, masked_transform = rasterio.mask.mask(dataset=src, shapes=shapes_geojson, crop=False, nodata=np.nan)
     #                 # Mask the raster using the overlapping polygons
     #                 with rasterio.open(stacked_aop_filename) as src:
     #                     masked_raster, masked_transform = rasterio.mask.mask(dataset=src, shapes=shapes_geojson, crop=False, nodata=np.nan)
@@ -369,22 +439,47 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     #                     crs=raster_crs, transform=masked_transform
     #                 ) as dst:
     #                     dst.write(masked_raster)
+    #                 # Save the masked raster as a new GeoTIFF file
+    #                 with rasterio.open(
+    #                     east_north_tif_path, "w", driver="GTiff",
+    #                     height=masked_raster.shape[1], width=masked_raster.shape[2],
+    #                     count=masked_raster.shape[0], dtype=str(masked_raster.dtype),
+    #                     crs=raster_crs, transform=masked_transform
+    #                 ) as dst:
+    #                     dst.write(masked_raster)
                     
+    #                 print(f"Masked raster saved to {east_north_tif_path}")
     #                 print(f"Masked raster saved to {east_north_tif_path}")
 
     #     # combine all extracted features into a single .tif
     #     paths_ls = glob.glob(os.path.join(extracted_features_path, "*.tif"))
+    #     # combine all extracted features into a single .tif
+    #     paths_ls = glob.glob(os.path.join(extracted_features_path, "*.tif"))
         
+    #     # refine the output csv selection 
+    #     tifs = [path for path in paths_ls if f"000_{shapefile_description}.tif" in path]
     #     # refine the output csv selection 
     #     tifs = [path for path in paths_ls if f"000_{shapefile_description}.tif" in path]
         
     #     # Open and merge TIF files
     #     src_files_to_mosaic = [rasterio.open(tif) for tif in tifs]
     #     mosaic, out_trans = merge(src_files_to_mosaic)
+    #     # Open and merge TIF files
+    #     src_files_to_mosaic = [rasterio.open(tif) for tif in tifs]
+    #     mosaic, out_trans = merge(src_files_to_mosaic)
 
     #     # Get metadata from the first file
     #     out_meta = src_files_to_mosaic[0].meta.copy()   
+    #     # Get metadata from the first file
+    #     out_meta = src_files_to_mosaic[0].meta.copy()   
 
+    #     # Update metadata for the merged file
+    #     out_meta.update({
+    #         "driver": "GTiff",
+    #         "height": mosaic.shape[1],
+    #         "width": mosaic.shape[2],
+    #         "transform": out_trans
+    #     })
     #     # Update metadata for the merged file
     #     out_meta.update({
     #         "driver": "GTiff",
@@ -396,7 +491,13 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     #     # Write the merged TIF file
     #     with rasterio.open(extracted_features_filename, "w", **out_meta) as dest:
     #         dest.write(mosaic)
+    #     # Write the merged TIF file
+    #     with rasterio.open(extracted_features_filename, "w", **out_meta) as dest:
+    #         dest.write(mosaic)
 
+    #     # Close input files
+    #     for src in src_files_to_mosaic:
+    #         src.close()
     #     # Close input files
     #     for src in src_files_to_mosaic:
     #         src.close()
@@ -404,7 +505,13 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
     #     # Delete the individual TIF files for each tile
     #     for tif in tifs:
     #         os.remove(tif)
+    #     # Delete the individual TIF files for each tile
+    #     for tif in tifs:
+    #         os.remove(tif)
 
+    r_source = ro.r['source']
+    r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    extract_spectra_from_polygon_r = ro.r('extract_spectra_from_polygon_r')
     r_source = ro.r['source']
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
     extract_spectra_from_polygon_r = ro.r('extract_spectra_from_polygon_r')
@@ -419,11 +526,21 @@ def extract_spectra_from_polygon(site, year, shp_path, data_int_path, data_final
                                                          use_case=use_case, 
                                                          aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,
                                                          ic_type=ic_type)
+    # Extract training data from AOP data with tree polygons
+    training_spectra_path = extract_spectra_from_polygon_r(site=site, 
+                                                         year=year, 
+                                                         data_int_path=data_int_path, 
+                                                         data_final_path=data_final_path, 
+                                                         stacked_aop_path=stacked_aop_path, 
+                                                         shp_path=shp_path,
+                                                         use_case=use_case, 
+                                                         aggregate_from_1m_to_2m_res=aggregate_from_1m_to_2m_res,
+                                                         ic_type=ic_type)
 
     log.info('Spectral features for training data saved at: '
-             f'{extracted_features_filename}')
+             f'{training_spectra_path}')
     
-    return extracted_features_filename
+    return training_spectra_path
 
 
 
@@ -824,7 +941,7 @@ def cm_analysis(y_true, y_pred, labels,savefile):
     plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
  
-    sns.set(style="whitegrid")
+    # sns.set(style="whitegrid")
 
     ##############################
  
