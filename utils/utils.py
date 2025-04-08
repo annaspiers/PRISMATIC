@@ -99,13 +99,13 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
                     str(data_int_path/site/year_inventory/'hs_envi_flightline'),
                     l, cache)
     _add_to_cache('prep_manual_training_data',
-                  str(data_int_path/site/year_inventory/'training'/'tree_crowns_training.shp'),
+                  str(data_int_path/site/year_inventory/'training'/'ref_labelled_crowns.shp'),
                   l, cache)
     _add_to_cache('prep_aop_imagery',
                   str(data_int_path/site/year_inventory/'stacked_aop'),
                   l, cache)
     _add_to_cache('extract_spectra_from_polygon',
-                  str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_inv.csv'),
+                  str(data_int_path/site/year_inventory/'training'/'ref_labelled_crowns-extracted_features_inv.csv'),
                   l, cache)   
                 
     return cache
@@ -120,7 +120,7 @@ def build_cache_all( data_int_path):
 
     cache = {}
     _add_to_cache('train_pft_classifier',
-                  str(data_int_path/'rf_dir'/'rf_model_tree_crowns_training.joblib'),
+                  str(data_int_path/'rf_dir'/'rf_model.joblib'),
                     l, cache)   
     return cache
 

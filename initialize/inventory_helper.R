@@ -53,23 +53,24 @@ match_species_to_pft <- function(species = NULL, indvdID = NULL, taxonID = NULL,
     
     # Define a named list of patterns for each PFT
     pft_patterns <- list(
-        oak = c("oak", "quercus", "quch2", "quke", "querc", "quwi2", "qudo",
+        oak =   c("oak", "quercus", "quch2", "quke", "querc", "quwi2", "qudo",
                 "alder", "aspen", "cottonwood", "populus", "eucalyptus"), # other broadleaf
-        pine = c("pine", "pinus", "pico", "pije", "pinace",
+        pine =  c("pine", "pinus", "pico", "pije", "pinace",
                  "pisa2", "pipo", "pila", "pisa2"),
-        fir = c("fir", "abies", "abco", "ablo", "abma"), 
+        fir =   c("fir", "abies", "abco", "ablo", "abma"), 
         cedar = c("cedar", "cypress", "sequoia", 
                   "cade27", "segi2", "juniper"), 
         shrub = c("ceanothus", "wax", "cherry", "berry", "willow", "misery", 
-                  "chinkapin", "chinquapin", "ribes", "alder", "manzan", 
-                  "lupin", "buck", "leuco", "coffee", "rhamnus", 
+                  "chinkapin", "chinquapin", "alder", "manzan",  #is alder a tree
+                  "buck", "leuco", "coffee", "rhamnus", 
                   "oleander", "lonicera", "kekiella", "olive", 
                   "aeca", "aece", "arcto3spp", "arne", "arpa", "arpa6", "arvim", 
                   "ceano", "ceca", "ceco", "cecu", "cein3", "cele2", "cemog", "chfo", 
                   "chse11", "conu4", "crse11", "dawr2", "frca6", "frcac7", "loin4", "lual4", 
                   "lupinspp", "prem", "rhil", "rhamna", "ribes", "rice", "riro", "rivi3", 
-                  "rhila", "salix", "sani4", "sasc", "sefl3", "todi"), 
-        grass_rock_bare = c("rock", "bareground", "grass")
+                  "rhila", "salix", "sani4", "sanic5", "sasc", "sefl3", "todi"), 
+        grass = c("grass", "lupin"),
+        rock_bare = c("rock", "bareground")
     )    
     
     # Check for growthForm first

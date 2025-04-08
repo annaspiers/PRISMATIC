@@ -355,7 +355,7 @@ def main(cfg):
             # year_inventory='2021'
             # year_aop = '2021-07' #2021-07 2021-03
 
-                    rf_model_path=os.path.join(data_int_path,'rf_dir/rf_model_tree_crowns_training.joblib')
+                    rf_model_path=os.path.join(data_int_path,'rf_dir/rf_model.joblib')
                     ic_type_path = str(data_final_path+'/'+site+'/'+year_inventory+'/'+ic_type) #needs to be str to be input
                     Path(ic_type_path).mkdir(parents=True, exist_ok=True)
 
