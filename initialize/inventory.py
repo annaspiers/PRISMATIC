@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 COLS = ['individualID', 'domainID', 'siteID', 'plotID', 'subplotID',
-        'pointID', 'stemDistance', 'stemAzimuth', 'scientificName','taxonID',
+        'pointID', 'stemDistance', 'stemAzimuth', 'eventID.x', 'tempStemID', 'scientificName','taxonID',
         'taxonRank', 'adjNorthing', 'adjEasting', 'adjCoordinateUncertainty',
         'adjDecimalLatitude', 'adjDecimalLongitude',
         'adjElevation', 'adjElevationUncertainty',

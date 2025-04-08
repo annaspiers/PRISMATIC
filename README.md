@@ -58,9 +58,11 @@ Data procesing workflow:
 - For a single target site and year, `generate_initial_conditions`: generate FATES initial conditions (cohort and patch files) by combining forest structure and composition
 
 We generate FATES intital conditions in three types: 
-- `ic_type == field_inv_plots`: initialization from NEON forest inventory plots
-- `ic_type == rs_inv_plots`: initialization from *remote sensing data over* NEON forest inventory plots
+- `ic_type == field_inv_plots`: initialization from NEON forest *inventory plots*
+- `ic_type == rs_inv_plots`: initialization from *remote sensing data* over NEON forest inventory plots
+- `ic_type == rs_tower_ftpt`: initialization from remote sensing data over NEON *eddy covariance tower footprint*
 - `ic_type == rs_random_plots`: initialization from remote sensing data over *plots randomly generated across entire NEON site*
+- `ic_type == rs_wall2wall`: initialization from remote sensing data over *plots gridded wall to wall across entire NEON site*
 
 The final result is at `data_final_path/site/year/ic_type`.
 

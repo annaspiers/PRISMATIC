@@ -18,7 +18,7 @@ def _add_to_cache(func_name, ps, l, cache):
 
 
 def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw_inv_path, 
-                     data_int_path, hs_type):
+                     data_int_path, hs_type, coords_bbox):
     l = []
     data_raw_aop_path = Path(data_raw_aop_path)
     data_raw_inv_path = Path(data_raw_inv_path)
@@ -39,23 +39,27 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
                    str(data_raw_aop_path/site/year_aop/'tif')],
                   l, cache)
     if hs_type=="tile":
-        _add_to_cache('download_hyperspectral',
-                    str(data_raw_aop_path/site/year_aop/'hs_tile'),
-                    l, cache)
-        _add_to_cache('download_aop_bbox',
-                    [str(data_raw_aop_path/site/year_aop/'laz'),
-                    str(data_raw_aop_path/site/year_aop/'tif'),
-                    str(data_raw_aop_path/site/year_aop/'hs_tile')],
-                    l, cache)
+        if not coords_bbox:
+            _add_to_cache('download_hyperspectral',
+                        str(data_raw_aop_path/site/year_aop/'hs_tile'),
+                        l, cache)
+        else:
+            _add_to_cache('download_aop_bbox',
+                        [str(data_raw_aop_path/site/year_aop/'laz'),
+                        str(data_raw_aop_path/site/year_aop/'tif'),
+                        str(data_raw_aop_path/site/year_aop/'hs_tile')],
+                        l, cache)
     if hs_type=="flightline":
-        _add_to_cache('download_hyperspectral',
-                    str(data_raw_aop_path/site/year_aop/'hs_flightline'),
-                    l, cache)
-        _add_to_cache('download_aop_bbox',
-                    [str(data_raw_aop_path/site/year_aop/'laz'),
-                    str(data_raw_aop_path/site/year_aop/'tif'),
-                    str(data_raw_aop_path/site/year_aop/'hs_flightline')],
-                    l, cache)
+        if not coords_bbox:
+            _add_to_cache('download_hyperspectral',
+                        str(data_raw_aop_path/site/year_aop/'hs_flightline'),
+                        l, cache)
+        else:
+            _add_to_cache('download_aop_bbox',
+                        [str(data_raw_aop_path/site/year_aop/'laz'),
+                        str(data_raw_aop_path/site/year_aop/'tif'),
+                        str(data_raw_aop_path/site/year_aop/'hs_flightline')],
+                        l, cache)
     _add_to_cache('download_trait_table',
                   str(data_raw_inv_path/'NEON_trait_table.csv'),
                   l, cache)
@@ -95,55 +99,53 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
                     str(data_int_path/site/year_inventory/'hs_envi_flightline'),
                     l, cache)
     _add_to_cache('prep_manual_training_data',
-                  str(data_int_path/site/year_inventory/'training'/'tree_crowns_training.shp'),
+                  str(data_int_path/site/year_inventory/'training'/'ref_labelled_crowns.shp'),
                   l, cache)
     _add_to_cache('prep_aop_imagery',
                   str(data_int_path/site/year_inventory/'stacked_aop'),
                   l, cache)
     _add_to_cache('extract_spectra_from_polygon',
-                  str(data_int_path/site/year_inventory/'training'/'tree_crowns_training-extracted_features_inv.csv'),
-                  l, cache)
-    
-
-    _add_to_cache('train_pft_classifier',
-                  str(data_int_path/'rf_dir'/'rf_model_tree_crowns_training.joblib'),
-                    l, cache) #ais where to put this?
+                  str(data_int_path/site/year_inventory/'training'/'ref_labelled_crowns-extracted_features_inv.csv'),
+                  l, cache)   
                 
     return cache
 
 
+def build_cache_all( data_int_path):  
+    
+    l = []
+    data_int_path = Path(data_int_path)                                   
 
-def build_cache_predict( data_raw_aop_path, data_int_path, data_final_path, use_case, site, 
-                        year_inventory, year_aop, ic_type):  
+    l.extend([str(p) for p in data_int_path.glob('**/*.joblib')])
+
+    cache = {}
+    _add_to_cache('train_pft_classifier',
+                  str(data_int_path/'rf_dir'/'rf_model.joblib'),
+                    l, cache)   
+    return cache
+
+
+
+def build_cache_predict( site, year_inventory, use_case, data_raw_aop_path, data_int_path, 
+                        data_final_path, ic_type):  
+                       
     l = []
     data_raw_aop_path = Path(data_raw_aop_path)
     data_int_path = Path(data_int_path)
     data_final_path = Path(data_final_path)
 
     l.extend([str(p) for p in data_int_path.glob('**/') if p.is_dir()])
-    l.extend([str(p) for p in data_int_path.glob('**/*.joblib')])
     l.extend([str(p) for p in data_final_path.glob('**/') if p.is_dir()])
     l.extend([str(p) for p in data_final_path.glob('**/*.css')])
     l.extend([str(p) for p in data_final_path.glob('**/*.pss')])
     
     cache = {}
     
-    if use_case=="predict":        
-        if (ic_type == "field_inv_plots"):
-            _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/site/year_inventory/ic_type/"ic_field_inv.css"),
-                       str(data_final_path/site/year_inventory/ic_type/"ic_field_inv.pss")],
-                      l, cache)   
-        if (ic_type=="rs_inv_plots"):
-            _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/site/year_inventory/ic_type/"ic_rs_inv_plots.css"),
-                       str(data_final_path/site/year_inventory/ic_type/"ic_rs_inv_plots.pss")],
-                      l, cache)   
-        if (ic_type == "rs_random_plots"):
-            _add_to_cache('generate_initial_conditions',
-                      [str(data_final_path/site/year_inventory/ic_type/"ic_rs_random_plots.css"),
-                       str(data_final_path/site/year_inventory/ic_type/"ic_rs_random_plots.pss")],
-                      l, cache)   
+    if use_case=="predict":  
+        _add_to_cache('generate_initial_conditions',     
+            [str(data_final_path/site/year_inventory/ic_type/"ic.css"),
+            str(data_final_path/site/year_inventory/ic_type/"ic.pss")],
+            l, cache)   
     return cache
 
 

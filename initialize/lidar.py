@@ -34,7 +34,7 @@ def download_aop_bbox(site, year, path, hs_type, coords_bbox):
         Lidar year
     path : str
         Path to store the downloaded data
-    coords_bbox : str
+    coords_bbox : list
         UTM coordinates for bounding box of data subset to download 
 
     Returns
@@ -168,7 +168,7 @@ def download_lidar(site, year, lidar_path, use_tiles_w_veg):
                         match_string=file_type,
                         check_size=False)
 
-    product_codes = ['DP3.30024.001', 'DP3.30025.001'] #DTM, slope/aspect
+    product_codes = ['DP3.30024.001', 'DP3.30025.001', 'DP3.30015.001'] #DTM, slope/aspect, CHM
     file_type = 'tif'
     for product_code in product_codes:
         p = path/file_type
@@ -313,15 +313,7 @@ def clip_lidar_by_plots(laz_path,
 
     laz_file_paths = [f for f in laz_path.glob('*colorized.laz')]
     shp_file = [i for i in site_plots_path.glob('plots.shp')][0] 
-    #otherwise only the first plot was being saved
-                # [i for i in
-                # site_plots_path.glob('*.shp')
-                # if 'plots' in str(i)][0]
     polygons_utm = gpd.read_file(shp_file)
-    # if ic_type=="rs_inv_plots":
-    # if 'plotID' in polygons_utm.columns and 'subplotID' in polygons_utm.columns: 
-    #     polygons_utm['plotID'] = polygons_utm['plotID'] + '_' + polygons_utm['subplotID']
-    #ais ^ fix this so that plotID and subplotID are connected earlier on and so I don't ahve to do this ad hoc
 
 
     log.info('Cropping lidar files given all plots...')

@@ -3,7 +3,7 @@
 
 #install.packages("readr")
 #library(readr)
-# install.packages("ggbiplot", repos = c("https://cloud.r-project.org"))
+#install.packages("ggbiplot", repos = c("https://cloud.r-project.org"))
 library(ggbiplot)
 library(stringr)
 library(terra)
@@ -13,13 +13,13 @@ library(ggplot2)
 library(caret)
 library(tidyselect) #all_of
 library(parallel) #mclapply https://dept.stat.lsa.umich.edu/~jerrick/courses/stat701/notes/parallel.html
-#install.packages("vscDebugger", repos = "https://manuelhentschel.r-universe.dev")
-#library(vscDebugger)
 
 if (!require("BiocManager", quietly = TRUE)){
   install.packages("BiocManager")
   BiocManager::install("rhdf5")}  
 library(rhdf5)
+
+# source("initialize/inventory_helper.R")
 
 
 st_erase <- function(x, y) sf::st_difference(x, st_union(st_combine(y))) 
@@ -249,9 +249,7 @@ clip_overlap <- function(df, thresh) {
 
 extract_ind_validation_set <- function(df, percentTrain=0.8) {
   # randomly select <percentTrain> of individuals (select all pixels from individaul) 
-  # from outlined polygons for training, use the remaining samples for validation.
-  # keep track of which pixelNumber, easting, northing
-  # that these pixels correspond to. 
+  # from outlined polygons for training, use the remaining samples for validation
   
   # percentTrain: randomly select this amount of data for training, 
   # use the rest for validation
@@ -392,25 +390,6 @@ filter_out_wavelengths <- function(wavelengths, layer_names){
     return(wavelength_lut)
 }
 
-
-
-# prep_features_for_RF <- function(extracted_features_filename, featureNames) {
-#     # read the spectra values extracted from the data cube 
-#     df <- read.csv(extracted_features_filename) %>%
-#         #dplyr::select(-rowname) %>%
-#         mutate(dfID = paste(eastingIDs, northingIDs, 
-#                              pixelNumber, sep = "_") ) %>%
-#         # remove gbase::round pixels ais
-#         filter(chm>0)# %>% 
-#         # also reset the factor levels (in case there are dropped pft levels)
-#         #droplevels()
-    
-#     features_df <- df %>% 
-#         # filter the data to contain only the features of interest 
-#         dplyr::select(shapeID, all_of(featureNames))
-    
-#     return(features_df)
-# }
 
 
 
@@ -828,38 +807,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
                     # stack up all the RGB features
                     rgb_features <- c(rgb_meanR, rgb_meanG, rgb_meanB,
                                       rgb_sdR, rgb_sdG, rgb_sdB)
-
-                    # Create the pixel number grid as a layer to add to the data cube.
-                    # this one keeps track of individual pixel ID's to avoid duplicate
-                    # spectra being extracted. Basically, assign an integer ID to each
-                    # pixel in the 1000x1000 raster. This raster needs to have the same
-                    # dimensions, extent, and crs as the other layers so they can be stacked
-                    # together. create a vector of IDs from 1 to the number of pixels in one band
-                    pixelID <- 1:(dim(chm)[1]*dim(chm)[2]) #1:(nrow(s) * ncol(s))
-                    # add tile east, north coordinates 
-                    #pixelID <- paste(pixelID, east_north_string, sep="_")
-                    # reshape this 1D vector into a 2D matrix 
-                    dim(pixelID) <- c(dim(chm)[1],dim(chm)[2]) #c(nrow(s),ncol(s))
-                    # create a raster layer of pixel numbers 
-                    pixelNumbers <- terra::rast(pixelID, crs = terra::crs(chm)) 
-                    terra::ext(pixelNumbers) <- terra::ext(chm) 
-                    names(pixelNumbers) <- "pixelNumber"
                     
-                    # Create similar layers to keep track of the tile where the pixel is located
-                    eastingID <- rep(as.numeric(easting), times = (dim(chm)[1] * dim(chm)[2]))
-                    northingID <- rep(as.numeric(northing), times = (dim(chm)[1] * dim(chm)[2]))
-                    # reshape to be two-dimensional
-                    dim(eastingID) <- c(dim(chm)[1],dim(chm)[2])
-                    dim(northingID) <- c(dim(chm)[1],dim(chm)[2])
-                    # create rasters to contain the easting and northing values
-                    eastingIDs <- terra::rast(eastingID, crs = terra::crs(chm))
-                    northingIDs <- terra::rast(northingID, crs = terra::crs(chm))
-                    # assign extent and CRS to match the other layers in the stack
-                    terra::ext(eastingIDs) <- terra::ext(chm)
-                    terra::ext(northingIDs) <- terra::ext(chm)
-                    names(eastingIDs) <- "eastingIDs"
-                    names(northingIDs) <- "northingIDs"
-
                     ### Apply masks
                     # Create chm mask to mask out non-veg
 
@@ -908,8 +856,7 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
                     # layer to keep track of pixel number within the tile.
                     stacked_aop_data <- c(hs, chm, dtm, slope, aspect_cat, savi,
                                           pri, ndvi, evi, arvi, 
-                                          rgb_features, pixelNumbers, 
-                                          eastingIDs, northingIDs)
+                                          rgb_features)
                     terra::crs(stacked_aop_data) <- terra::crs(chm)
 
                     # save the stacked AOP data to file for easy clipping later
@@ -999,17 +946,7 @@ create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_p
   # ais use neon trait table from Marcos?
   veg_training <- veg_has_coords_size %>%
     left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
-    dplyr::mutate(pft =  ifelse(!is.na(pft),pft,ifelse(growthForm == "small shrub" | growthForm == "single shrub" ,"shrub",
-                                  ifelse(taxonID=="PIPO" | taxonID=="PILA" | taxonID=="PINUS", "pine", 
-                                          ifelse(taxonID=="CADE27", "cedar", 
-                                                ifelse(taxonID=="ABCO" | taxonID=="ABMA" , "fir", 
-                                                        ifelse(taxonID=="QUCH2" | taxonID=="QUKE"| taxonID=="QUERC"|
-                                                               taxonID=="QUWI2", "oak", 
-                                                              ifelse(taxonID=="ARVIM" | taxonID=="CECU" | taxonID=="CEMOG" | 
-                                                                          taxonID=="CEIN3" | taxonID=="RIRO" | taxonID=="FRCA6" | 
-                                                                          taxonID=="RHIL" | taxonID=="AECA" | taxonID=="SANI4" | 
-                                                                          taxonID=="CEANO", "shrub", "other")))))))) 
-  
+    dplyr::mutate(pft = match_species_to_pft(growthForm, taxonID))
   write.csv(veg_training, file = file.path(training_data_dir, "vst_training.csv"))
   
   coord_ref <- sf::st_crs(32611)
@@ -1082,7 +1019,7 @@ create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_p
   
   
   # Write shapefile with clipped tree crown polygons half the max crown diameter 
-  training_shp_path <- file.path(training_data_dir, "tree_crowns_training.shp")
+  training_shp_path <- file.path(training_data_dir, "ref_labelled_crowns.shp")
   sf::st_write(obj = polygons_clipped_half_diam_valid,
                dsn = training_shp_path,
                delete_dsn = TRUE)
@@ -1091,125 +1028,97 @@ create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_p
 }
 
 
-prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_int_path, 
-                                       biomass_path, pft_reference_path, px_thresh) {
-    #ais automate this function
+# prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_int_path, 
+#                                        biomass_path, pft_reference_path, px_thresh) {
+#     #ais automate this function
     
-    # output directory for training data
-    training_data_dir <- file.path(data_int_path, site, year, "training")
-    if (!dir.exists(training_data_dir)) {
-        dir.create(training_data_dir)
-    }
+#     # output directory for training data
+#     training_data_dir <- file.path(data_int_path, site, year, "training")
+#     if (!dir.exists(training_data_dir)) {
+#         dir.create(training_data_dir)
+#     }
     
-    #1) read in manual shapes (placed in this folder manually from my local machine)
-    manual_shps_path <- file.path(data_raw_inv_path,"manually_uploaded",site,year,"my_shapes.shp")
-    manual_shps <- sf::read_sf(manual_shps_path)
-    # aisI need to manually put my_shapes.shp into these directories
+#     #1) read in manual shapes (placed in this folder manually from my local machine)
+#     manual_shps_path <- file.path(data_raw_inv_path,site,year,"ref_labelled_crowns.shp")
+#     manual_shps <- sf::read_sf(manual_shps_path) 
     
-    if (site=="SJER" & year=="2021" | site=="TEAK" & year=="2021") {
-      merge_manual_inventory_sf <- manual_shps
-    } else {
-      #2) read in inventory csv
-      live_trees_path <- file.path(biomass_path,"pp_veg_structure_IND_IBA_IAGB_live.csv")
-      pft_reference <- read.csv(pft_reference_path)
+#     if (site=="SJER" & year=="2021" | site=="TEAK" & year=="2021") {
+#       merge_manual_inventory_sf <- manual_shps
+#     } else {
+#       #2) read in inventory csv
+#       live_trees_path <- file.path(biomass_path,"pp_veg_structure_IND_IBA_IAGB_live.csv")
+#       pft_reference <- read.csv(pft_reference_path)
       
-      # Load cleaned inventory data for site and year
-      # ais this is live trees only. should figure out how to incorporate dead trees
-      veg_ind <- read.csv(live_trees_path) %>%
-          dplyr::rename(easting = adjEasting, 
-                        northing = adjNorthing,
-                        # Rename columns so they're unique when truncated when saving shp 
-                        lat = adjDecimalLatitude,
-                        long = adjDecimalLongitude,
-                        elev = adjElevation,
-                        elevUncert = adjElevationUncertainty,
-                        indStemDens = individualStemNumberDensity,
-                        indBA = individualBasalArea,
-                        dendroH = dendrometerHeight,
-                        dendroGap = dendrometerGap,
-                        dendroCond = dendrometerCondition,
-                        bStemDiam = basalStemDiameter,
-                        bStemMeasHgt = basalStemDiameterMsrmntHeight,
-                        sciNameFull = scientificName,
-                        sp_gen = scientific,
-                        wood_dens1 = wood.dens,
-                        wood_dens2 = wood_dens) #ais what is the source of columns in this df? NEON or our own changes?
+#       # Load cleaned inventory data for site and year
+#       # ais this is live trees only. should figure out how to incorporate dead trees
+#       veg_ind <- read.csv(live_trees_path) %>%
+#           dplyr::rename(easting = adjEasting, 
+#                         northing = adjNorthing,
+#                         # Rename columns so they're unique when truncated when saving shp 
+#                         lat = adjDecimalLatitude,
+#                         long = adjDecimalLongitude,
+#                         elev = adjElevation,
+#                         elevUncert = adjElevationUncertainty,
+#                         indStemDens = individualStemNumberDensity,
+#                         indBA = individualBasalArea,
+#                         dendroH = dendrometerHeight,
+#                         dendroGap = dendrometerGap,
+#                         dendroCond = dendrometerCondition,
+#                         bStemDiam = basalStemDiameter,
+#                         bStemMeasHgt = basalStemDiameterMsrmntHeight,
+#                         sciNameFull = scientificName,
+#                         sp_gen = scientific,
+#                         wood_dens1 = wood.dens,
+#                         wood_dens2 = wood_dens) #ais what is the source of columns in this df? NEON or our own changes?
     
-      # Remove all rows with missing an easting or northing coordinate
-      veg_has_coords <- veg_ind[complete.cases(veg_ind[, c("northing", "easting")]),]
+#       # Remove all rows with missing an easting or northing coordinate
+#       veg_has_coords <- veg_ind[complete.cases(veg_ind[, c("northing", "easting")]),]
       
-      # Keep only the entries with crown diameter and tree height
-      # since these measurements are needed to create and compare polygons.
-      # ais future work: include ninetyCrownDiameter?
-      veg_has_coords_size <- veg_has_coords[complete.cases(veg_has_coords$height) & 
-                                                complete.cases(veg_has_coords$maxCrownDiameter),] %>%
-          dplyr::filter(maxCrownDiameter < 50) %>%
-          dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04659") %>% #no tree here
-          dplyr::filter(individualID != "NEON.PLA.D17.SOAP.05847") %>% #no tree here
-          dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04256")  #no tree here
-      #"NEON.PLA.D17.SOAP.04972" #about 1/3 is ground
+#       # Keep only the entries with crown diameter and tree height
+#       # since these measurements are needed to create and compare polygons.
+#       # ais future work: include ninetyCrownDiameter?
+#       veg_has_coords_size <- veg_has_coords[complete.cases(veg_has_coords$height) & 
+#                                                 complete.cases(veg_has_coords$maxCrownDiameter),] %>%
+#           dplyr::filter(maxCrownDiameter < 50) %>%
+#           dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04659") %>% #no tree here
+#           dplyr::filter(individualID != "NEON.PLA.D17.SOAP.05847") %>% #no tree here
+#           dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04256")  #no tree here
+#       #"NEON.PLA.D17.SOAP.04972" #about 1/3 is ground
     
-      # Assign a PFT to each individual
-      # ais need to make this an exhaustive match for all sites, not just SOAP
-      # ais use neon trait table from Marcos?
-      veg_training <- veg_has_coords_size %>%
-        left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
-        dplyr::mutate(pft = case_when(
-            grepl("CADE27",taxonID,ignore.case=T) ~ "cedar",
-            grepl("ABCO",taxonID,ignore.case=T) |
-                grepl("ABMA",taxonID,ignore.case=T) ~ "fir",
-            grepl("PIPO",taxonID,ignore.case=T) |
-                grepl("PILA",taxonID,ignore.case=T) |
-                grepl("PISA2",taxonID,ignore.case=T) |
-                grepl("PINUS",taxonID,ignore.case=T) ~ "pine",
-            grepl("QUCH2",taxonID,ignore.case=T)  |
-                grepl("QUDO",taxonID,ignore.case=T) |
-                grepl("QUKE",taxonID,ignore.case=T) |
-                grepl("QUERC",taxonID,ignore.case=T) |
-                grepl("QUWI2",taxonID,ignore.case=T) ~ "oak",
-            grepl("SANI4",taxonID,ignore.case=T) |
-                grepl("AECA",taxonID,ignore.case=T) |
-                grepl("FRCA6",taxonID,ignore.case=T) |
-                grepl("FRCAC7",taxonID,ignore.case=T) |
-                grepl("RIRO",taxonID,ignore.case=T) |
-                grepl("RIRO",taxonID,ignore.case=T) |
-                grepl("LUAL4",taxonID,ignore.case=T) |
-                grepl("CEMOG",taxonID,ignore.case=T) |
-                grepl("CELE2",taxonID,ignore.case=T) |
-                grepl("CECU",taxonID,ignore.case=T) |
-                grepl("CEIN3",taxonID,ignore.case=T) |
-                grepl("ARVIM",taxonID,ignore.case=T) |
-                grepl("RHIL",taxonID,ignore.case=T) |
-                grepl("CEANO",taxonID,ignore.case=T) ~ "shrub",
-            .default="other" ))
+#       # Assign a PFT to each individual
+#       # ais need to make this an exhaustive match for all sites, not just SOAP
+#       # ais use neon trait table from Marcos?
+#       veg_training <- veg_has_coords_size %>%
+#         left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
+#         dplyr::mutate(pft = match_species_to_pft(growthForm, taxonID))
 
-      #3) link inventory csv and manual shapes
-      merge_manual_inventory_sf <- manual_shps %>% 
-                    st_transform(32611) %>%
-                    #  ais ^ will need to change this from being hardcoded to defining globally
-                    left_join(veg_training %>% rename(indvdID=individualID)) %>%
-                    filter(!is.na(sciNameFull)) %>%
-                    dplyr::select(c(indvdID,pft))
-    } 
+#       #3) link inventory csv and manual shapes
+#       merge_manual_inventory_sf <- manual_shps %>% 
+#                     st_transform(32611) %>%
+#                     #  ais ^ will need to change this from being hardcoded to defining globally
+#                     left_join(veg_training %>% rename(indvdID=individualID)) %>%
+#                     filter(!is.na(sciNameFull)) %>%
+#                     dplyr::select(c(indvdID,pft))
+#     } 
     
-    # Generate a list of AOP tiles that overlap with the inventory data
-    tiles <- list_tiles_w_veg(veg_df = merge_manual_inventory_sf,
-                              out_dir = training_data_dir)
+#     # Generate a list of AOP tiles that overlap with the inventory data
+#     tiles <- list_tiles_w_veg(veg_df = merge_manual_inventory_sf,
+#                               out_dir = training_data_dir)
     
-    #4) exprt as training_crowns.shp
-    training_shp_path <- file.path(training_data_dir, "tree_crowns_training.shp")
-    sf::st_write(obj = merge_manual_inventory_sf,
-                 dsn = training_shp_path,
-                 delete_dsn = TRUE)
+#     #4) exprt as training_crowns.shp
+#     training_shp_path <- file.path(training_data_dir, "ref_labelled_crowns.shp")
+#     sf::st_write(obj = merge_manual_inventory_sf,
+#                  dsn = training_shp_path,
+#                  delete_dsn = TRUE)
     
-    return(training_shp_path)
+#     return(training_shp_path)
+# }
 
-}
 
 
 extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final_path,
                                         stacked_aop_path, shp_path, use_case, 
-                                         aggregate_from_1m_to_2m_res, ic_type=NA, ic_type_path=NA ) {
+                                        aggregate_from_1m_to_2m_res, ic_type) { 
         # modified from Scholl et al from https://github.com/earthlab/neon-veg
     
     # Extract features (remote sensing data) for each sample (pixel) within the
@@ -1220,6 +1129,8 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
     # ais when use_case="predict", make the temp csv files save to data_final_path instead of training_path 
     
     # use_case is "train" or "predict"
+
+    ic_type_path = file.path(data_final_path,site,year,ic_type)
     
     assertthat::assert_that(length(list.files(stacked_aop_path))>0,
                             msg=paste0("Cannot extract data because stacked_aop_path is empty for ",site," - ",year) )
@@ -1238,7 +1149,7 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
                                                         "-extracted_features_inv.csv"))        
         
     } else if (use_case=="predict") {
-        extracted_features_path <- file.path(ic_type_path) #ais need to change the folder where this is saved
+        extracted_features_path <- file.path(ic_type_path) 
         extracted_features_filename <- file.path(extracted_features_path,
                                                  paste0(shapefile_description, 
                                                         "-extracted_features.csv"))
@@ -1268,14 +1179,7 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
         
         # add new columns for the plot center coordinates
         shp_sf$center_X <- shp_coords$X
-        shp_sf$center_Y <- shp_coords$Y
-        
-        # # Create group name for plotting purposes
-        # neighbors <- st_is_within_distance(shp_sf, dist = 30) # identify neighboring polygons
-        # # assign polygons near each other to the same groupID
-        # shp_sf$groupID <- as.data.frame(neighbors) %>% 
-        #     distinct(col.id, .keep_all=T) %>% 
-        #     pull(row.id)
+        shp_sf$center_Y <- shp_coords$Y      
         
         # create column to track shape ID 
         # if training, this is the tree crown boundary
@@ -1290,130 +1194,101 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
                 shp_sf <- shp_sf %>%
                     dplyr::rename(shapeID=plotID)
             } else {
-              print(past0("tyring to predict without training data. Need to first switch use_case to train from predict"))
+              print(paste0("trying to predict without training data. Need to first switch use_case to train from predict"))
             }
         }
         
         # Filter to tiles containing veg to speed up the next for-loop
-        if (use_case=="train" | ic_type=="rs_inv_plots" ) {
+        if (use_case=='train' ) { #ais | ic_type=='rs_inv_plots'  kept getting Nonetype error
             tiles_w_veg <- read.table(file.path(training_data_dir, "tiles_w_veg.txt")) %>%
                 pull(V1)
             
             stacked_aop_list <- stacked_aop_list[stringr::str_detect(stacked_aop_list, tiles_w_veg %>% paste(collapse = "|"))]
-        }
+        } 
         
         # loop through AOP tiles 
-        for (stacked_aop_filename in stacked_aop_list) { #12 index
+        for (stacked_aop_filename in stacked_aop_list) { 
+
+          # read current tile of stacked AOP data 
+          stacked_aop_data <- terra::rast(stacked_aop_filename) #old raster::stack
+          
+          # construct the easting northing string for naming outputs
+          east_north_string <- paste0(stacked_aop_data$eastingIDs[1], "_",
+                                      stacked_aop_data$northingIDs[1])
+
+          east_north_csv_path = file.path(extracted_features_path,
+            paste0("extracted_features_",east_north_string, "_",
+                  shapefile_description, ".csv"))
+          
+          # If csv file already exists, skip
+          if (file.exists(east_north_csv_path)) {
+              next
+          }
+                      
+          # figure out which plots are within the current tile by comparing each
+          # X,Y coordinate to the extent of the current tile 
+          shapes_in <- shp_sf %>% 
+              dplyr::filter(center_X >= terra::ext(stacked_aop_data)[1] & #old raster::extent
+                                center_X < terra::ext(stacked_aop_data)[2] & 
+                                center_Y >= terra::ext(stacked_aop_data)[3] & 
+                                center_Y  < terra::ext(stacked_aop_data)[4]) 
             
-            # read current tile of stacked AOP data 
-            stacked_aop_data <- terra::rast(stacked_aop_filename) #old raster::stack
+          # if no polygons are within the current tile, skip to the next one
+          if (nrow(shapes_in)==0){
+              message("no shapes located within current tile... skipping to next shapefile")
+              next
+          } else {
+              
+              if (use_case == "train") {
+                  message(paste0("Extracting ",nrow(shapes_in), 
+                                  " trees in current tile, ",east_north_string))
+              } else {
+                  message(paste0("Extracting ",nrow(shapes_in), 
+                                  " plots in current tile, ",east_north_string)) 
+              } 
+          }
             
-            # construct the easting northing string for naming outputs
-            east_north_string <- paste0(stacked_aop_data$eastingIDs[1], "_",
-                                        stacked_aop_data$northingIDs[1])
-            
-            # If csv file already exists, skip
-            if (file.exists(file.path(training_data_dir,paste0("extracted_features_",
-                                                               east_north_string, "_",shapefile_description,".csv")))) {
-                next
-            }
-            
-            # # Save spatial extent of tile
-            # ext <- st_as_sf(as(extent(stacked_aop_data),"SpatialPolygons")) 
-            # st_crs(ext) <- st_crs(stacked_aop_data) 
-            # write_sf(ext,file.path(training_data_dir,"stacked_aop_extent",
-            #                       paste0(east_north_string,".shp")))
-            
-            # figure out which plots are within the current tile by comparing each
-            # X,Y coordinate to the extent of the current tile 
-            shapes_in <- shp_sf %>% 
-                dplyr::filter(center_X >= terra::ext(stacked_aop_data)[1] & #old raster::extent
-                                  center_X < terra::ext(stacked_aop_data)[2] & 
-                                  center_Y >= terra::ext(stacked_aop_data)[3] & 
-                                  center_Y  < terra::ext(stacked_aop_data)[4]) 
-            
-            # if no polygons are within the current tile, skip to the next one
-            if (nrow(shapes_in)==0){
-                message("no shapes located within current tile... skipping to next shapefile")
-                next
-            } else {
-                
-                if (use_case == "train") {
-                    message(paste0("Extracting ",nrow(shapes_in), 
-                                   " trees in current tile, ",east_north_string))
-                } else {
-                    message(paste0("Extracting ",nrow(shapes_in), 
-                                   " plots in current tile, ",east_north_string)) 
-                } 
-            }
-            
-            # Aggregate to 2m resolution from 1m
-            if (aggregate_from_1m_to_2m_res == T) {
-                stacked_aop_data <- raster::aggregate(stacked_aop_data,2) 
-                # takes 5min for a 1kmx1km tile
-            }
-            
-            # clip the hyperspectral raster stack with the polygons within current tile.
-            # the returned objects are data frames, each row corresponds to a pixel in the
-            # hyperspectral imagery. The ID number refers to which tree that the 
-            # the pixel belongs to. A large polygon will lead to many extracted pixels
-            # (many rows in the output data frame), whereas tree stem points will
-            # lead to a single extracted pixel per tree. 
-            
-            shapes_in_spv <- terra::vect(shapes_in)
-            extracted_spectra <- terra::extract(stacked_aop_data, shapes_in_spv, ID=TRUE) %>%
-                left_join(data.frame(shapeID = shapes_in_spv$shapeID, 
-                                     ID = 1:nrow(shapes_in_spv))) %>%
-                dplyr::select(-ID)
-            
-            # # Plot polygons of training data and RGB image of extracted pixels
-            # for (group in unique(shapes_in_spv$groupID)) {
-                
-            #     # determine window size 
-            #     shapes_temp = shp_sf %>% filter(groupID==group)
-            #     buff_temp = sf::st_buffer(shapes_temp, dist = 10)
-            #     bbox_temp = sf::st_bbox(buff_temp)
-            #     cropped_rast <- terra::crop(stacked_aop_data, terra::ext(bbox_temp))
-                
-            #     # save as png
-            #     png(file.path(training_data_dir,paste0("group_",group,".png"))) 
-            #     # plot RGB - (55, 33, 11)
-            #     terra::plotRGB(cropped_rast, r=435, g=436, b=437, stretch="lin")
-            #     # plot training outline on top
-            #     terra::plot(terra::vect(shapes_temp),col="blue", alpha=0.4, add=T)
-            #     terra::text(terra::vect(shapes_temp),"pft",col="red")
-            #     dev.off()
-                
-            # }
-            
-            
-            # VS-NOTE TO DO: ais
-            # adjust this extract step to only get pixels WITHIN each tree polygon,
-            # also try calculating the percentage that each pixel is within a polygon
-            # and keep only pixels with > 50% overlap 
-            
-            # merge the extracted spectra and other data values with the tree info 
-            shapes_metadata <- tibble(shapes_in)
-            
-            # combine the additional data with each spectrum for writing to file.
-            # remove the geometry column to avoid issues when writing to csv later 
-            spectra_write <- merge(shapes_metadata,
-                                   extracted_spectra,
-                                   by="shapeID") %>% 
-                dplyr::select(shapeID, everything()) %>% 
-                dplyr::select(-geometry)
-            #ais find where subplotID is assigned
-            
-            
-            # write extracted spectra and other remote sensing data values to file 
-            write.csv(spectra_write, 
-                      file = file.path(extracted_features_path,
-                                       paste0("extracted_features_",
-                                              east_north_string, "_",
-                                              shapefile_description,
-                                              ".csv")),
-                      row.names = FALSE) 
-        }  
+          # Aggregate to 2m resolution from 1m
+          if (aggregate_from_1m_to_2m_res == T) {
+              stacked_aop_data <- raster::aggregate(stacked_aop_data,2) 
+              # takes 5min for a 1kmx1km tile
+          }
+          
+          # clip the hyperspectral raster stack with the polygons within current tile.
+          # the returned objects are data frames, each row corresponds to a pixel in the
+          # hyperspectral imagery. The ID number refers to which tree that the 
+          # the pixel belongs to. A large polygon will lead to many extracted pixels
+          # (many rows in the output data frame), whereas tree stem points will
+          # lead to a single extracted pixel per tree. 
+          
+          shapes_in_spv <- terra::vect(shapes_in)
+          extracted_spectra <- terra::extract(stacked_aop_data, shapes_in_spv, ID=TRUE) %>%
+              left_join(data.frame(shapeID = shapes_in_spv$shapeID, 
+                                    ID = 1:nrow(shapes_in_spv))) %>%
+              dplyr::select(-ID)
+                    
+          # VS-NOTE TO DO: ais
+          # adjust this extract step to only get pixels WITHIN each tree polygon,
+          # also try calculating the percentage that each pixel is within a polygon
+          # and keep only pixels with > 50% overlap 
+          
+          # merge the extracted spectra and other data values with the tree info 
+          shapes_metadata <- tibble(shapes_in)
+          
+          # combine the additional data with each spectrum for writing to file.
+          # remove the geometry column to avoid issues when writing to csv later 
+          spectra_write <- merge(shapes_metadata,
+                                  extracted_spectra,
+                                  by="shapeID") %>% 
+              dplyr::select(shapeID, everything()) %>% 
+              dplyr::select(-geometry)
+          #ais find where subplotID is assigned
+          
+          # write extracted spectra and other remote sensing data values to file 
+          write.csv(spectra_write, 
+                    file = east_north_csv_path,
+                    row.names = FALSE) 
+        } 
         
         # combine all extracted features into a single .csv
         paths_ls <- list.files(extracted_features_path, full.names = TRUE)
@@ -1429,7 +1304,7 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
             if(c==1){
                 spectra_all <- csv
             } else {
-                spectra_all <- rbind(spectra_all, csv) #AIS check if extracted features CSV has already been made
+                spectra_all <- rbind(spectra_all, csv) 
             }
         }
         
@@ -1448,323 +1323,6 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
 
 
 
-# train_pft_classifier <- function(sites, data_int_path, pcaInsteadOfWavelengths, 
-#                               ntree, randomMinSamples, independentValidationSet) {
-
-#                                 #ais why is this stepped through several times and not just once?
-#   # Train random forest model and assess PFT classification accuracy.
-#   #   Model outputs will be written to a folder within the training directory 
-#   #   starting with "rf_" followed by a description of each shapefile 
-#   #   containing points or polygons per tree. 
-
-#   #   ntree 
-#   #       RF tuning parameter, number of trees to grow. default value 500
-
-#   #   randomMinSamples 
-#   #       To reduce bias, this boolean variable indicates whether the same number 
-#   #       of samples are randomly selected per PFT class. Otherwise,
-#   #       all samples per class are used for training the classifier. 
-
-#   #   independentValidationSet=T
-#   #       if TRUE, keep separate set for validation
-#   #       ais this doesnt work if for F - troubleshoot this later
-
-#     features_df <- data.frame()
-#     for (site in sites) {
-#         site_year_paths <- list.dirs(file.path(data_int_path,site), recursive=F)
-#         for (site_year_path in site_year_paths) {
-            
-#             # Load data
-#             wavelengths <- read.csv(file.path(site_year_path,"stacked_aop/wavelengths.txt")) %>%
-#                 pull(wavelengths)
-#             # Stacked AOP layer names
-#             stacked_aop_layer_names <- read.csv(file.path(site_year_path,"stacked_aop/stacked_aop_layer_names.txt")) %>%
-#                 pull(stacked_aop_layer_names)
-#             # Labelled, half-diam crown polygons to be used for training/validation
-#             shapefile_description <- tools::file_path_sans_ext(basename(file.path(site_year_path,"training/tree_crowns_training.shp")))
-#             # Csv file containing extracted features
-#             extracted_features_filename <- file.path(site_year_path,"training/tree_crowns_training-extracted_features_inv.csv")
-#             if (!file.exists(extracted_features_filename)){
-#               next
-#             }
-
-#             # Directory to save the classification outputs 
-#             rf_output_dir <- file.path(data_int_path, "rf_dir")
-#             if (!dir.exists(file.path(rf_output_dir))) {
-#                 dir.create(file.path(rf_output_dir))
-#             }
-            
-#             # Filter out unwanted wavelengths
-#             wavelength_lut <- filter_out_wavelengths(wavelengths=wavelengths, 
-#                                                      layer_names=stacked_aop_layer_names)
-            
-#             # features to use in the RF models
-#             featureNames <- c(wavelength_lut$xwavelength,
-#                               stacked_aop_layer_names[(length(wavelengths)+1):length(stacked_aop_layer_names)],
-#                               "pft", "dfID")
-            
-#             # Prep extracted features csv for RF model
-#             features_temp <- prep_features_for_RF(extracted_features_filename, featureNames) 
-#             colnames(features_temp) <- c("shapeID",paste0("X",1:nrow(wavelength_lut)),
-#                                          featureNames[-(1:nrow(wavelength_lut))])
-#             #^ just make sure that column names are the same so we can rbind them across site-year
-#             # ais may want to add columns for site and year 
-            
-#             features_df <- rbind(features_df, features_temp)
-#         }
-#     }
-    
-#     # number of PCAs to keep
-#     nPCs <- 5  # ais automate this using the elbow method
-    
-#     # ais see Scholl et al script 08 where they compare sampling bias of using half-diam
-#     # crowns instead of max diam crowns (search neonvegIDsForBothShapefiles variable)
-    
-#     # remove the individual spectral reflectance bands from the training data
-#     features_noWavelengths <- features_df %>% dplyr::select(-starts_with("X"))
-    
-#     # PCA: calculate Principal Components 
-#     hs <- data.matrix(features_df %>% dplyr::select(starts_with("X")))
-#     hs_pca <- stats::prcomp(hs, center = TRUE, scale. = TRUE)
-#     summ <- summary(hs_pca)
-#     summ$importance[2,]
-#     # summary(hs_pca) ais print pc summary info somewhere?
-#     # add first n PCs to features data frame
-#     features <- cbind(features_noWavelengths, hs_pca$x[,1:nPCs]) 
-    
-#     # visualize where each sample falls on a plot with PC2 vs PC1 
-#     ggbiplot::ggbiplot(hs_pca,
-#                         choices = 1:2, # which PCs to plot
-#                         obs.scale = 1, var.scale = 1, # scale observations & variables
-#                         var.axes=FALSE, # remove arrows
-#                         groups = features_df$pft, # color the points by PFT
-#                         ellipse = TRUE, # draw ellipse abase::round each group
-#                         circle = TRUE ) + # draw circle abase::round center of data set
-#         ggplot2::ggtitle("PCA biplot, PC1 and PC2") +
-#         ggplot2::scale_color_brewer(palette="Spectral") +
-#         ggplot2::theme_bw()
-#     ggplot2::ggsave(file.path(rf_output_dir,"pcaPlot1vs2.pdf"))
-    
-#     ggbiplot::ggbiplot(hs_pca,
-#                         choices = 2:3, # which PCs to plot
-#                         obs.scale = 1, var.scale = 1, # scale observations & variables
-#                         var.axes=FALSE, # remove arrows
-#                         groups = features_df$pft, # color the points by PFT
-#                         ellipse = TRUE, # draw ellipse abase::round each group
-#                         circle = TRUE ) + # draw circle abase::round center of data set
-#         ggplot2::ggtitle("PCA biplot, PC3 and PC3") +
-#         ggplot2::scale_color_brewer(palette="Spectral") +
-#         ggplot2::theme_bw()
-#     ggplot2::ggsave(file.path(rf_output_dir,"pcaPlot2vs3.pdf"))
-    
-#     # return(features)
-#     # features <- apply_PCA(df=features_df, wavelengths=wavelength_lut, output_dir=rf_output_dir)
-    
-#     # Split labelled data into training and validation sets
-#     if(independentValidationSet) {
-        
-#         training_val_set <- extract_ind_validation_set(features)
-#         features_train <- training_val_set[[1]]
-#         features_val <- training_val_set[[2]]
-        
-#         # Visualize the training and validation data
-#         train_val_breakdown <- features_val %>% dplyr::count(pft) %>% dplyr::rename(valSet=n) %>%
-#             left_join(features_train %>% dplyr::count(pft) %>% dplyr::rename(trainSet=n)) %>%
-#             left_join(features %>% dplyr::count(pft) %>% dplyr::rename(total=n)) 
-        
-#         # Histograms
-#         train_val_byCount <- rbind(features_train,features_val) %>%
-#             mutate(train_val = ifelse(dfID %in% features_train$dfID,"train","val")) %>%
-#             ggplot2::ggplot(ggplot2::aes(x=pft, fill=train_val)) +
-#             ggplot2::ggtitle("Plot by count") +
-#             ggplot2::geom_bar() + # by count
-#             ggplot2::theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-#         train_val_byPerc <- rbind(features_train,features_val) %>%
-#             mutate(train_val = ifelse(dfID %in% features_train$dfID,"train","val")) %>%
-#             ggplot2::ggplot(ggplot2::aes(x=pft, fill=train_val)) +
-#             ggplot2::ggtitle("Plot by %") +
-#             ggplot2::geom_bar(position="fill") + # by percent
-#             ggplot2::theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-#         together <- cowplot::plot_grid(train_val_byCount,train_val_byPerc)
-#         ggplot2::ggsave(together, 
-#                file=file.path(rf_output_dir,"train_val_split.pdf"),
-#                width=9, height=6, units="in")
-        
-#         # remove the pixelNumber, easting, and northing columns since they
-#         # are not input features to the train the classifier 
-#         features_train <- features_train %>% 
-#             dplyr::select(-c(pixelNumber, eastingIDs, northingIDs, dfID, shapeID,
-#                              train))
-        
-#     } else { #if we are not using a validation set and training the model on the whole dataset
-#         features_train <- features
-#     }
-    
-#     # if(randomMinSamples){
-#     #   # reduce number of samples per PFT to avoid classifier bias
-#     #   
-#     #   # count the minimum number of samples for a single class
-#     #   minSamples <- min(featureSummary$total)  
-#     #   print(paste0("Randomly selecting ",
-#     #                as.character(minSamples),
-#     #                " samples per PFT class to avoid classifier bias"))
-#     #   
-#     #   # isolate the samples per PFT
-#     #   taxon1 <- features[features$pft==pft_list[1],]
-#     #   taxon2 <- features[features$pft==pft_list[2],]
-#     #   taxon3 <- features[features$pft==pft_list[3],]
-#     #   #taxon4 <- features[features$pft==pft_list[4],]
-#     #   
-#     #   # keep random minSamples of each PFT; merge
-#     #   taxon1 <- taxon1[sample(nrow(taxon1), minSamples), ]
-#     #   taxon2 <- taxon2[sample(nrow(taxon2), minSamples), ]
-#     #   taxon3 <- taxon3[sample(nrow(taxon3), minSamples), ]
-#     #   #taxon4 <- taxon4[sample(nrow(taxon4), minSamples), ]
-#     #   
-#     #   features <- rbind(taxon1, taxon2, taxon3)#, taxon4)
-#     #   
-#     # } else{
-#     #   #print("Using all samples per class")
-#     # }
-    
-#     # TRAIN RF CLASSIFIER using training set  ---------------------------------
-#     set.seed(104)
-#     # drop any rows with NA ais investigate this
-#     features_train_noNA <- na.omit(features_train) 
-#     rf_model_path = file.path(rf_output_dir, paste0("rf_model_",shapefile_description,".rds")) 
-    
-#     # if (!file.exists(rf_model_path)) {
-#       rf_model <- randomForest::randomForest(as.factor(features_train_noNA$pft) ~ .,
-#                                             data=features_train_noNA, 
-#                                             importance=TRUE, 
-#                                             ntree=ntree) 
-
-#       # save RF model to file 
-#       saveRDS(rf_model, file = rf_model_path)
-#     # } else {
-#     #   rf_model <- readRDS(rf_model_path)
-#     # }
-    
-#     # y = predicted data; (horizontal axis)
-#     # x = observed data (true class labels) (vertical axis)
-    
-#     accuracies <- rfUtilities::accuracy(x = rf_model$y,
-#                                         y = rf_model$predicted)
-    
-#     # record each accuracy metric in the table for a final comparison.
-#     # base::round each value to the nearest decimal place 
-#     OA_OOB <- base::round(accuracies$PCC, 1) # Overall Accuracy
-#     K <- base::round(accuracies$kappa, 3) #Cohen's Kappa 
-    
-#     # INDEPENDENT VALIDATION  -------------------------------------------------
-    
-#     # predict PFT ID for validation set 
-#     if(independentValidationSet){
-#         features_val_noNA <- na.omit(features_val) 
-#         # ^ re-writing here after assigning in script 1. Doing to get PC columns for validaiton
-#         predValidation <- predict(rf_model, features_val_noNA, type = "class")
-#         confusionTable <- table(predValidation, features_val_noNA$pft)
-#         val_OA <- sum(predValidation == features_val_noNA$pft) / 
-#             length(features_val_noNA$pft)
-#     }
-    
-#     # Other performance metrics
-#     # adapted from https://github.com/annaspiers/NEON-NIWO-misclass/blob/master/validation.R
-#     #validation data only
-#     # metrics_per_class <- get_model_performance_metrics(confusionTable) 
-#     # val_perf_metr <- rbind(metrics_per_class,
-#     #       metrics_per_class %>%
-#     #         summarize(idx = "macro_values",
-#     #                   precision=mean(precision, na.rm=T),
-#     #                   recall=mean(recall, na.rm=T), 
-#     #                   f1=mean(f1, na.rm=T))) %>%
-#     #   mutate(across(c(precision, recall, f1), \(x) base::round(x, 2) ))
-    
-#     model_stats <- caret::confusionMatrix(data = rf_model$predicted, 
-#                                           reference = rf_model$y, 
-#                                           mode = "prec_recall")
-#     print(colnames(data.frame(t(model_stats$byClass)) %>% 
-#         tibble::rownames_to_column()))
-#     model_stats_byclass <- data.frame(t(model_stats$byClass)) %>% 
-#         tibble::rownames_to_column() %>% 
-#         as.data.frame() %>%
-#         dplyr::rename(metric=rowname) %>%
-#         dplyr::mutate(across(where(is.numeric), \(x) base::round(x, 2) ))
-#     names(model_stats_byclass) <- gsub("^Class\\.\\.", "", names(model_stats_byclass))
-
-    
-#     # write all relevant information to the textfile: -------------------------
-    
-#     # open a text file to record the output results
-#     rf_output_file <- file(description = file.path(rf_output_dir,"rf_model_summaries.txt"), open="w") #ais change back to this?
-#     #rf_output_file <- file(description = file.path(data_int_path,"rf_model_summaries.txt"), open="w") 
-#     # shapefile name
-#     write(shapefile_description, rf_output_file, append=TRUE)
-    
-#     # RF model summary, OOB error rate 
-#     write("\nRaw RF model output with confusion matrix for training set: ", 
-#           rf_output_file, append=TRUE) 
-#     capture.output(rf_model, file = rf_output_file, append=TRUE)
-#     #alt to confusion matrix for training set is accuracies$confusion
-    
-#     write("\n\nOverall Accuracy (OOB):", rf_output_file, append=TRUE) 
-#     write(base::round(accuracies$PCC/100,3), rf_output_file, append=TRUE)
-    
-#     write("\nCohen's Kappa:", rf_output_file, append=TRUE) 
-#     capture.output(base::round(accuracies$kappa, 3), file = rf_output_file, append=TRUE)
-    
-#     write("\nUser's Accuracy:", rf_output_file, append=TRUE) 
-#     capture.output(accuracies$users.accuracy, file = rf_output_file, append=TRUE)
-    
-#     write("\nProducer's Accuracy:", rf_output_file, append=TRUE) 
-#     capture.output(accuracies$producers.accuracy, file = rf_output_file, append=TRUE)
-    
-#     val_OA <- sum(predValidation == features_val_noNA$pft) / 
-#         length(features_val_noNA$pft)
-#     write("\n\nOverall Accuracy (IndVal):", rf_output_file, append=TRUE)
-#     write(base::round(val_OA,3), rf_output_file, append=TRUE)
-    
-#     # write the accuracy summary data frame to file 
-#     write("\nConfusion matrix for validation set:", rf_output_file, append=TRUE) 
-#     capture.output(confusionTable, file = rf_output_file, append=TRUE)
-    
-#     # recall, precision, F1
-    
-#     write("\nOther performance metrics for validation data: ", rf_output_file, append=TRUE) #newline
-#     write(colnames(model_stats_byclass), rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[1,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[2,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[3,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[4,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[5,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[6,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[7,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[8,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[9,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[10,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-#     write(as.matrix(model_stats_byclass)[11,], rf_output_file, ncolumns=6, append=TRUE, sep="\t")
-    
-#     # training/val data breakdown
-#     featureSummary <- data.frame(train_val_breakdown)
-#     colnames(featureSummary) <- c("pft","validation","training", "total")
-#     write("\n\nLabelled data split:", rf_output_file, append=TRUE) #newline
-#     capture.output(featureSummary, file = rf_output_file, append=TRUE)
-    
-#     # features used to describe each sample (pixel)
-#     write("\ndescriptive features used to train this model: ", rf_output_file, append=TRUE) #newline
-#     write(colnames(features_train), rf_output_file, ncolumns=5, append=TRUE)
-    
-#     # close the text file
-#     close(rf_output_file)
-    
-#     # Save variable importance plots
-#     plot_variable_importance(rf_model, rf_output_dir) #ais change back to this?
-    
-#     return(rf_model_path)
-# }
-
-
-
 generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trait_table_path) {
   # Assign a PFT to each species
 
@@ -1775,8 +1333,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       dplyr::mutate(growthForm_neon = ifelse(grepl("tree", growthForm), "tree",
                                     ifelse(grepl("sapling", growthForm), "tree",
                                             ifelse(grepl("shrub", growthForm), "shrub", growthForm)))) %>%
-      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) %>% #site=siteID)
-        filter(!is.na(scientificName))
+      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) 
 
     all_veg_structure <- rbind(all_veg_structure, site_veg_structure)
     # ais how to group in Carissa's data here?
@@ -1784,68 +1341,6 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
   
   trait_table <- readr::read_csv(trait_table_path) %>%
       dplyr::select(scientific, leafPhen=leaf.phen, growthForm_traittable=growth.form)
-
-  # carissa <- readr::read_csv("/Users/AISpiers/dev/RS-PRISMATIC/preprocessing/data/raw/inventory/carissa/neon_2023_field_work_final_ais_grouped_species.csv") %>%
-  #     mutate(scientificName=ifelse(Species=="OTHER",`If other species: describe here`,Species)) %>%
-  #     filter(!is.na(scientificName)) %>%
-  #     #rename(taxonID=) %>%
-  #     rename(siteID = `NEON Site`) %>%
-  #     #rename(growthForm=) %>%
-  #     dplyr::select(scientificName,  siteID) %>% #taxonID,growthForm
-  #     distinct() %>%
-  #     # Use NEON taxonID table taht I downloaded to raw/inventory
-  #     # https://data.neonscience.org/taxonomic-lists?taxonTypeCode=PLANT
-  #     mutate(taxonID = case_when(
-  #         scientificName == "Broad-leaved lupine (Lupinus latifolia var. columbianus)" | 
-  #             scientificName == "Lupinus sp." ~ "LUPINSPP",
-  #         scientificName == "Abies concolor (Gord. & Glend.) Lindl. ex Hildebr. var. lowiana (Gord. & Glend.) Lemmon (white fir)" |
-  #             scientificName == "Abies magnifica A. Murray bis (CA red fir)" ~ "ABIES",
-  #         scientificName == "White leaf manzanita (arctostaphulos viscida)" |
-  #             scientificName == "Arctostaphylos patula Greene (greenleaf manzanita)" |
-  #             scientificName == "White leaf manzanita (arctostaphulos viscida)"  |
-  #             scientificName == "Pinemat manzanita (Arctostaphylos nevadensis)"  |
-  #             scientificName == "Arctostaphylos nevadensis\n\n\n" |
-  #             scientificName == "Arctostaphylos patula Greene (greenleaf manzanita)" ~ "ARCTO3SPP",
-  #         scientificName == "Chrysolepis sempervirens (Kellogg) Hjelmqvist (Sierran Chinkapin)" |
-  #             scientificName == "Bush chinquapin (Chrysolepis (Castonopsis) sempervirens)" ~ "CHSE11",
-  #         scientificName == "Arroyo or Lemmon\xd5s willow" |
-  #             scientificName == "Lemmon\xd5s willow (Salix Lemmonii - see notes)" |
-  #             scientificName == "Pacific Willow or Arroyo Willow" ~ "SALIX",
-  #         scientificName == "Vaccinium sp." ~ "VACCI",
-  #         scientificName == "Sambucus nigra L. (elderberry)" ~ "SANI4",
-  #         scientificName == "Artemesia californica" ~ "ARCA11",
-  #         scientificName == "coffee berry" ~ "PSYCH",
-  #         scientificName == "Quercus douglasii Hook. & Arn. (blue oak)" ~ "QUDO",
-  #         scientificName == "Pinus sabiniana Douglas ex Douglas (CA foothill pine)" ~ "PISA2",
-  #         scientificName == "Ceanothus cuneatus (Hook.) Nutt. (buckbrush)" |
-  #             scientificName == "Ceanothus? thyrsiflorus - blue blossom" ~ "CECU",
-  #         scientificName == "Quercus wislizeni A. DC. (interior live oak)" ~ "QUWI2",
-  #         scientificName == "Ceanothus leucodermis Greene (chaparral whitethorn)" ~ "CELE2",
-  #         scientificName == "Aesculus californica (Spach) Nutt. (CA buckeye)" ~ "AECA",
-  #         scientificName == "Rhamnus ilicifolia Kellogg (hollyleaf redberry)" ~ "RHIL",
-  #         scientificName == "90% thimbleberry, 10% some kind of pea" ~ "RUBUS",
-  #         scientificName == "Scouler\xd5s willow \nSalix scouleriana" ~ "SASC",
-  #         scientificName == "Black oak \n\nQuecus kolleggii" |
-  #             scientificName == "Quercus kelloggii Newberry (CA black oak)" ~ "QUKE",
-  #         scientificName == "Incense cedar" |
-  #             scientificName == "Calocedrus decurrens (Torr.) Florin (CA incense cedar)" ~ "CADE27",
-  #         scientificName == "Quaking aspen (populous tremuloides)" ~ "POTR5",
-  #         scientificName == "Broad-leaved lotus (Lotus crassifolius)" ~ "LOCR",
-  #         scientificName == "Western juniper (Juniperous occidentalis)" ~ "JUOC",
-  #         scientificName == "Black Cottonwood (populus balsamifera)" ~ "POBA2",
-  #         scientificName == "Sequoiadendron giganteum" ~ "SEGI2",
-  #         scientificName == "Chamaebatia foliolosa Benth. (mountain misery)" ~ "CHFO",
-  #         scientificName == "Mountain alder (Alnus incana spp. tenuifolia)" ~ "ALIN2",
-  #         scientificName == "Wax currant (Ribes cereum)" ~ "RICE",
-  #         scientificName == "Pinus lambertiana Douglas (sugar pine)" ~ "PILA",
-  #         scientificName == "Prunus emarginata (Douglas ex Hook.) D. Dietr. (bitter cherry)" ~ "PREM",
-  #         scientificName == "Pinus jeffreyi Balf. (Jeffrey pine)" ~ "PIJE",
-  #         scientificName == "Pinus contorta Douglas ex Loudon (lodgepole pine)" ~ "PICO",
-  #         scientificName == "Fern" ~ "ASPLE",
-  #         .default="2PLANT")) %>%
-  #     mutate(TEAK=ifelse(siteID=="TEAK","TEAK",NA),
-  #            SJER=ifelse(siteID=="SJER","SJER",NA)) %>%
-  #     dplyr::select(-siteID)
   
   neon_sites <- all_veg_structure %>%
       arrange(taxonID) %>%
@@ -1857,39 +1352,29 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       mutate(growthForm_neon = ifelse(taxonID=="CONU4","tree",
                                     ifelse(taxonID=="ARNE","shrub",growthForm_neon))) %>%
       # Otherwise get rid of rows with NA in growthForm_neon (these are duplicates)
-      filter(!is.na(growthForm_neon)) %>%
+      filter(!is.na(growthForm_neon) | !is.na(scientificName)) %>%
       left_join(trait_table) %>%
       # By default use trait table growth form
       mutate(growthForm = ifelse(is.na(growthForm_traittable),
                                 growthForm_neon,growthForm_traittable)) %>%
-      # Filter out remaining unlikely growth forms - AIS search on Calscape
+      # Filter out remaining unlikely growth forms - found on Calscape
       mutate(growthForm = case_when(
-          taxonID == "ABIES" |
-              taxonID == "ABLO" |
+          taxonID == "ABIES" | taxonID == "ABLO" |
               taxonID == "CADE27" ~ "tree",
-          taxonID == "CECO" |
-              taxonID == "FRCA6" |
-              taxonID == "LOIN4" |
-              taxonID == "RHIL" |
-              taxonID == "RIBES" |
-              taxonID == "RIRO" |
-              taxonID == "TODI" ~ "shrub",
-          taxonID == "AECA" |
-              taxonID == "SALIX" ~ "shrub/tree",
-          taxonID == "2PLANT" |
-              taxonID == "2PLANT-S" |
+          taxonID == "CECO" | taxonID == "FRCA6" |
+              taxonID == "LOIN4" | taxonID == "RHIL" |
+              taxonID == "RIBES" |  taxonID == "RIRO" |
+              taxonID == "TODI" | taxonID == "AECA" |  taxonID == "SALIX"  ~ "shrub",
+          taxonID == "2PLANT" | taxonID == "2PLANT-S" |
               taxonID == "LUAL4" ~ NA,
           .default = growthForm  )) %>%
       dplyr::select(scientific,taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm) %>%
-      distinct()
+      distinct()   
+      
       
   # Add in Carissa's dataset
   neon_carissa <- neon_sites %>%
-      # full_join(carissa) %>%
-      # # Use NEON species name if it exists, otherwise Carissa's
-      # mutate(scientific = ifelse(is.na(scientific), scientificName, scientific)) %>%
-      # dplyr::select( scientific, taxonID, SOAP, SJER, TEAK, growthForm) %>%
-      distinct() %>% 
+      # Use NEON species name if it exists, otherwise Carissa's
       tidyr::unite("siteID", any_of(c("SOAP", "SJER", "TEAK")), na.rm = TRUE) %>%
       # Manually remove remaining duplicates
       mutate(siteID=ifelse(taxonID=="AECA", "SOAP_SJER", siteID),
@@ -1931,38 +1416,7 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
       
       
   pft_assignment_df <- neon_carissa %>%
-      mutate(pft = case_when(
-          taxonID == "ABIES" | taxonID == "ABCO" |
-              taxonID == "ABLO" |
-              taxonID == "ABMA" ~ "fir", #white or red fir
-          taxonID == "CADE27" | taxonID == "SEGI2" ~ "cedar", #incense cedar
-          taxonID == "PICO" | taxonID == "PIJE" |
-              taxonID == "PILA" | taxonID == "PINACE" |
-              taxonID == "PINACE" | taxonID == "PIPO" |
-              taxonID == "PISA2" |
-              taxonID == "PINUS" ~ "pine", #Ponderosa pine
-          taxonID == "QUCH2" | taxonID == "QUKE" |
-              taxonID == "QUDO" | taxonID == "QUERC" |
-              taxonID == "QUWI2" ~ "oak", #target:canyon live oak (evergreen), also Black oak(deciduous), 
-          taxonID == "ARNE" | taxonID == "ARPA" |
-              taxonID == "ARPA6" | taxonID == "ARVIM" |
-              taxonID == "CEANO" | taxonID == "CECA" |
-              taxonID == "CECO" | taxonID == "CECU" |
-              taxonID == "CEIN3" | taxonID == "CELE2" |
-              taxonID == "CHFO" | taxonID == "CHSE11" |
-              taxonID == "CRSE11" | taxonID == "DAWR2" |
-              taxonID == "FRCA6" | taxonID == "FRCAC7" |
-              taxonID == "LOIN4" | taxonID == "RHAMNA" |
-              taxonID == "RHIL" | taxonID == "PREM" |
-              taxonID == "RICE" | taxonID == "RIBES" |
-              taxonID == "RIRO" | taxonID == "RIVI3" |
-              taxonID == "SALIX" | taxonID == "SANI4" |
-              taxonID == "CEMOG" | taxonID == "ARCTO3SPP" |
-              taxonID == "SEFL3" | taxonID == "TODI" |
-              taxonID == "SASC" | taxonID == "AECA" |
-              taxonID == "CONU4" | taxonID == "LUPINSPP" ~ "shrub", #Ceanothus sp.
-          .default = "other"
-      ))
+      mutate(pft = match_species_to_pft(growthForm, taxonID))
       
   # Print any scientific names that were not addressed in logic tree and instead assigned as 'other'
   message("The following rows were classified as PFT 'other'")
@@ -1971,7 +1425,6 @@ generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trai
   pft_reference_path <- file.path(data_int_path,"pft_reference.csv")
   readr::write_csv(pft_assignment_df, pft_reference_path)
   return(pft_reference_path)
-  #ais change things here to accommodate other_bdlf, other_conif
 }
 
 # crop_flightlines_to_tiles <- function(site, year_aop, data_raw_aop_path,

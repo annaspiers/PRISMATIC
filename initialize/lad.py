@@ -3,7 +3,7 @@ import pandas as pd
 import rpy2.robjects as ro
 from rpy2.robjects import pandas2ri
 import numpy as np
-from scipy.integrate import trapz
+from scipy.integrate import trapezoid
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import argrelextrema
 import json
@@ -69,7 +69,7 @@ def calculate_snd(inventory_df, lad_df, infl_points):
         if i == 0:
             h0 = 0
         layer_lad = lad_df.query(f'{h0} <= z and z <= {h1}')
-        layer_lai = trapz(layer_lad.lad.values,
+        layer_lai = trapezoid(layer_lad.lad.values,
                           layer_lad.z.values,
                           dx=0.5)
         layer_inventory_df = inventory_df.query(f'{h0} <= height and height <= {h1}')
@@ -78,7 +78,7 @@ def calculate_snd(inventory_df, lad_df, infl_points):
 
     # from last layer -> sky
     layer_lad = lad_df.query(f'z <= {h1}')
-    layer_lai = trapz(layer_lad.lad.values,
+    layer_lai = trapezoid(layer_lad.lad.values,
                       layer_lad.z.values,
                       dx=0.5)
     layer_inventory_df = inventory_df.query(f'height <= {h1}')
