@@ -12,6 +12,7 @@ library(sf)
 library(ggplot2)
 library(caret)
 library(tidyselect) #all_of
+library(forcats)
 library(parallel) #mclapply https://dept.stat.lsa.umich.edu/~jerrick/courses/stat701/notes/parallel.html
 
 if (!require("BiocManager", quietly = TRUE)){
@@ -19,7 +20,7 @@ if (!require("BiocManager", quietly = TRUE)){
   BiocManager::install("rhdf5")}  
 library(rhdf5)
 
-# source("initialize/inventory_helper.R")
+source("initialize/inventory_helper.R")
 
 
 st_erase <- function(x, y) sf::st_difference(x, st_union(st_combine(y))) 
@@ -881,154 +882,299 @@ prep_aop_imagery <- function(site, year, hs_type, hs_path, tif_path, data_int_pa
 }
 
 
+#ais I no longer use this code below to create polygons for training data
+# these often missed the study tree, so I just used manual training data
 
-create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_path, 
-                              biomass_path, pft_reference_path, px_thresh) {
-  # modified from Scholl et al from https://github.com/earthlab/neon-veg
+# create_tree_crown_polygons <- function(site, year, data_raw_inv_path, data_int_path, 
+#                               biomass_path, pft_reference_path, px_thresh) {
+#   # modified from Scholl et al from https://github.com/earthlab/neon-veg
 
-  # Create geospatial features (points, polygons with half the maximum crown diameter) 
-  #       for every tree in the NEON woody vegetation data set. 
-  #       Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
+#   # Create geospatial features (points, polygons with half the maximum crown diameter) 
+#   #       for every tree in the NEON woody vegetation data set. 
+#   #       Analog to 02-create_tree_features.R from https://github.com/earthlab/neon-veg 
 
-  #       Generate polygons that intersect with independent pixels in the AOP data 
-  #       Analog to 03-process_tree_features.R from https://github.com/earthlab/neon-veg 
+#   #       Generate polygons that intersect with independent pixels in the AOP data 
+#   #       Analog to 03-process_tree_features.R from https://github.com/earthlab/neon-veg 
   
-  # px_thresh is the area threshold (# of of 1m pixels) to filter out small tree crowns
+#   # px_thresh is the area threshold (# of of 1m pixels) to filter out small tree crowns
   
-  # output directory for training data
-  training_data_dir <- file.path(data_int_path, site, year, "training")
-  if (!dir.exists(training_data_dir)) {
-    dir.create(training_data_dir)
-  }
+#   # output directory for training data
+#   training_data_dir <- file.path(data_int_path, site, year, "training")
+#   if (!dir.exists(training_data_dir)) {
+#     dir.create(training_data_dir)
+#   }
   
-  live_trees_path <- file.path(biomass_path,"pp_veg_structure_IND_IBA_IAGB_live.csv")
+#   live_trees_path <- file.path(biomass_path,"pp_veg_structure_IND_IBA_IAGB_live.csv")
     
-  pft_reference <- read.csv(pft_reference_path)
+#   pft_reference <- read.csv(pft_reference_path)
   
-  # Load cleaned inventory data for site and year
-  # ais this is live trees only. should figure out how to incorporate dead trees
-  veg_ind <- read.csv(live_trees_path) %>%
-    dplyr::rename(easting = adjEasting, 
-                  northing = adjNorthing,
-                  # Rename columns so they're unique when truncated when saving shp 
-                  lat = adjDecimalLatitude,
-                  long = adjDecimalLongitude,
-                  elev = adjElevation,
-                  elevUncert = adjElevationUncertainty,
-                  indStemDens = individualStemNumberDensity,
-                  indBA = individualBasalArea,
-                  dendroH = dendrometerHeight,
-                  dendroGap = dendrometerGap,
-                  dendroCond = dendrometerCondition,
-                  bStemDiam = basalStemDiameter,
-                  bStemMeasHgt = basalStemDiameterMsrmntHeight,
-                  sciNameFull = scientificName,
-                  sp_gen = scientific,
-                  wood_dens1 = wood.dens,
-                  wood_dens2 = wood_dens) #ais what is the source of columns in this df? NEON or our own changes?
+#   # Load cleaned inventory data for site and year
+#   # ais this is live trees only. should figure out how to incorporate dead trees
+#   veg_ind <- read.csv(live_trees_path) %>%
+#     dplyr::rename(easting = adjEasting, 
+#                   northing = adjNorthing,
+#                   # Rename columns so they're unique when truncated when saving shp 
+#                   lat = adjDecimalLatitude,
+#                   long = adjDecimalLongitude,
+#                   elev = adjElevation,
+#                   elevUncert = adjElevationUncertainty,
+#                   indStemDens = individualStemNumberDensity,
+#                   indBA = individualBasalArea,
+#                   dendroH = dendrometerHeight,
+#                   dendroGap = dendrometerGap,
+#                   dendroCond = dendrometerCondition,
+#                   bStemDiam = basalStemDiameter,
+#                   bStemMeasHgt = basalStemDiameterMsrmntHeight,
+#                   sciNameFull = scientificName,
+#                   sp_gen = scientific,
+#                   wood_dens1 = wood.dens,
+#                   wood_dens2 = wood_dens) #ais what is the source of columns in this df? NEON or our own changes?
   
-  # Remove all rows with missing an easting or northing coordinate
-  veg_has_coords <- veg_ind[complete.cases(veg_ind[, c("northing", "easting")]),]
+#   # Remove all rows with missing an easting or northing coordinate
+#   veg_has_coords <- veg_ind[complete.cases(veg_ind[, c("northing", "easting")]),]
   
-  # Keep only the entries with crown diameter and tree height
-  # since these measurements are needed to create and compare polygons.
-  # ais future work: include ninetyCrownDiameter?
-  veg_has_coords_size <- veg_has_coords[complete.cases(veg_has_coords$height) & 
-                                          complete.cases(veg_has_coords$maxCrownDiameter),] %>%
-    dplyr::filter(maxCrownDiameter < 50) %>%
-    dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04659") %>% #no tree here
-    dplyr::filter(individualID != "NEON.PLA.D17.SOAP.05847") %>% #no tree here
-    dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04256")  #no tree here
-    #"NEON.PLA.D17.SOAP.04972" #about 1/3 is ground
+#   # Keep only the entries with crown diameter and tree height
+#   # since these measurements are needed to create and compare polygons.
+#   # ais future work: include ninetyCrownDiameter?
+#   veg_has_coords_size <- veg_has_coords[complete.cases(veg_has_coords$height) & 
+#                                           complete.cases(veg_has_coords$maxCrownDiameter),] %>%
+#     dplyr::filter(maxCrownDiameter < 50) %>%
+#     dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04659") %>% #no tree here
+#     dplyr::filter(individualID != "NEON.PLA.D17.SOAP.05847") %>% #no tree here
+#     dplyr::filter(individualID != "NEON.PLA.D17.SOAP.04256")  #no tree here
+#     #"NEON.PLA.D17.SOAP.04972" #about 1/3 is ground
   
-  # Assign a PFT to each individual
-  # ais need to make this an exhaustive match for all sites, not just SOAP
-  # ais use neon trait table from Marcos?
-  veg_training <- veg_has_coords_size %>%
-    left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
-    dplyr::mutate(pft = match_species_to_pft(growthForm, taxonID))
-  write.csv(veg_training, file = file.path(training_data_dir, "vst_training.csv"))
+#   # Assign a PFT to each individual
+#   # ais need to make this an exhaustive match for all sites, not just SOAP
+#   # ais use neon trait table from Marcos?
+#   veg_training <- veg_has_coords_size %>%
+#     left_join(pft_reference %>% dplyr::select(-growthForm) , by=join_by(siteID, taxonID)) %>%
+#     dplyr::mutate(pft = match_species_to_pft(growthForm, taxonID))
+#   write.csv(veg_training, file = file.path(training_data_dir, "vst_training.csv"))
   
-  coord_ref <- sf::st_crs(32611)
-  #  ais ^ will need to change this from being hardcoded to finding
-  # the UTM zone that any data are associated
+#   coord_ref <- sf::st_crs(32611)
+#   #  ais ^ will need to change this from being hardcoded to finding
+#   # the UTM zone that any data are associated
   
-  # Convert the data frame to an SF object 
-  veg_training_pts_sf <- sf::st_as_sf(veg_training,
-                                      coords = c("easting", "northing"),
-                                      crs = coord_ref)
-  # sf::st_write(obj = veg_training_pts_sf,
-  #              dsn = file.path(training_data_dir, "veg_points_all.shp"),
-  #              delete_dsn = TRUE)
+#   # Convert the data frame to an SF object 
+#   veg_training_pts_sf <- sf::st_as_sf(veg_training,
+#                                       coords = c("easting", "northing"),
+#                                       crs = coord_ref)
+#   # sf::st_write(obj = veg_training_pts_sf,
+#   #              dsn = file.path(training_data_dir, "veg_points_all.shp"),
+#   #              delete_dsn = TRUE)
   
-  # Generate a list of AOP tiles that overlap with the inventory data
-  tiles <- list_tiles_w_veg(veg_df = veg_training,
-                               out_dir = training_data_dir)
+#   # Generate a list of AOP tiles that overlap with the inventory data
+#   tiles <- list_tiles_w_veg(veg_df = veg_training,
+#                                out_dir = training_data_dir)
   
-  # # plot all mapped stem locations
-  # ggplot2::ggplot() +
-  #   ggplot2::geom_sf(data = mapped_stems_sf) +
-  #   ggplot2::ggtitle("Map of Stem Locations")
+#   # # plot all mapped stem locations
+#   # ggplot2::ggplot() +
+#   #   ggplot2::geom_sf(data = mapped_stems_sf) +
+#   #   ggplot2::ggtitle("Map of Stem Locations")
   
-  # Write shapefile with CIRCULAR POLYGONS for all mapped stems with 
-  # height & crown diameter. Size: 1/2 Maximum crown diameter
-  polys_half_diam <- sf::st_buffer(veg_training_pts_sf,
-                                   dist = base::round((veg_training_pts_sf$maxCrownDiameter/4),
-                                                digits = 1))
-  # sf::st_write(obj = polys_half_diam,
-  #     dsn = file.path(training_data_dir, "veg_polygons_half_diam.shp"),
-  #     delete_dsn = TRUE)
+#   # Write shapefile with CIRCULAR POLYGONS for all mapped stems with 
+#   # height & crown diameter. Size: 1/2 Maximum crown diameter
+#   polys_half_diam <- sf::st_buffer(veg_training_pts_sf,
+#                                    dist = base::round((veg_training_pts_sf$maxCrownDiameter/4),
+#                                                 digits = 1))
+#   # sf::st_write(obj = polys_half_diam,
+#   #     dsn = file.path(training_data_dir, "veg_polygons_half_diam.shp"),
+#   #     delete_dsn = TRUE)
   
-  # Apply area threshold to remove small polygons (smaller than 4 1m pixels)---------------------------
-  # 2. An area threshold is then applied to remove any small trees area values 
-  # less than the area of four hyperspectral pixels. This threshold 
-  # was selected with the coarser resolution of the hyperspectral and LiDAR data 
-  # products in mind. By preserving the trees with larger crowns, it is believed 
-  # that purer spectra will be extracted for them for the training data sets, 
-  # as opposed to extracting mixed pixels which signal from smaller plants and 
-  # backgbase::round materials or neighboring vegetation. 
+#   # Apply area threshold to remove small polygons (smaller than 4 1m pixels)---------------------------
+#   # 2. An area threshold is then applied to remove any small trees area values 
+#   # less than the area of four hyperspectral pixels. This threshold 
+#   # was selected with the coarser resolution of the hyperspectral and LiDAR data 
+#   # products in mind. By preserving the trees with larger crowns, it is believed 
+#   # that purer spectra will be extracted for them for the training data sets, 
+#   # as opposed to extracting mixed pixels which signal from smaller plants and 
+#   # backgbase::round materials or neighboring vegetation. 
   
-  # Define the area threshold in units of [m^2]
-  # Area of RGB pixel, 10cm by 10cm
-  px_area_rgb <- 0.1 * 0.1 #[m^2]
-  # Gridded LiDAR products and HS pixels are 1m x 1m
-  px_area_hs <- 100 * px_area_rgb #[m^2]
-  # Multiply area of 1 HS pixel by the number of pixels; 
-  # as defined in the main script by the px_thresh variable
-  thresh <- px_area_hs * px_thresh #[m^2]
+#   # Define the area threshold in units of [m^2]
+#   # Area of RGB pixel, 10cm by 10cm
+#   px_area_rgb <- 0.1 * 0.1 #[m^2]
+#   # Gridded LiDAR products and HS pixels are 1m x 1m
+#   px_area_hs <- 100 * px_area_rgb #[m^2]
+#   # Multiply area of 1 HS pixel by the number of pixels; 
+#   # as defined in the main script by the px_thresh variable
+#   thresh <- px_area_hs * px_thresh #[m^2]
   
-  # Remove half-diam polygons with area < n hyperspectral pixels 
-  polygons_thresh_half_diam <- polys_half_diam %>% 
-    dplyr::mutate(area_m2 = sf::st_area(polys_half_diam)) %>% 
-    dplyr::filter(as.numeric(area_m2) > thresh)
+#   # Remove half-diam polygons with area < n hyperspectral pixels 
+#   polygons_thresh_half_diam <- polys_half_diam %>% 
+#     dplyr::mutate(area_m2 = sf::st_area(polys_half_diam)) %>% 
+#     dplyr::filter(as.numeric(area_m2) > thresh)
   
-  # Clip shorter polygons with taller polygons -----------------------------
+#   # Clip shorter polygons with taller polygons -----------------------------
   
-  polygons_clipped_half_diam <- clip_overlap(polygons_thresh_half_diam, thresh)
+#   polygons_clipped_half_diam <- clip_overlap(polygons_thresh_half_diam, thresh)
   
-  # Check and fix/delete invalid geometries.
-  # Remove invalid geometries if the reason
-  # for invalidity is "Too few points in geometry component[453729.741 4433259.265]"
-  # since there are too few points to create a valid polygon. 
-  # Use the reason = TRUE paramater in sf::st_isvalid to see the reason. 
-  polygons_clipped_half_diam_is_valid <- sf::st_is_valid(x = polygons_clipped_half_diam)
+#   # Check and fix/delete invalid geometries.
+#   # Remove invalid geometries if the reason
+#   # for invalidity is "Too few points in geometry component[453729.741 4433259.265]"
+#   # since there are too few points to create a valid polygon. 
+#   # Use the reason = TRUE paramater in sf::st_isvalid to see the reason. 
+#   polygons_clipped_half_diam_is_valid <- sf::st_is_valid(x = polygons_clipped_half_diam)
   
-  # polygons_clipped_valid <- lwgeom::st_make_valid(polygons_clipped)
-  polygons_clipped_half_diam_valid <- polygons_clipped_half_diam %>% 
-    dplyr::filter(polygons_clipped_half_diam_is_valid)
+#   # polygons_clipped_valid <- lwgeom::st_make_valid(polygons_clipped)
+#   polygons_clipped_half_diam_valid <- polygons_clipped_half_diam %>% 
+#     dplyr::filter(polygons_clipped_half_diam_is_valid)
   
   
-  # Write shapefile with clipped tree crown polygons half the max crown diameter 
-  training_shp_path <- file.path(training_data_dir, "ref_labelled_crowns.shp")
-  sf::st_write(obj = polygons_clipped_half_diam_valid,
-               dsn = training_shp_path,
-               delete_dsn = TRUE)
+#   # Write shapefile with clipped tree crown polygons half the max crown diameter 
+#   training_shp_path <- file.path(training_data_dir, "ref_labelled_crowns.shp")
+#   sf::st_write(obj = polygons_clipped_half_diam_valid,
+#                dsn = training_shp_path,
+#                delete_dsn = TRUE)
   
-  return(training_shp_path)
+#   return(training_shp_path)
+# }
+
+
+
+prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_int_path, biomass_path) {
+
+    training_data_dir <- file.path(data_int_path, site, year, "training")
+    if (!dir.exists(training_data_dir)) {
+        dir.create(training_data_dir)
+    }
+
+    # Merge manual shapes with NEON metadata for each site-year 
+    # Here we get the right PFT for each shape in each year
+
+    # SJER 2017 NEON inventory
+    # SJER 2021 NEON inventory
+    # SOAP 2019 NEON inventory
+    # SOAP 2021 NEON inventory
+    # TEAK 2021 NEON inventory                                    
+    neon_inv_manual <- sf::st_read(file.path(data_raw_inv_path, "manually_uploaded" ,paste0("NEON - ",site," - ", year) ,"my_shapes.shp"))
+
+    # Load cleaned inventory data for site and year
+    # ais this is live trees only. should figure out how to incorporate dead trees
+    veg_ind <- read.csv(file.path(biomass_path,"pp_veg_structure_IND_IBA_IAGB_live.csv")) %>%
+        dplyr::rename(indvdID=individualID, easting = adjEasting,  northing = adjNorthing,
+                        # Rename columns so they're unique when truncated when saving shp 
+                        lat = adjDecimalLatitude, long = adjDecimalLongitude, elev = adjElevation,
+                        indStemDens = individualStemNumberDensity, indBA = individualBasalArea,
+                        bStemDiam = basalStemDiameter, bStemMeasHgt = basalStemDiameterMsrmntHeight,
+                        sciNameFull = scientificName, sp_gen = scientific,
+                        wood_dens1 = wood.dens, wood_dens2 = wood_dens)  %>% #ais what is the source of columns in this df? NEON or our own changes?
+        dplyr::mutate(pft = match_species_to_pft(taxonID)) 
+
+    # link inventory csv and manual shapes
+    neon_inv <- neon_inv_manual %>% 
+                    dplyr::left_join(veg_ind, join_by(indvdID)) %>% 
+                    dplyr::select(c(pft,indvdID), everything())
+
+    if (site =="SJER" & year=="2021") {    
+        SJER_2021_neon_ref      <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"NEON - SJER - 2021", "tree_crowns_training.shp"))
+        
+        # SJER 2023 carissa/anna fieldwork
+        SJER_2023_c_manual      <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa - SJER - 2023", "my_shapes.shp")) #manually exported from QGIS
+        SJER_2023_c_ref         <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa - SJER - 2023", "tgis_merged_species_32611.shp"))
+        
+        # SJER 2024 carissa/anna fieldwork
+        SJER_2024_c_a_manual    <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa Anna - SJER - 2024" ,"my_shapes.shp")) #manually exported from QGIS
+        SJER_2024_c_a_ref1      <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa Anna - SJER - 2024" ,"trimble_merged_PLY_SJER.shp")) %>%
+            st_transform(32611)
+        SJER_2024_a_ref2        <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa Anna - SJER - 2024" ,"Anna_V1_ais-point.shp"))
+        SJER_2024_c_a_ref3      <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa Anna - SJER - 2024" ,"garmin_merged_PT_SJER.shp")) %>%
+            st_transform(32611)
+
+        SJER_2021_neon <- neon_inv %>% dplyr::select(-id) %>% 
+            dplyr::left_join(data.frame(SJER_2021_neon_ref) %>% dplyr::select(indvdID,species=sp_gen)) %>%
+            select(indvdID, species)
+      
+        SJER_2023_c <- SJER_2023_c_manual %>% 
+            dplyr::left_join(data.frame(SJER_2023_c_ref) %>% dplyr::select(Name,species)) %>%
+            rename(indvdID=Name) %>% select(indvdID,species)
+
+        SJER_2024_c_a <- SJER_2024_c_a_manual %>%  
+            dplyr::left_join(data.frame(SJER_2024_c_a_ref1) %>% 
+                                    dplyr::rename(site_type=`Site.type`,
+                                                species_other=`If.other.s`) %>% 
+                        dplyr::select(Name,Species,species_other,site_type)) %>% 
+            mutate(species=ifelse(!is.na(species_ai),species_ai,
+                                ifelse(site_type=="Grassland",site_type,
+                                ifelse(Species=="OTHER",species_other, 
+                                    ifelse(!is.na(Species),Species,site_type))))) %>%
+            mutate(species=ifelse(is.na(species),"grass",species)) %>%
+            tibble::rownames_to_column() %>%
+            # assign arbitrary names to crowns delineated by me 
+            # (not assiciated with carissa's dataset)
+            mutate(Name = ifelse(is.na(Name), paste0(rowname,"_SJER24_ais"), Name)) %>%
+            select(indvdID=Name, species)
+
+        # Merge shapefiles for all years since we're using only 2021 imagery for now
+        my_shapes <- SJER_2021_neon %>%
+            rbind(SJER_2023_c) %>%
+            rbind(SJER_2024_c_a) %>%
+            mutate(pft = match_species_to_pft(species, indvdID)) %>%
+            # Get rid of any rows with no PFT. No longer using the 'other_herb' PFT
+            filter(indvdID!="A08") %>%
+            select(c(indvdID,pft))
+
+    } else if (site =="TEAK" & year=="2021") {
+        TEAK_2021_neon_ref      <- read_sf(file.path(data_raw_inv_path, "manually_uploaded",  "NEON - TEAK - 2021", "tree_crowns_training.shp"))
+
+        # TEAK 2023 carissa/anna fieldwork
+        TEAK_2023_c_a_manual      <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa - TEAK - 2023" ,"my_shapes.shp")) # manually exported from QGIS
+        TEAK_2023_c_a_ref         <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa - TEAK - 2023" ,"tgis_merged_species.shp")) %>%
+            st_transform(32611)
+
+        # TEAK 2024 carissa/anna fieldwork
+        TEAK_2024_c_a_manual    <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa - TEAK - 2024" ,"my_shapes.shp")) #manually exported from QGIS
+        TEAK_2024_c_a_ref       <- read_sf(file.path(data_raw_inv_path, "manually_uploaded" ,"Carissa - TEAK - 2024" ,"tgis_merged_PLY_TEAK.shp")) %>%
+            st_transform(32611)
+
+        TEAK_2021_neon <- neon_inv %>% select(-c(id,notes)) %>% #03011, 02218
+            left_join(data.frame(TEAK_2021_neon_ref) %>% select(indvdID,species=sp_gen)) %>%
+            select(indvdID,species)
+
+        TEAK_2023_c_a <- TEAK_2023_c_a_manual %>% 
+            left_join(data.frame(TEAK_2023_c_a_ref) %>% select(Name,species)) %>%
+            mutate(species = case_when(
+                grepl("C03",Name,ignore.case=T) ~ "oak", 
+                grepl("C036",Name,ignore.case=T) ~ "willow", 
+                grepl("A172",Name,ignore.case=T) ~ "pine", 
+                grepl("A101",Name,ignore.case=T) ~ "manzanita",
+                .default = species )) %>%
+            filter(!is.na(species)) %>%
+            #Remove where there is lotus in the species name - too few for training data
+            filter(!grepl("lotus", species, ignore.case = TRUE)) %>%
+            rename(indvdID=Name) %>% select(indvdID,species)
+
+        TEAK_2024_c_a <- TEAK_2024_c_a_manual %>% 
+            rename(species=species_ai) %>%
+            # assign arbitrary names to crowns delineated by me 
+            # (not assiciated with carissa's dataset)
+            tibble::rownames_to_column() %>%
+            mutate(indvdID = ifelse(is.na(id), paste0(rowname,"_TEAK24_ais"), id)) %>%
+            filter(!is.na(species)) %>%
+            select(indvdID, species)
+        # Merge shapefiles for all years since we're using only 2021 imagery for now
+        my_shapes <- TEAK_2021_neon %>%
+            rbind(TEAK_2023_c_a) %>%
+            rbind(TEAK_2024_c_a) %>%
+            mutate(pft = match_species_to_pft(species, indvdID)) %>%
+            select(c(indvdID,pft))
+    } else {
+        # rename df so that list_tiles_w_veg is generalizable below
+        my_shapes = neon_inv
+    }
+
+    # Generate a list of AOP tiles that overlap with the inventory data
+    tiles <- list_tiles_w_veg(veg_df = my_shapes, out_dir = training_data_dir)
+
+    training_shp_path = file.path(training_data_dir,"ref_labelled_crowns.shp")
+    write_sf(my_shapes, training_shp_path)
+
+    return(training_shp_path)
 }
 
 
-# prep_manual_crown_delineations <- function(site, year, data_raw_inv_path, data_int_path, 
+
+# prep_manual_crown_delineations_old <- function(site, year, data_raw_inv_path, data_int_path, 
 #                                        biomass_path, pft_reference_path, px_thresh) {
 #     #ais automate this function
     
@@ -1208,14 +1354,13 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
         
         # loop through AOP tiles 
         for (stacked_aop_filename in stacked_aop_list) { 
-
+          
           # read current tile of stacked AOP data 
           stacked_aop_data <- terra::rast(stacked_aop_filename) #old raster::stack
           
           # construct the easting northing string for naming outputs
-          east_north_string <- paste0(stacked_aop_data$eastingIDs[1], "_",
-                                      stacked_aop_data$northingIDs[1])
-
+          east_north_string <- stringr::str_match(stacked_aop_filename, "(\\d+)_(\\d+)")[[1]]
+          
           east_north_csv_path = file.path(extracted_features_path,
             paste0("extracted_features_",east_north_string, "_",
                   shapefile_description, ".csv"))
@@ -1224,7 +1369,7 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
           if (file.exists(east_north_csv_path)) {
               next
           }
-                      
+            
           # figure out which plots are within the current tile by comparing each
           # X,Y coordinate to the extent of the current tile 
           shapes_in <- shp_sf %>% 
@@ -1247,7 +1392,7 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
                                   " plots in current tile, ",east_north_string)) 
               } 
           }
-            
+          
           # Aggregate to 2m resolution from 1m
           if (aggregate_from_1m_to_2m_res == T) {
               stacked_aop_data <- raster::aggregate(stacked_aop_data,2) 
@@ -1323,109 +1468,109 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
 
 
 
-generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trait_table_path) {
-  # Assign a PFT to each species
+# generate_pft_reference <- function(sites, data_raw_inv_path, data_int_path, trait_table_path) {
+#   # Assign a PFT to each species
 
-  # load data
-  all_veg_structure <- data.frame()
-  for (site in sites) {
-    site_veg_structure <- readr::read_csv(file.path(data_raw_inv_path,site,"veg_structure.csv")) %>%
-      dplyr::mutate(growthForm_neon = ifelse(grepl("tree", growthForm), "tree",
-                                    ifelse(grepl("sapling", growthForm), "tree",
-                                            ifelse(grepl("shrub", growthForm), "shrub", growthForm)))) %>%
-      dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) 
+#   # load data
+#   all_veg_structure <- data.frame()
+#   for (site in sites) {
+#     site_veg_structure <- readr::read_csv(file.path(data_raw_inv_path,site,"veg_structure.csv")) %>%
+#       dplyr::mutate(growthForm_neon = ifelse(grepl("tree", growthForm), "tree",
+#                                     ifelse(grepl("sapling", growthForm), "tree",
+#                                             ifelse(grepl("shrub", growthForm), "shrub", growthForm)))) %>%
+#       dplyr::select(scientificName, taxonID, growthForm_neon, site=siteID) 
 
-    all_veg_structure <- rbind(all_veg_structure, site_veg_structure)
-    # ais how to group in Carissa's data here?
-  }
+#     all_veg_structure <- rbind(all_veg_structure, site_veg_structure)
+#     # ais how to group in Carissa's data here?
+#   }
   
-  trait_table <- readr::read_csv(trait_table_path) %>%
-      dplyr::select(scientific, leafPhen=leaf.phen, growthForm_traittable=growth.form)
+#   trait_table <- readr::read_csv(trait_table_path) %>%
+#       dplyr::select(scientific, leafPhen=leaf.phen, growthForm_traittable=growth.form)
   
-  neon_sites <- all_veg_structure %>%
-      arrange(taxonID) %>%
-      distinct() %>%
-      dplyr::mutate(scientific = stringr::word(scientificName, 1,2, sep=" "),
-              dummy = 1) %>%
-      tidyr::pivot_wider(names_from=site, values_from=dummy) %>%
-      dplyr::select(scientific, taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm_neon) %>%
-      mutate(growthForm_neon = ifelse(taxonID=="CONU4","tree",
-                                    ifelse(taxonID=="ARNE","shrub",growthForm_neon))) %>%
-      # Otherwise get rid of rows with NA in growthForm_neon (these are duplicates)
-      filter(!is.na(growthForm_neon) | !is.na(scientificName)) %>%
-      left_join(trait_table) %>%
-      # By default use trait table growth form
-      mutate(growthForm = ifelse(is.na(growthForm_traittable),
-                                growthForm_neon,growthForm_traittable)) %>%
-      # Filter out remaining unlikely growth forms - found on Calscape
-      mutate(growthForm = case_when(
-          taxonID == "ABIES" | taxonID == "ABLO" |
-              taxonID == "CADE27" ~ "tree",
-          taxonID == "CECO" | taxonID == "FRCA6" |
-              taxonID == "LOIN4" | taxonID == "RHIL" |
-              taxonID == "RIBES" |  taxonID == "RIRO" |
-              taxonID == "TODI" | taxonID == "AECA" |  taxonID == "SALIX"  ~ "shrub",
-          taxonID == "2PLANT" | taxonID == "2PLANT-S" |
-              taxonID == "LUAL4" ~ NA,
-          .default = growthForm  )) %>%
-      dplyr::select(scientific,taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm) %>%
-      distinct()   
+#   neon_sites <- all_veg_structure %>%
+#       arrange(taxonID) %>%
+#       distinct() %>%
+#       dplyr::mutate(scientific = stringr::word(scientificName, 1,2, sep=" "),
+#               dummy = 1) %>%
+#       tidyr::pivot_wider(names_from=site, values_from=dummy) %>%
+#       dplyr::select(scientific, taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm_neon) %>%
+#       mutate(growthForm_neon = ifelse(taxonID=="CONU4","tree",
+#                                     ifelse(taxonID=="ARNE","shrub",growthForm_neon))) %>%
+#       # Otherwise get rid of rows with NA in growthForm_neon (these are duplicates)
+#       filter(!is.na(growthForm_neon) | !is.na(scientificName)) %>%
+#       left_join(trait_table) %>%
+#       # By default use trait table growth form
+#       mutate(growthForm = ifelse(is.na(growthForm_traittable),
+#                                 growthForm_neon,growthForm_traittable)) %>%
+#       # Filter out remaining unlikely growth forms - found on Calscape
+#       mutate(growthForm = case_when(
+#           taxonID == "ABIES" | taxonID == "ABLO" |
+#               taxonID == "CADE27" ~ "tree",
+#           taxonID == "CECO" | taxonID == "FRCA6" |
+#               taxonID == "LOIN4" | taxonID == "RHIL" |
+#               taxonID == "RIBES" |  taxonID == "RIRO" |
+#               taxonID == "TODI" | taxonID == "AECA" |  taxonID == "SALIX"  ~ "shrub",
+#           taxonID == "2PLANT" | taxonID == "2PLANT-S" |
+#               taxonID == "LUAL4" ~ NA,
+#           .default = growthForm  )) %>%
+#       dplyr::select(scientific,taxonID, any_of(c("SOAP", "SJER", "TEAK")), growthForm) %>%
+#       distinct()   
       
       
-  # Add in Carissa's dataset
-  neon_carissa <- neon_sites %>%
-      # Use NEON species name if it exists, otherwise Carissa's
-      tidyr::unite("siteID", any_of(c("SOAP", "SJER", "TEAK")), na.rm = TRUE) %>%
-      # Manually remove remaining duplicates
-      mutate(siteID=ifelse(taxonID=="AECA", "SOAP_SJER", siteID),
-            siteID=ifelse(taxonID=="QUWIF", "SJER_TEAK", siteID),
+#   # Add in Carissa's dataset
+#   neon_carissa <- neon_sites %>%
+#       # Use NEON species name if it exists, otherwise Carissa's
+#       tidyr::unite("siteID", any_of(c("SOAP", "SJER", "TEAK")), na.rm = TRUE) %>%
+#       # Manually remove remaining duplicates
+#       mutate(siteID=ifelse(taxonID=="AECA", "SOAP_SJER", siteID),
+#             siteID=ifelse(taxonID=="QUWIF", "SJER_TEAK", siteID),
             
-            siteID=ifelse(taxonID=="ARCTO3SPP", "SJER_TEAK", siteID),
-            scientific=ifelse(taxonID=="ARCTO3SPP","Arctostaphylos sp.",scientific),
+#             siteID=ifelse(taxonID=="ARCTO3SPP", "SJER_TEAK", siteID),
+#             scientific=ifelse(taxonID=="ARCTO3SPP","Arctostaphylos sp.",scientific),
             
-            siteID=ifelse(taxonID=="CECU", "SOAP_SJER_TEAK", siteID),
-            scientific=ifelse(taxonID=="CECU","Ceanothus sp.",scientific),
+#             siteID=ifelse(taxonID=="CECU", "SOAP_SJER_TEAK", siteID),
+#             scientific=ifelse(taxonID=="CECU","Ceanothus sp.",scientific),
             
-            siteID=ifelse(taxonID=="CHFO", "SOAP_TEAK", siteID),
-            scientific=ifelse(taxonID=="CHFO","Chamaebatia foliolosa",scientific),
+#             siteID=ifelse(taxonID=="CHFO", "SOAP_TEAK", siteID),
+#             scientific=ifelse(taxonID=="CHFO","Chamaebatia foliolosa",scientific),
             
-            siteID=ifelse(taxonID=="LUPINSPP", "SJER_TEAK", siteID),
-            scientific=ifelse(taxonID=="LUPINSPP","Lupinus sp.",scientific),
+#             siteID=ifelse(taxonID=="LUPINSPP", "SJER_TEAK", siteID),
+#             scientific=ifelse(taxonID=="LUPINSPP","Lupinus sp.",scientific),
             
-            siteID=ifelse(taxonID=="QUKE", "SJER_TEAK", siteID),
-            scientific=ifelse(taxonID=="QUKE","Quercus kelloggii",scientific),
+#             siteID=ifelse(taxonID=="QUKE", "SJER_TEAK", siteID),
+#             scientific=ifelse(taxonID=="QUKE","Quercus kelloggii",scientific),
             
-            siteID=ifelse(taxonID=="QUWI2", "SOAP_TEAK", siteID),
-            scientific=ifelse(taxonID=="QUWI2", "Quercus wislizeni", scientific),
+#             siteID=ifelse(taxonID=="QUWI2", "SOAP_TEAK", siteID),
+#             scientific=ifelse(taxonID=="QUWI2", "Quercus wislizeni", scientific),
             
-            scientific=ifelse(taxonID=="SANI4","Sambucus nigra",scientific),
-            siteID=ifelse(scientific=="Sambucus nigra", "SOAP_SJER", siteID),
-            taxonID=ifelse(scientific=="Sambucus nigra", "SANI4", taxonID),
+#             scientific=ifelse(taxonID=="SANI4","Sambucus nigra",scientific),
+#             siteID=ifelse(scientific=="Sambucus nigra", "SOAP_SJER", siteID),
+#             taxonID=ifelse(scientific=="Sambucus nigra", "SANI4", taxonID),
             
-            scientific=ifelse(taxonID=="SALE","Salix sp.",scientific)) %>%
-      filter(!(taxonID == "CADE27" & siteID=="SOAP")) %>%
-      filter(!(taxonID == "2PLANT" & siteID=="SJER")) %>%
-      filter(!(taxonID == "RIRO" & siteID=="SOAP")) %>%
-      filter(!(taxonID == "TODI" & siteID=="SJER")) %>%
-      filter(!(taxonID == "CECU" & is.na(growthForm))) %>%
-      filter(!(taxonID == "CHFO" & is.na(growthForm))) %>%
-      filter(!(taxonID == "QUKE" & is.na(growthForm))) %>%
-      filter(!(taxonID == "QUWI2" & is.na(growthForm))) %>%
-      filter(!(taxonID == "SANI4" & is.na(growthForm))) %>%
-      distinct()
+#             scientific=ifelse(taxonID=="SALE","Salix sp.",scientific)) %>%
+#       filter(!(taxonID == "CADE27" & siteID=="SOAP")) %>%
+#       filter(!(taxonID == "2PLANT" & siteID=="SJER")) %>%
+#       filter(!(taxonID == "RIRO" & siteID=="SOAP")) %>%
+#       filter(!(taxonID == "TODI" & siteID=="SJER")) %>%
+#       filter(!(taxonID == "CECU" & is.na(growthForm))) %>%
+#       filter(!(taxonID == "CHFO" & is.na(growthForm))) %>%
+#       filter(!(taxonID == "QUKE" & is.na(growthForm))) %>%
+#       filter(!(taxonID == "QUWI2" & is.na(growthForm))) %>%
+#       filter(!(taxonID == "SANI4" & is.na(growthForm))) %>%
+#       distinct()
       
       
-  pft_assignment_df <- neon_carissa %>%
-      mutate(pft = match_species_to_pft(growthForm, taxonID))
+#   pft_assignment_df <- neon_carissa %>%
+#       mutate(pft = match_species_to_pft(growthForm, taxonID))
       
-  # Print any scientific names that were not addressed in logic tree and instead assigned as 'other'
-  message("The following rows were classified as PFT 'other'")
-  message(pft_assignment_df %>% filter(pft=="other"))
+#   # Print any scientific names that were not addressed in logic tree and instead assigned as 'other'
+#   message("The following rows were classified as PFT 'other'")
+#   message(pft_assignment_df %>% filter(pft=="other"))
 
-  pft_reference_path <- file.path(data_int_path,"pft_reference.csv")
-  readr::write_csv(pft_assignment_df, pft_reference_path)
-  return(pft_reference_path)
-}
+#   pft_reference_path <- file.path(data_int_path,"pft_reference.csv")
+#   readr::write_csv(pft_assignment_df, pft_reference_path)
+#   return(pft_reference_path)
+# }
 
 # crop_flightlines_to_tiles <- function(site, year_aop, data_raw_aop_path,
 #                                       hs_flightline_corrected_tif) {

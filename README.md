@@ -41,7 +41,6 @@ Data procesing workflow:
     - `download_veg_structure_data`: woody veg data
     - `download_polygons`:  polygons for woody veg plots
     - `download_trait_table`: table of trait values for species
-- For all sites at once, `generate_pft_reference`: generates table linking species
 - For each site, process intermediate data products:
     - `prep_veg_structure`: organize woody veg data into year and sampling effort
     - `prep_polygons`: identify subplot associated with woody veg data
@@ -51,7 +50,7 @@ Data procesing workflow:
     - `prep_biomass`: calculate biomass for all invidivuals in NEON data
     - if using hyperspectral flightlines rather than tiles
         - `correct_flightlines`: apply BRDF and topographic corrections and convert corrected flightlines into tiles
-    - `prep_manual_training_data`: clean manually delineated tree crowns with plant functional type (PFT) labels
+    - `prep_manual_training_data`: clean manually delineated tree crowns with plant functional type (PFT) labels, generates table linking species to PFT
     - `prep_aop_imagery`: prepare NEON AOP-derived rasters for PFT classifier
     - `extract_spectra_from_polygon`: Extract features (remote sensing data) for each pixel within the specified shapefile (tree crown for training, plot for prediction)
 - For all sites at once, `train_pft_classifier`: train PFT classifier

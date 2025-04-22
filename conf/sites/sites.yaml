@@ -8,7 +8,6 @@ run:
     #     download_aop_bbox: False
     #     download_veg_structure_data: False
     #     download_polygons: False
-    #     generate_pft_reference: False
     #     prep_veg_structure: False
     #     prep_polygons: False
     #     normalize_laz: False
@@ -29,7 +28,6 @@ run:
     # #     download_aop_bbox: False
     # #     download_veg_structure_data: False
     # #     download_polygons: False
-    # #     generate_pft_reference: False
     # #     prep_veg_structure: False
     # #     prep_polygons: False
     # #     normalize_laz: False
@@ -50,7 +48,6 @@ run:
         download_aop_bbox: False
         download_veg_structure_data: False
         download_polygons: False
-        generate_pft_reference: False
         prep_veg_structure: False
         prep_polygons: False
         normalize_laz: False
@@ -71,7 +68,6 @@ run:
   #   #     download_aop_bbox: False
   #   #     download_veg_structure_data: False
   #   #     download_polygons: False
-  #   #     generate_pft_reference: False
   #   #     prep_veg_structure: False
   #   #     prep_polygons: False
   #   #     normalize_laz: False
@@ -92,7 +88,6 @@ run:
   #   #     download_aop_bbox: False
   #   #     download_veg_structure_data: False
   #   #     download_polygons: False
-  #   #     generate_pft_reference: False
   #   #     prep_veg_structure: False
   #   #     prep_polygons: False
   #   #     normalize_laz: False
@@ -116,7 +111,6 @@ run:
   #       download_aop_bbox: False
   #       download_veg_structure_data: False
   #       download_polygons: False
-  #       generate_pft_reference: False
   #       prep_veg_structure: False
   #       prep_polygons: False
   #       normalize_laz: False
@@ -137,7 +131,6 @@ run:
   #       download_aop_bbox: False
   #       download_veg_structure_data: False
   #       download_polygons: False
-  #       generate_pft_reference: False
   #       prep_veg_structure: False
   #       prep_polygons: False
   #       normalize_laz: False
@@ -160,7 +153,6 @@ run:
   #       download_aop_bbox: False
   #       download_veg_structure_data: False
   #       download_polygons: False
-  #       generate_pft_reference: False
   #       prep_veg_structure: False
   #       prep_polygons: False
   #       normalize_laz: False
@@ -181,7 +173,6 @@ run:
   #   #     download_aop_bbox: False 
   #   #     download_veg_structure_data: False
   #   #     download_polygons: False
-  #   #     generate_pft_reference: False
   #   #     prep_veg_structure: False
   #   #     prep_polygons: False
   #   #     normalize_laz: False
@@ -202,7 +193,6 @@ run:
   #   #     download_aop_bbox: False 
   #   #     download_veg_structure_data: False
   #   #     download_polygons: False
-  #   #     generate_pft_reference: False
   #   #     prep_veg_structure: False
   #   #     prep_polygons: False
   #   #     normalize_laz: False
@@ -224,7 +214,6 @@ global_run_params:
     download_aop_bbox: False
     download_veg_structure_data: False
     download_polygons: False
-    generate_pft_reference: False
     prep_veg_structure: False
     prep_polygons: False
     normalize_laz: False 

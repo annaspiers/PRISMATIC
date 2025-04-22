@@ -2,6 +2,9 @@ library(lidR)
 library(terra)
 library(neonUtilities)
 options(stringsAsFactors = FALSE)
+library(parallel) #detectCores
+library(future) #parallelize lidR functions
+plan(multisession, workers = future::availableCores()/4 ) # Use all but a few
 
 
 move_downloaded_files <- function(dir_out, dp_id, dp_name, file_pattern, delete_orig = FALSE, unzip = FALSE){

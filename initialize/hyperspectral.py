@@ -23,6 +23,8 @@ from shapely.geometry import Point
 from shapely.geometry import mapping
 from shapely.geometry import box
 import rpy2.robjects as ro
+from rpy2.robjects import pandas2ri
+pandas2ri.activate()
 from collections import Counter
 import seaborn as sns
 
@@ -139,19 +141,19 @@ def download_hyperspectral(site, year, data_raw_aop_path, hs_type):
     
     return str(p)
 
-def generate_pft_reference(sites, data_raw_inv_path, data_int_path, trait_table_path):
-    """ Generate a csv that translates each species into a PFT usable as training data
-    """
-    r_source = ro.r['source']
-    r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+# def generate_pft_reference(sites, data_raw_inv_path, data_int_path, trait_table_path):
+#     """ Generate a csv that translates each species into a PFT usable as training data
+#     """
+#     r_source = ro.r['source']
+#     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
 
-    # Generate PFT reference
-    generate_pft_reference = ro.r('generate_pft_reference')
-    Path(data_int_path).mkdir(parents=True, exist_ok=True)
-    pft_reference_path = generate_pft_reference(sites, data_raw_inv_path, data_int_path, trait_table_path)
-    log.info('Generated PFT reference for: {sites}'
-             f'{pft_reference_path}')
-    #ais now where to feed in pft_reference csv path
+#     # Generate PFT reference
+#     generate_pft_reference = ro.r('generate_pft_reference')
+#     Path(data_int_path).mkdir(parents=True, exist_ok=True)
+#     pft_reference_path = generate_pft_reference(sites, data_raw_inv_path, data_int_path, trait_table_path)
+#     log.info('Generated PFT reference for: {sites}'
+#              f'{pft_reference_path}')
+#     #ais now where to feed in pft_reference csv path
 
 
 def correct_flightlines(site, year_inv, year_aop, data_raw_aop_path, data_int_path):
@@ -193,8 +195,7 @@ def correct_flightlines(site, year_inv, year_aop, data_raw_aop_path, data_int_pa
     log.info(f'Merging spatially overlapping tiffs for: {site} {year_inv}')
     
 
-def prep_manual_training_data(site, year, data_raw_inv_path, data_int_path, biomass_path, 
-                               pft_reference_path, px_thresh):
+def prep_manual_training_data(site, year, data_raw_inv_path, data_int_path, biomass_path):
     """
     Clean and organize manually delineated tree crowns with PFT labels
     """
@@ -202,12 +203,118 @@ def prep_manual_training_data(site, year, data_raw_inv_path, data_int_path, biom
     # Create features (points or polygons) for each tree 
     log.info(f'Creating tree crown training data features for: {site} {year}')
     r_source = ro.r['source']
+    # r_source(str(Path(__file__).resolve().parent/'inventory_helper.R'))
+    # match_species_to_pft = ro.r('match_species_to_pft') 
     r_source(str(Path(__file__).resolve().parent/'hyperspectral_helper.R'))
+    # list_tiles_w_veg = ro.r('list_tiles_w_veg') 
     
     # Create tree polygons
     prep_manual_crown_delineations = ro.r('prep_manual_crown_delineations') 
     training_shp_path = prep_manual_crown_delineations(site, year, data_raw_inv_path, data_int_path, 
-                                                   biomass_path, pft_reference_path, px_thresh)
+                                                   biomass_path)
+    
+    #ais abandoned converting this function from R to python because loading shapefiles with gpd lost the column data types. also tough to use list_tiles_w_veg function in python
+    
+    # training_data_dir = os.path.join(data_int_path, site, year, "training")
+    # if not os.path.exists(training_data_dir):
+    #     os.makedirs(training_data_dir)
+
+    # # Merge manual shapes with NEON metadata for each site-year 
+    # # Here we get the right PFT for each shape in each year
+
+    # # NEON inventory for SJER 2017, SJER 2021, SOAP 2019, SOAP 2021, TEAK 2021                                    
+    # neon_inv_manual = gpd.read_file(os.path.join(data_raw_inv_path,"manually_uploaded", f"NEON - {site} - {year}", "my_shapes.shp"))
+
+    # # Load cleaned inventory data for site and year
+    # # ais this is live trees only. should figure out how to incorporate dead trees
+    # veg_ind = pd.read_csv(os.path.join(biomass_path, "pp_veg_structure_IND_IBA_IAGB_live.csv")).rename(columns={
+    #     'individualID': 'indvdID',
+    #     'adjEasting': 'easting',
+    #     'adjNorthing': 'northing',
+    #     'adjDecimalLatitude': 'lat',
+    #     'adjDecimalLongitude': 'long',
+    #     'adjElevation': 'elev',
+    #     'individualStemNumberDensity': 'indStemDens',
+    #     'individualBasalArea': 'indBA',
+    #     'basalStemDiameter': 'bStemDiam',
+    #     'basalStemDiameterMsrmntHeight': 'bStemMeasHgt',
+    #     'scientificName': 'sciNameFull',
+    #     'scientific': 'sp_gen',
+    #     'wood.dens': 'wood_dens1',
+    #     'wood.dens': 'wood_dens2'
+    # }).assign(pft=lambda df: df['taxonID'].apply(match_species_to_pft))
+
+    # # link inventory csv and manual shapes
+    # neon_inv = neon_inv_manual.merge(veg_ind, on='indvdID', how='left')
+    # neon_inv['id'] = neon_inv['id'].astype(str)
+
+    # if site == "SJER" and year == "2021": 
+    #     SJER_2021_neon_ref = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "NEON - SJER - 2021", "tree_crowns_training.shp"))
+        
+    #     # SJER 2023 carissa/anna fieldwork
+    #     SJER_2023_c_manual = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa - SJER - 2023", "my_shapes.shp"))
+    #     SJER_2023_c_ref = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa - SJER - 2023", "tgis_merged_species_32611.shp"))
+        
+    #     # SJER 2024 carissa/anna fieldwork
+    #     SJER_2024_c_a_manual = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa Anna - SJER - 2024", "my_shapes.shp"))
+    #     SJER_2024_c_a_ref1 = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa Anna - SJER - 2024", "trimble_merged_PLY_SJER.shp")).to_crs(epsg=32611)
+    #     # SJER_2024_a_ref2 = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa Anna - SJER - 2024", "Anna_V1_ais-point.shp"))
+    #     # SJER_2024_c_a_ref3 = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa Anna - SJER - 2024", "garmin_merged_PT_SJER.shp")).to_crs(epsg=32611)
+
+    #     SJER_2021_neon = neon_inv.drop(columns=['id']).merge(SJER_2021_neon_ref[['indvdID', 'sp_gen']], on='indvdID').rename(columns={'sp_gen': 'species'})
+    #     SJER_2023_c = SJER_2023_c_manual.merge(SJER_2023_c_ref[['Name', 'species']], on='Name').rename(columns={'Name': 'indvdID'})
+    #     SJER_2024_c_a = SJER_2024_c_a_manual.merge(SJER_2024_c_a_ref1[['Name', 'Species', 'If other s', 'Site type']], on='Name').assign(
+    #         species=lambda df: df.apply(lambda row: row['species_ai'] if pd.notna(row['species_ai']) else (
+    #             'grass' if row['Site type'] == 'Grassland' else (
+    #                 row['If other s'] if row['Species'] == 'OTHER' else row['Species'])), axis=1)).fillna({'species': 'grass'}).reset_index().assign(
+    #         Name=lambda df: df.apply(lambda row: f"{row.name}_SJER24_ais" if pd.isna(row['Name']) else row['Name'], axis=1)).rename(columns={'Name': 'indvdID'})
+        
+    #     # Merge shapefiles for all years since we're using only 2021 imagery for now
+    #     my_shapes = pd.concat([SJER_2021_neon, SJER_2023_c, SJER_2024_c_a]).assign(pft=lambda df: df.apply(lambda row: match_species_to_pft(row['species'], row['indvdID']), axis=1)).query("indvdID != 'A08'")
+
+    # elif site == "TEAK" and year == "2021":
+    #     TEAK_2021_neon_ref = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "NEON - TEAK - 2021", "tree_crowns_training.shp"))
+        
+    #     # TEAK 2023 carissa/anna fieldwork
+    #     TEAK_2023_c_a_manual = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa - TEAK - 2023", "my_shapes.shp"))
+    #     TEAK_2023_c_a_ref = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa - TEAK - 2023", "tgis_merged_species.shp")).to_crs(epsg=32611)
+        
+    #     # TEAK 2024 carissa/anna fieldwork
+    #     TEAK_2024_c_a_manual = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa - TEAK - 2024", "my_shapes.shp"))
+    #     TEAK_2024_c_a_ref = gpd.read_file(os.path.join(data_raw_inv_path, "manually_uploaded", "Carissa - TEAK - 2024", "tgis_merged_PLY_TEAK.shp")).to_crs(epsg=32611)
+
+    #     TEAK_2021_neon = neon_inv.drop(columns=['id', 'notes']).merge(TEAK_2021_neon_ref[['indvdID', 'sp_gen']], on='indvdID').rename(columns={'sp_gen': 'species'})
+        
+    #     TEAK_2023_c_a = TEAK_2023_c_a_manual.merge(TEAK_2023_c_a_ref[['Name', 'species']], left_on='indvdID', right_on='Name').assign(
+    #         species=lambda df: df.apply(lambda row: 'oak' if 'C03' in row['Name'] else (
+    #             'willow' if 'C036' in row['Name'] else (
+    #                 'pine' if 'A172' in row['Name'] else (
+    #                     'manzanita' if 'A101' in row['Name'] else row['species']))), axis=1)).query("species.notna()").query("species.str.contains('lotus', case=False) == False").rename(columns={'Name': 'indvdID'})
+        
+    #     TEAK_2024_c_a = TEAK_2024_c_a_manual.rename(columns={'species_ai': 'species'}).reset_index().assign(
+    #         indvdID=lambda df: df.apply(lambda row: f"{row.name}_TEAK24_ais" if pd.isna(row['id']) else row['id'], axis=1)).query("species.notna()")
+
+    #     # Merge shapefiles for all years since we're using only 2021 imagery for now
+    #     my_shapes = pd.concat([TEAK_2021_neon, TEAK_2023_c_a, TEAK_2024_c_a]).assign(pft=lambda df: df.apply(lambda row: match_species_to_pft(row['species'], row['indvdID']), axis=1)).drop(columns=['geometry'])
+
+    # else:
+    #     # rename df so that list_tiles_w_veg is generalizable below
+    #     my_shapes = neon_inv
+
+    # # Generate a list of AOP tiles that overlap with the inventory data
+    # # my_shapes_r = pandas2ri.py2rpy(my_shapes)
+    # # list_tiles_w_veg(veg_df = my_shapes_r, out_dir = training_data_dir)
+
+
+    # my_shapes['domainID'] = my_shapes['domainID'].astype(str)
+    # my_shapes['siteID'] = my_shapes['siteID'].astype(str)
+    # my_shapes['species_ai'] = my_shapes['species_ai'].astype(str)
+    # my_shapes['Species'] = my_shapes['Species'].astype(str)
+    # my_shapes['If other s'] = my_shapes['If other s'].astype(str)
+
+    # training_shp_path = os.path.join(training_data_dir, "ref_labelled_crowns.shp")
+    # my_shapes.to_file(training_shp_path)
+
     log.info('Clipped tree crown polygons data saved at: '
              f'{training_shp_path}')
     
@@ -543,7 +650,6 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
 
     # Remove any rows with NA   
     features_df.dropna(inplace=True)
-    features_df.drop(columns=['pixelNumber','eastingIDs','northingIDs'], inplace=True) 
         
     # group the data by 'pft' and 'shapeID'
     grouped_features = features_df.groupby(['pft', 'shapeID'])
