@@ -278,7 +278,10 @@ def main(cfg):
         # ^ intermediate data finished processing for all site/years. Next, train RF 
 
     
-
+        sites = []
+        for site, v in cfg.sites.run.items():
+            sites.append(site)
+            
         for k, v in p.force_rerun.items():
             rerun_status[k] = v or global_force_rerun.get(k, False)
             log.info(f'Run process for all sites, '

@@ -1354,14 +1354,13 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
         
         # loop through AOP tiles 
         for (stacked_aop_filename in stacked_aop_list) { 
-
+          
           # read current tile of stacked AOP data 
           stacked_aop_data <- terra::rast(stacked_aop_filename) #old raster::stack
           
           # construct the easting northing string for naming outputs
-          east_north_string <- paste0(stacked_aop_data$eastingIDs[1], "_",
-                                      stacked_aop_data$northingIDs[1])
-
+          east_north_string <- stringr::str_match(stacked_aop_filename, "(\\d+)_(\\d+)")[[1]]
+          
           east_north_csv_path = file.path(extracted_features_path,
             paste0("extracted_features_",east_north_string, "_",
                   shapefile_description, ".csv"))
@@ -1370,7 +1369,7 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
           if (file.exists(east_north_csv_path)) {
               next
           }
-                      
+            
           # figure out which plots are within the current tile by comparing each
           # X,Y coordinate to the extent of the current tile 
           shapes_in <- shp_sf %>% 
@@ -1393,7 +1392,7 @@ extract_spectra_from_polygon_r <- function(site, year, data_int_path, data_final
                                   " plots in current tile, ",east_north_string)) 
               } 
           }
-            
+          
           # Aggregate to 2m resolution from 1m
           if (aggregate_from_1m_to_2m_res == T) {
               stacked_aop_data <- raster::aggregate(stacked_aop_data,2) 

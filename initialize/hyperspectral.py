@@ -213,6 +213,8 @@ def prep_manual_training_data(site, year, data_raw_inv_path, data_int_path, biom
     training_shp_path = prep_manual_crown_delineations(site, year, data_raw_inv_path, data_int_path, 
                                                    biomass_path)
     
+    #ais abandoned converting this function from R to python because loading shapefiles with gpd lost the column data types. also tough to use list_tiles_w_veg function in python
+    
     # training_data_dir = os.path.join(data_int_path, site, year, "training")
     # if not os.path.exists(training_data_dir):
     #     os.makedirs(training_data_dir)
@@ -648,7 +650,6 @@ def train_pft_classifier(sites, data_int_path, pcaInsteadOfWavelengths, ntree,
 
     # Remove any rows with NA   
     features_df.dropna(inplace=True)
-    features_df.drop(columns=['pixelNumber','eastingIDs','northingIDs'], inplace=True) 
         
     # group the data by 'pft' and 'shapeID'
     grouped_features = features_df.groupby(['pft', 'shapeID'])

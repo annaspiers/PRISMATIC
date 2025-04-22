@@ -231,8 +231,7 @@ def predict_plot_level_PFTs(data_int_path, stacked_aop_path, ic_type_path, rf_mo
         stacked_aop_layer_names = pd.read_csv(os.path.join(stacked_aop_path, 
                                                            "stacked_aop_layer_names.txt"))['stacked_aop_layer_names'].tolist()
         #ais remove the following rows earlier in the workflow so I don't need to do it here
-        # stacked_aop_layer_names.drop(columns=['pixelNumber','eastingIDs','northingIDs'], inplace=True)
-        stacked_aop_layer_names = [x for x in stacked_aop_layer_names if x not in ['pixelNumber','eastingIDs','northingIDs']]
+        stacked_aop_layer_names = [x for x in stacked_aop_layer_names]
             
         # Filter out unwanted wavelengths
         wavelength_lut = filter_out_wavelengths(wavelengths=wavelengths, layer_names=stacked_aop_layer_names)
@@ -424,7 +423,7 @@ def predict_pixel_PFTs(site, year_inv, year_aop, data_raw_aop_path, data_int_pat
                 tile_df = pd.DataFrame(tile_vec, columns=stacked_aop_layer_names)
 
                 # features to use in the RF models
-                rf_features_noWavelengths = [x for x in stacked_aop_layer_names if x not in ['pixelNumber', 'eastingIDs', 'northingIDs'] and not x.isdigit()]
+                rf_features_noWavelengths = [x for x in stacked_aop_layer_names if not x.isdigit()]
                 rf_features_wavelengths = round(wavelength_lut['wavelength']).astype(int).astype(str).tolist() #wavelength_lut['xwavelength'].tolist()
                 rf_features_all =  rf_features_noWavelengths + rf_features_wavelengths 
                 
