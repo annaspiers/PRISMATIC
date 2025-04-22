@@ -7,9 +7,10 @@ library(bvls) #bvls()
 library(tidyr) #pivot_longer()
 library(assertthat)
 library(dplyr)
-library(future)
-plan(multisession, workers = 3L)
 library(rjson)
+library(future)
+plan(multisession, workers = future::availableCores()/4 ) # Use all but a few
+
 
 
 #ais replace this function below with sy-toan's clip_lidar_to_polygon_lidR

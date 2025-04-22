@@ -72,9 +72,6 @@ def build_cache_site(site, year_inventory, year_aop, data_raw_aop_path, data_raw
                   l, cache)    
     
     # Process raw data
-    _add_to_cache('generate_pft_reference',
-                  str(data_int_path/'pft_reference.csv'),
-                  l, cache)
     _add_to_cache('prep_veg_structure',
                   [str(data_raw_inv_path/site/year_inventory/'pp_veg_structure.csv'),
                    str(data_raw_inv_path/site/year_inventory/'pp_plot_sampling_effort.csv')],

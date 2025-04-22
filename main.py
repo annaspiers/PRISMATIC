@@ -25,7 +25,6 @@ from initialize.lidar import download_aop_bbox, \
 from initialize.biomass import prep_biomass
 from initialize.lad import prep_lad
 from initialize.hyperspectral import download_hyperspectral, \
-                                        generate_pft_reference, \
                                         prep_manual_training_data, \
                                         prep_aop_imagery, \
                                         extract_spectra_from_polygon, \
@@ -121,6 +120,16 @@ def main(cfg):
                             (site=site, 
                             data_path=data_raw_inv_path))
                     
+                    # process plots   
+                    inventory_file_path, \
+                        sampling_effort_path = (force_rerun(cache, force=rerun_status)
+                                                (prep_veg_structure)
+                                                (site=site,
+                                                year_inv=year_inventory,
+                                                year_aop=year_aop,
+                                                data_path=data_raw_inv_path,
+                                                month_window=month_window))
+                    
                     neon_plots_path = (force_rerun(cache, force=rerun_status)
                                     (download_polygons)
                                     (data_path=data_raw_inv_path))
@@ -136,17 +145,6 @@ def main(cfg):
                                                         (download_trait_table)
                                                         (download_link=url, 
                                                         data_path=data_raw_inv_path))
-
-
-        sites = []
-        for site, v in cfg.sites.run.items():
-            sites.append(site)
-            pft_reference_path = (force_rerun(cache, force=rerun_status)
-                                                (generate_pft_reference)
-                                                (sites=sites,
-                                                data_raw_inv_path=data_raw_inv_path, 
-                                                data_int_path=data_int_path,
-                                                trait_table_path=trait_table_path))
 
 
 
@@ -179,17 +177,8 @@ def main(cfg):
                             hs_path=os.path.join(data_raw_aop_path,site,year_aop,"hs_flightline")
                         tif_path=os.path.join(data_raw_aop_path,site,year_aop,"tif")
                         neon_plots_path=os.path.join(data_raw_inv_path,"All_NEON_TOS_Plots_V9")
-                        
-                        # process plots   
-                    inventory_file_path, \
-                        sampling_effort_path = (force_rerun(cache, force=rerun_status)
-                                                (prep_veg_structure)
-                                                (site=site,
-                                                year_inv=year_inventory,
-                                                year_aop=year_aop,
-                                                data_path=data_raw_inv_path,
-                                                month_window=month_window))
-                    
+                       
+                                           
                     partitioned_plots_path = (force_rerun(cache, force=rerun_status)
                                             (prep_polygons)
                                             (input_data_path=neon_plots_path,
@@ -261,9 +250,7 @@ def main(cfg):
                                                     year=year_inventory,
                                                     data_raw_inv_path=data_raw_inv_path, 
                                                     data_int_path=data_int_path, 
-                                                    biomass_path=biomass_path,
-                                                    pft_reference_path=pft_reference_path,
-                                                    px_thresh=px_thresh))  
+                                                    biomass_path=biomass_path))  
                         
                         # prep NEON AOP data for classifier
                         stacked_aop_path = (force_rerun(cache, force=rerun_status)
